@@ -112,3 +112,53 @@ just build      # 프론트 빌드
 - 작업 단위로 브랜치 없이 `main`에 커밋해도 무방(개인 저장소). 각 작업은 백엔드→프론트
   순으로 완성하고 커밋. 커밋 전 `just test` + `npm run build`로 회귀 확인.
 - 새 엔드포인트 추가 시 라우트 순서 주의: 고정 경로(`/summary` 등)를 `/{ticker}`보다 먼저.
+
+## 6. 진행 체크리스트
+
+> 각 작업을 마치면 해당 항목을 `- [x]`로 갱신하고 커밋한다. 다음 세션이
+> 이 목록만 보고도 어디까지 됐는지 알 수 있게 유지한다.
+
+### MVP (완료)
+- [x] 네이버 모바일 API 클라이언트(`naver_client.py`) — 시세/매매동향/분봉/기본정보
+- [x] 수집기(`collectors.py`) + 조회(`repository.py`) + SQLite 스키마
+- [x] 엔드포인트: summary / 상세 / prices / trading-flow / intraday / collect-* / stats
+- [x] 프론트: 대시보드 + 상세(차트 3종), 한글 주석, 천 단위 구분
+- [x] GitHub 원격 연결 및 푸시
+
+### 작업 1 — 펀더멘털 (주식 + ETF)
+- [ ] DB 스키마 추가: `stock_fundamentals`, `etf_fundamentals`, `etf_holdings`
+- [ ] `naver_client`: `fetch_stock_fundamentals` / `fetch_etf_fundamentals` / `fetch_etf_holdings`
+- [ ] `collectors`: `stockEndType`에 따라 주식/ETF 펀더멘털 수집 분기
+- [ ] `GET /api/stocks/{ticker}/fundamentals`
+- [ ] 프론트: 상세에 펀더멘털 카드(주식 PER/PBR/배당, ETF NAV/괴리율/보수/수익률/구성종목)
+- [ ] `just test` + `npm run build` 후 커밋
+
+### 작업 2 — 종목 카탈로그 자동 확장
+- [ ] `services/catalog.py`: `marketValue/{KOSPI,KOSDAQ}` 페이지네이션 수집
+- [ ] `POST /api/data/sync-catalog?market=&limit=` (또는 sync-stocks 확장)
+- [ ] collect-all 백그라운드/진행률 고려
+- [ ] 커밋
+
+### 작업 3 — 뉴스
+- [ ] `config.py`에 `NAVER_CLIENT_ID/SECRET` env (없으면 비활성화)
+- [ ] 네이버 검색 API 수집 + `news` 테이블
+- [ ] `GET /api/stocks/{ticker}/news`
+- [ ] 프론트: 상세에 뉴스 타임라인
+- [ ] 커밋
+
+### 작업 4 — AI 인사이트(핵심포인트)
+- [ ] 매매동향 판정: 최근 5거래일 외국인 순매수 합계 × 평균 거래량 비율(예: 5%)
+- [ ] 핵심포인트/전략 요약 생성 로직
+- [ ] `GET /api/stocks/{ticker}/insights`
+- [ ] 프론트: 상세에 인사이트 카드
+- [ ] 커밋
+
+### 작업 5 — 스케줄러
+- [ ] APScheduler 정기 수집(N분) + 일일 마감 수집(평일 15:40 KST)
+- [ ] lifespan 기동/정리
+- [ ] 커밋
+
+### 작업 6 — 품질/UX (상시)
+- [ ] collectors 파싱 테스트(respx 모킹) 확대
+- [ ] 분봉 새로고침 스피너, 로딩/에러 UX
+- [ ] collect-all 백그라운드 + 진행률 폴링
