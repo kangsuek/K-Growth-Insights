@@ -15,6 +15,8 @@ export const stockApi = {
   intraday: (ticker) => api.get(`/stocks/${ticker}/intraday`),
   // 주식/ETF 펀더멘털 (type에 따라 stock 또는 etf+holdings 응답).
   fundamentals: (ticker) => api.get(`/stocks/${ticker}/fundamentals`),
+  // 종목 뉴스 타임라인 (네이버 검색 API 키 없으면 빈 배열).
+  news: (ticker, limit = 10) => api.get(`/stocks/${ticker}/news`, { params: { limit } }),
 }
 
 // 네이버 모바일 API에서 최신 데이터를 SQLite로 수집하는 엔드포인트

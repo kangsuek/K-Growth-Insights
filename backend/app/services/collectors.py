@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from app import config
 from app.config import PRICE_PAGES, TRADING_FLOW_PAGES
 from app.database import get_connection
 from app.models import CollectResult
@@ -191,6 +192,37 @@ def collect_etf_holdings(ticker: str) -> int:
     return len(rows)
 
 
+def collect_news(ticker: str) -> int:
+    """종목명으로 네이버 검색 API 뉴스를 수집해 upsert. 키 미설정 시 0.
+
+    link를 종목 내 고유키로 삼아 재수집 시 중복 없이 최신 제목/요약을 갱신한다.
+    """
+    if not config.naver_search_enabled():
+        return 0
+    stock = repository.get_stock(ticker)
+    if not stock:
+        return 0
+    rows = naver_client.fetch_news(stock["name"], display=config.NEWS_DISPLAY)
+    if not rows:
+        return 0
+    with get_connection() as conn:
+        conn.executemany(
+            """
+            INSERT INTO news (ticker, title, link, description, pub_date, updated_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(ticker, link) DO UPDATE SET
+                title=excluded.title, description=excluded.description,
+                pub_date=excluded.pub_date, updated_at=excluded.updated_at
+            """,
+            [
+                (ticker, r["title"], r["link"], r["description"], r["pub_date"])
+                for r in rows
+                if r.get("title") and r.get("link")
+            ],
+        )
+    return len(rows)
+
+
 def collect_stock(ticker: str) -> CollectResult:
     """Collect all datasets for a single ticker (STOCK/ETF에 따라 펀더멘털 분기)."""
     result = CollectResult(ticker=ticker)
@@ -206,6 +238,9 @@ def collect_stock(ticker: str) -> CollectResult:
             result.holdings = collect_etf_holdings(ticker)
         else:
             result.fundamentals = collect_stock_fundamentals(ticker)
+
+        # 검색 API 키가 설정된 경우에만 뉴스 수집(그레이스풀).
+        result.news = collect_news(ticker)
     except Exception as exc:  # noqa: BLE001 - report per-ticker, keep going
         logger.error("collect_stock(%s) failed: %s", ticker, exc, exc_info=True)
         result.ok = False

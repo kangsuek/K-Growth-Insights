@@ -14,17 +14,23 @@ the rest of the app never deals with Naver's string/comma/sign formatting.
 """
 from __future__ import annotations
 
+import html
 import logging
 import re
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
 import httpx
+
+from app import config
 
 logger = logging.getLogger(__name__)
 
 MSTOCK_BASE = "https://m.stock.naver.com/api/stock"
 MSTOCKS_BASE = "https://m.stock.naver.com/api/stocks"
 CHART_BASE = "https://api.stock.naver.com/chart/domestic/item"
+# 뉴스는 시장 데이터가 아니라 네이버 공식 검색 API(JSON)를 사용한다.
+SEARCH_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
 
 # 카탈로그 수집 대상 시장. 네이버 URL 세그먼트 그대로 사용.
 MARKETS = ("KOSPI", "KOSDAQ")
@@ -376,3 +382,61 @@ def fetch_market_catalog(market: str, limit: int = 100) -> list[dict]:
         logger.warning("fetch_market_catalog(%s) failed: %s", market, exc)
 
     return rows[:limit]
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_html(text: Optional[str]) -> Optional[str]:
+    """검색 API 결과의 <b> 태그·HTML 엔티티를 제거해 순수 텍스트로 만든다."""
+    if not text:
+        return text
+    return html.unescape(_TAG_RE.sub("", text)).strip()
+
+
+def _pubdate_to_iso(value: Optional[str]) -> Optional[str]:
+    """RFC 2822 pubDate('Mon, 21 Jul 2026 09:00:00 +0900') → ISO8601. 실패 시 원문."""
+    if not value:
+        return None
+    try:
+        return parsedate_to_datetime(value).isoformat()
+    except (TypeError, ValueError):
+        return value
+
+
+def fetch_news(query: str, display: int = 10) -> list[dict]:
+    """네이버 검색 API로 종목 뉴스 조회(최신순). 키 미설정 시 빈 리스트.
+
+    각 행: {title, link, description, pub_date}  (태그 제거·날짜 ISO 정규화)
+    """
+    if not config.naver_search_enabled():
+        return []
+
+    headers = {
+        "X-Naver-Client-Id": config.NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": config.NAVER_CLIENT_SECRET,
+    }
+    params = {"query": query, "display": display, "sort": "date"}
+    try:
+        with httpx.Client(timeout=DEFAULT_TIMEOUT) as client:
+            resp = client.get(SEARCH_NEWS_URL, params=params, headers=headers)
+            resp.raise_for_status()
+            items = resp.json().get("items") or []
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_news(%s) failed: %s", query, exc)
+        return []
+
+    rows: list[dict] = []
+    for it in items:
+        link = it.get("originallink") or it.get("link")
+        if not link:
+            continue
+        rows.append(
+            {
+                "title": _clean_html(it.get("title")),
+                "link": link,
+                "description": _clean_html(it.get("description")),
+                "pub_date": _pubdate_to_iso(it.get("pubDate")),
+            }
+        )
+    return rows

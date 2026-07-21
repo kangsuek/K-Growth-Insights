@@ -5,6 +5,7 @@ import PriceChart from '../components/PriceChart'
 import TradingFlowChart from '../components/TradingFlowChart'
 import IntradayChart from '../components/IntradayChart'
 import FundamentalsCard from '../components/FundamentalsCard'
+import NewsTimeline from '../components/NewsTimeline'
 import { formatPrice, formatPct, formatSigned, changeColor } from '../utils/format'
 
 export default function StockDetail() {
@@ -31,6 +32,10 @@ export default function StockDetail() {
   const { data: fundamentals } = useQuery({
     queryKey: ['fundamentals', ticker],
     queryFn: () => stockApi.fundamentals(ticker).then((r) => r.data),
+  })
+  const { data: news } = useQuery({
+    queryKey: ['news', ticker],
+    queryFn: () => stockApi.news(ticker).then((r) => r.data),
   })
 
   // 이 종목만 재수집 후 관련 쿼리 무효화.
@@ -97,6 +102,11 @@ export default function StockDetail() {
       <section className="card">
         <h2>오늘의 체결 흐름 (분봉)</h2>
         <IntradayChart data={intraday} />
+      </section>
+
+      <section className="card">
+        <h2>관련 뉴스</h2>
+        <NewsTimeline items={news} />
       </section>
     </div>
   )

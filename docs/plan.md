@@ -232,11 +232,11 @@ def test_fetch_daily_prices_parses_naver():
 - [x] 커밋
 
 ### 작업 3 — 뉴스
-- [ ] `config.py`에 `NAVER_CLIENT_ID/SECRET` env (없으면 비활성화)
-- [ ] 네이버 검색 API 수집 + `news` 테이블
-- [ ] `GET /api/stocks/{ticker}/news`
-- [ ] 프론트: 상세에 뉴스 타임라인
-- [ ] 커밋
+- [x] `config.py`에 `NAVER_CLIENT_ID/SECRET` env (없으면 비활성화, `naver_search_enabled()`)
+- [x] 네이버 검색 API 수집(`fetch_news`·`collect_news`, 태그 제거·날짜 ISO) + `news` 테이블
+- [x] `GET /api/stocks/{ticker}/news`
+- [x] 프론트: 상세에 뉴스 타임라인(NewsTimeline)
+- [x] 커밋
 
 ### 작업 4 — AI 인사이트(핵심포인트)
 - [ ] 매매동향 판정: 최근 5거래일 외국인 순매수 합계 × 평균 거래량 비율(예: 5%)

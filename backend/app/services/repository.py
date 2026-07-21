@@ -143,6 +143,20 @@ def get_fundamentals(ticker: str) -> dict | None:
         }
 
 
+def get_news(ticker: str, limit: int = 10) -> list[dict]:
+    """종목 뉴스를 최신순으로 조회."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT title, link, description, pub_date
+            FROM news WHERE ticker = ?
+            ORDER BY pub_date DESC LIMIT ?
+            """,
+            (ticker, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def data_stats() -> dict:
     with get_connection() as conn:
         def count(table: str) -> int:
@@ -153,4 +167,5 @@ def data_stats() -> dict:
             "prices": count("prices"),
             "trading_flow": count("trading_flow"),
             "intraday_prices": count("intraday_prices"),
+            "news": count("news"),
         }

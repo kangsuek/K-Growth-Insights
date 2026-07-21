@@ -97,8 +97,21 @@ CREATE TABLE IF NOT EXISTS etf_holdings (
     PRIMARY KEY (ticker, seq)
 );
 
+-- 종목 뉴스: 네이버 검색 API. link를 종목 내 고유키로 사용해 중복을 막는다.
+CREATE TABLE IF NOT EXISTS news (
+    ticker      TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    link        TEXT NOT NULL,
+    description TEXT,
+    pub_date    TEXT,   -- ISO8601 (파싱 실패 시 원문 문자열)
+    updated_at  TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (ticker, link)
+);
+
 CREATE INDEX IF NOT EXISTS idx_prices_ticker_date
     ON prices (ticker, date DESC);
+CREATE INDEX IF NOT EXISTS idx_news_ticker_date
+    ON news (ticker, pub_date DESC);
 CREATE INDEX IF NOT EXISTS idx_flow_ticker_date
     ON trading_flow (ticker, date DESC);
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_dt

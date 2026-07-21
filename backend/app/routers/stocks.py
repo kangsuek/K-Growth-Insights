@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.models import (
     FundamentalsResponse,
     IntradayPoint,
+    News,
     PricePoint,
     Stock,
     StockSummary,
@@ -54,6 +55,12 @@ def get_fundamentals(ticker: str):
     if data is None:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
     return data
+
+
+@router.get("/{ticker}/news", response_model=list[News])
+def get_news(ticker: str, limit: int = Query(10, ge=1, le=50)):
+    _ensure_stock(ticker)
+    return repository.get_news(ticker, limit=limit)
 
 
 def _ensure_stock(ticker: str) -> None:

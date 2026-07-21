@@ -25,3 +25,14 @@ PRICE_PAGES = int(os.getenv("PRICE_PAGES", "1"))
 # The trend (trading flow) endpoint ignores the page param and always returns
 # the ~20 most recent rows, so pagination is fixed at a single request.
 TRADING_FLOW_PAGES = int(os.getenv("TRADING_FLOW_PAGES", "1"))
+
+# 네이버 검색 API(뉴스) 자격증명. 없으면 뉴스 수집을 비활성화한다(그레이스풀).
+NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
+NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
+# 종목당 수집·조회할 뉴스 최대 건수.
+NEWS_DISPLAY = int(os.getenv("NEWS_DISPLAY", "10"))
+
+
+def naver_search_enabled() -> bool:
+    """네이버 검색 API 키가 모두 설정되어 있으면 True."""
+    return bool(NAVER_CLIENT_ID and NAVER_CLIENT_SECRET)

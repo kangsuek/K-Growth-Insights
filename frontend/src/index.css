@@ -139,3 +139,25 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
 .holdings-table th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
 .holdings-table .num { text-align: right; }
 .holdings-code { color: var(--muted); font-size: 0.78rem; }
+
+/* 뉴스 타임라인 */
+.news-list { list-style: none; margin: 0; padding: 0; }
+.news-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.news-item:last-child { border-bottom: none; }
+.news-title {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.news-title:hover { color: var(--accent); text-decoration: underline; }
+.news-desc {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 4px 0 6px;
+  line-height: 1.4;
+}
+.news-date { color: var(--muted); font-size: 0.78rem; }
