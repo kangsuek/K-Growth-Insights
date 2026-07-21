@@ -67,33 +67,33 @@
 - [ ] Dashboard·Header·Footer 렌더 확인(다크 테마, 시장현황, 종목 그리드, 정렬)
 - [ ] `npm run build` + 브라우저에서 5174와 비교
 
-### Phase 2 — 종목 상세(ETFDetail)
-- [ ] 상세 페이지 이식, 시세/매매동향/분봉/펀더멘털/인사이트/뉴스 연결
-- [ ] 백엔드 ➕: `/etfs/{t}/metrics`(지표 계산), 필요 시 `batch-summary`
-
-### Phase 3 — 종목발굴(Screening/Scanner)
-- [ ] 백엔드 ➕: `/scanner`, `/scanner/themes`, `/scanner/recommendations`
-- [ ] 페이지 연결
-
-### Phase 4 — 비교(Comparison)
-- [ ] 백엔드 ➕: `/etfs/compare`
-- [ ] 페이지 연결
-
-### Phase 5 — 시뮬레이션(Simulation)
-- [ ] 백엔드 ➕: `/simulation/lump-sum`·`/dca`·`/portfolio`
-- [ ] 페이지 연결
-
-### Phase 6 — 포트폴리오(Portfolio)
-- [ ] 포트폴리오 저장/조회(로컬 or 백엔드), 페이지 연결
-
-### Phase 7 — 알림(Alerts)
-- [ ] 백엔드 ➕: `alerts` 테이블 + CRUD(`/alerts/*`)
-- [ ] 페이지 연결
-
-### Phase 8 — 설정(Settings)
+### Phase 2 — 설정(Settings)  *(원래 8번 → 우선순위 상향)*
 - [ ] 백엔드 ➕: `/settings/stocks*`(관리·정렬·검증·검색), `/settings/api-keys`
 - [ ] `/data/scheduler-status`, `/data/reset`
 - [ ] 페이지 연결(종목 관리·API 키·데이터 관리·일반 설정)
+
+### Phase 3 — 종목 상세(ETFDetail)
+- [ ] 상세 페이지 이식, 시세/매매동향/분봉/펀더멘털/인사이트/뉴스 연결
+- [ ] 백엔드 ➕: `/etfs/{t}/metrics`(지표 계산), 필요 시 `batch-summary`
+
+### Phase 4 — 종목발굴(Screening/Scanner)
+- [ ] 백엔드 ➕: `/scanner`, `/scanner/themes`, `/scanner/recommendations`
+- [ ] 페이지 연결
+
+### Phase 5 — 비교(Comparison)
+- [ ] 백엔드 ➕: `/etfs/compare`
+- [ ] 페이지 연결
+
+### Phase 6 — 시뮬레이션(Simulation)
+- [ ] 백엔드 ➕: `/simulation/lump-sum`·`/dca`·`/portfolio`
+- [ ] 페이지 연결
+
+### Phase 7 — 포트폴리오(Portfolio)
+- [ ] 포트폴리오 저장/조회(로컬 or 백엔드), 페이지 연결
+
+### Phase 8 — 알림(Alerts)
+- [ ] 백엔드 ➕: `alerts` 테이블 + CRUD(`/alerts/*`)
+- [ ] 페이지 연결
 
 ### Phase 9 — 마감/정리
 - [ ] 미사용 코드·미지원 안내 정리, 접근성/반응형 점검

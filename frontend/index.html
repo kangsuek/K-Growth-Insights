@@ -2,8 +2,51 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>K-Growth Insights</title>
+    <!-- 초기 테마 적용 (FOUC 방지) -->
+    <script>
+      (function() {
+        const STORAGE_KEY = 'app_settings';
+        const DEFAULT_THEME = 'light';
+        
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          let theme = DEFAULT_THEME;
+          
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.theme) {
+              theme = parsed.theme;
+            }
+          }
+          
+          // 시스템 테마 감지
+          function getSystemTheme() {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          
+          // 실제 적용할 테마 계산
+          function getEffectiveTheme(theme) {
+            if (theme === 'system') {
+              return getSystemTheme();
+            }
+            return theme;
+          }
+          
+          // 테마 적용
+          const effectiveTheme = getEffectiveTheme(theme);
+          if (effectiveTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (error) {
+          console.error('Failed to apply initial theme:', error);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
