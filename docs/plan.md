@@ -246,9 +246,9 @@ def test_fetch_daily_prices_parses_naver():
 - [x] 커밋
 
 ### 작업 5 — 스케줄러
-- [ ] APScheduler 정기 수집(N분) + 일일 마감 수집(평일 15:40 KST)
-- [ ] lifespan 기동/정리
-- [ ] 커밋
+- [x] APScheduler 정기 수집(장중 N분, 오프아워 스킵) + 일일 마감 수집(평일 15:40 KST)
+- [x] lifespan 기동/정리(`services/scheduler.py`, BackgroundScheduler)
+- [x] 커밋
 
 ### 작업 6 — 품질/UX (상시)
 - [ ] collectors 파싱 테스트(respx 모킹) 확대

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import CORS_ORIGINS
 from app.database import init_db
 from app.routers import data, stocks
-from app.services import stocks_sync
+from app.services import scheduler, stocks_sync
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,7 +25,12 @@ async def lifespan(app: FastAPI):
         stocks_sync.sync_stocks(refresh_from_api=False)
     except Exception as exc:  # noqa: BLE001 - never block startup on seeding
         logger.warning("stock seeding skipped: %s", exc)
-    yield
+    # 자동 수집 스케줄러 기동(장중 N분 + 평일 15:40 KST 마감).
+    scheduler.start()
+    try:
+        yield
+    finally:
+        scheduler.shutdown()
 
 
 app = FastAPI(

@@ -36,3 +36,8 @@ NEWS_DISPLAY = int(os.getenv("NEWS_DISPLAY", "10"))
 def naver_search_enabled() -> bool:
     """네이버 검색 API 키가 모두 설정되어 있으면 True."""
     return bool(NAVER_CLIENT_ID and NAVER_CLIENT_SECRET)
+
+
+# 스케줄러: 장중 N분마다 정기 수집 + 평일 15:40 KST 마감 수집.
+SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
+COLLECT_INTERVAL_MINUTES = int(os.getenv("COLLECT_INTERVAL_MINUTES", "10"))
