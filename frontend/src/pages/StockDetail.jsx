@@ -6,6 +6,7 @@ import TradingFlowChart from '../components/TradingFlowChart'
 import IntradayChart from '../components/IntradayChart'
 import FundamentalsCard from '../components/FundamentalsCard'
 import NewsTimeline from '../components/NewsTimeline'
+import InsightsCard from '../components/InsightsCard'
 import { formatPrice, formatPct, formatSigned, changeColor } from '../utils/format'
 
 export default function StockDetail() {
@@ -36,6 +37,10 @@ export default function StockDetail() {
   const { data: news } = useQuery({
     queryKey: ['news', ticker],
     queryFn: () => stockApi.news(ticker).then((r) => r.data),
+  })
+  const { data: insights } = useQuery({
+    queryKey: ['insights', ticker],
+    queryFn: () => stockApi.insights(ticker).then((r) => r.data),
   })
 
   // 이 종목만 재수집 후 관련 쿼리 무효화.
@@ -74,6 +79,11 @@ export default function StockDetail() {
           </div>
         )}
       </header>
+
+      <section className="card">
+        <h2>핵심포인트</h2>
+        <InsightsCard data={insights} />
+      </section>
 
       <section className="card">
         <h2>{fundamentals?.type === 'ETF' ? 'ETF 정보' : '펀더멘털'}</h2>

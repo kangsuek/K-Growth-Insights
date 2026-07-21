@@ -17,6 +17,8 @@ export const stockApi = {
   fundamentals: (ticker) => api.get(`/stocks/${ticker}/fundamentals`),
   // 종목 뉴스 타임라인 (네이버 검색 API 키 없으면 빈 배열).
   news: (ticker, limit = 10) => api.get(`/stocks/${ticker}/news`, { params: { limit } }),
+  // 종목 핵심포인트(규칙 기반 수급·추세 요약).
+  insights: (ticker) => api.get(`/stocks/${ticker}/insights`),
 }
 
 // 네이버 모바일 API에서 최신 데이터를 SQLite로 수집하는 엔드포인트

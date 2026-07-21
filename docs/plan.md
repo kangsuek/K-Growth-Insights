@@ -239,11 +239,11 @@ def test_fetch_daily_prices_parses_naver():
 - [x] 커밋
 
 ### 작업 4 — AI 인사이트(핵심포인트)
-- [ ] 매매동향 판정: 최근 5거래일 외국인 순매수 합계 × 평균 거래량 비율(예: 5%)
-- [ ] 핵심포인트/전략 요약 생성 로직
-- [ ] `GET /api/stocks/{ticker}/insights`
-- [ ] 프론트: 상세에 인사이트 카드
-- [ ] 커밋
+- [x] 매매동향 판정: 최근 5거래일 순매수 합계 ÷ 일평균 거래량 비율(5%/15% 티어·지속성)
+- [x] 핵심포인트/전략 요약 생성 로직(`services/insights.py`, 규칙 기반·실시간 계산)
+- [x] `GET /api/stocks/{ticker}/insights`
+- [x] 프론트: 상세에 인사이트 카드(InsightsCard)
+- [x] 커밋
 
 ### 작업 5 — 스케줄러
 - [ ] APScheduler 정기 수집(N분) + 일일 마감 수집(평일 15:40 KST)
