@@ -368,6 +368,9 @@ def fetch_market_catalog(market: str, limit: int = 100) -> list[dict]:
                             "exchange": market,
                         }
                     )
+                # 한 페이지가 가득 차지 않으면 마지막 페이지이므로 종료.
+                if len(items) < MAX_PAGE_SIZE:
+                    break
                 page += 1
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_market_catalog(%s) failed: %s", market, exc)
