@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models import CollectAllResult, CollectResult
-from app.services import catalog, collectors, naver_client, repository, stocks_sync
+from app.models import CollectResult
+from app.services import catalog, collectors, jobs, naver_client, repository, stocks_sync
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
@@ -32,17 +32,17 @@ def collect_one(ticker: str):
     return collectors.collect_stock(ticker)
 
 
-@router.post("/collect-all", response_model=CollectAllResult)
+@router.post("/collect-all")
 def collect_all():
-    stocks = repository.list_stocks()
-    results = [collectors.collect_stock(s["ticker"]) for s in stocks]
-    succeeded = sum(1 for r in results if r.ok)
-    return CollectAllResult(
-        total=len(results),
-        succeeded=succeeded,
-        failed=len(results) - succeeded,
-        results=results,
-    )
+    """전체 수집을 백그라운드로 시작하고 즉시 진행 상태를 반환한다."""
+    started = jobs.start()
+    return {"started": started, **jobs.snapshot()}
+
+
+@router.get("/collect-status")
+def collect_status():
+    """전체 수집 진행률(폴링용)."""
+    return jobs.snapshot()
 
 
 @router.get("/stats")

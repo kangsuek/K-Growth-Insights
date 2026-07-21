@@ -128,10 +128,3 @@ class FundamentalsResponse(BaseModel):
     stock: Optional[StockFundamentals] = None
     etf: Optional[EtfFundamentals] = None
     holdings: list[EtfHolding] = []
-
-
-class CollectAllResult(BaseModel):
-    total: int
-    succeeded: int
-    failed: int
-    results: list[CollectResult]

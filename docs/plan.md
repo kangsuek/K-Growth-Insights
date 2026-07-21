@@ -251,6 +251,6 @@ def test_fetch_daily_prices_parses_naver():
 - [x] 커밋
 
 ### 작업 6 — 품질/UX (상시)
-- [ ] collectors 파싱 테스트(respx 모킹) 확대
-- [ ] 분봉 새로고침 스피너, 로딩/에러 UX
-- [ ] collect-all 백그라운드 + 진행률 폴링
+- [x] collectors 파싱 테스트(respx 모킹) 확대 — 시세·매매동향·분봉·펀더멘털·뉴스·인사이트·스케줄러·잡 (61건)
+- [x] 분봉 새로고침 스피너, 로딩/에러 UX(ChartState·spinner)
+- [x] collect-all 백그라운드(`services/jobs.py`, 데몬 스레드) + 진행률 폴링(GET /collect-status)

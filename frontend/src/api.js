@@ -23,7 +23,9 @@ export const stockApi = {
 
 // 네이버 모바일 API에서 최신 데이터를 SQLite로 수집하는 엔드포인트
 export const dataApi = {
+  // 전체 수집을 백그라운드로 시작(즉시 반환). 진행률은 collectStatus로 폴링.
   collectAll: () => api.post('/data/collect-all'),
+  collectStatus: () => api.get('/data/collect-status'),
   collectOne: (ticker) => api.post(`/data/collect/${ticker}`),
   stats: () => api.get('/data/stats'),
 }

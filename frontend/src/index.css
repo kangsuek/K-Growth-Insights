@@ -54,6 +54,65 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
 }
 .btn.sm { padding: 6px 12px; font-size: 0.85rem; }
 .btn:disabled { opacity: 0.6; cursor: default; }
+/* 보조(고스트) 버튼: 카드 헤더의 새로고침 등 */
+.btn.ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+/* 인라인 텍스트 버튼(다시 시도 등) */
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+/* 로딩 스피너 */
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 진행률 막대 */
+.progress {
+  height: 8px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 4px 0 16px;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* 카드 헤더(제목 + 우측 액션) */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.card-head h2 { margin: 0; }
+
+/* 에러 텍스트 */
+.error-text { color: #c0392b; font-size: 0.88rem; padding: 12px 0; }
 
 /* 카드 / 목록 행 */
 .list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
