@@ -218,12 +218,12 @@ def test_fetch_daily_prices_parses_naver():
 - [x] GitHub 원격 연결 및 푸시
 
 ### 작업 1 — 펀더멘털 (주식 + ETF)
-- [ ] DB 스키마 추가: `stock_fundamentals`, `etf_fundamentals`, `etf_holdings`
-- [ ] `naver_client`: `fetch_stock_fundamentals` / `fetch_etf_fundamentals` / `fetch_etf_holdings`
-- [ ] `collectors`: `stockEndType`에 따라 주식/ETF 펀더멘털 수집 분기
-- [ ] `GET /api/stocks/{ticker}/fundamentals`
-- [ ] 프론트: 상세에 펀더멘털 카드(주식 PER/PBR/배당, ETF NAV/괴리율/보수/수익률/구성종목)
-- [ ] `just test` + `npm run build` 후 커밋
+- [x] DB 스키마 추가: `stock_fundamentals`, `etf_fundamentals`, `etf_holdings`
+- [x] `naver_client`: `fetch_stock_fundamentals` / `fetch_etf_fundamentals` / `fetch_etf_holdings`
+- [x] `collectors`: 종목 `type`에 따라 주식/ETF 펀더멘털 수집 분기
+- [x] `GET /api/stocks/{ticker}/fundamentals`
+- [x] 프론트: 상세에 펀더멘털 카드(주식 PER/PBR/배당, ETF NAV/괴리율/보수/수익률/구성종목)
+- [x] `just test` + `npm run build` 후 커밋
 
 ### 작업 2 — 종목 카탈로그 자동 확장
 - [ ] `services/catalog.py`: `marketValue/{KOSPI,KOSDAQ}` 페이지네이션 수집
