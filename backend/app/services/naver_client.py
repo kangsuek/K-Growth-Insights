@@ -15,6 +15,7 @@ the rest of the app never deals with Naver's string/comma/sign formatting.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 import httpx
@@ -66,6 +67,24 @@ def _to_float(value) -> Optional[float]:
         return float(cleaned)
     except ValueError:
         return None
+
+
+_NUM_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
+
+
+def _num(value) -> Optional[float]:
+    """단위·통화가 붙은 문자열에서 앞쪽 숫자만 추출.
+
+    '20.93배' -> 20.93, '12,372원' -> 12372, '46.59%' -> 46.59,
+    '31,971.60' -> 31971.6. (시총 '1,514조 1,862억'처럼 조/억 표기는
+    앞 숫자만 잡히므로 이런 값은 텍스트 그대로 보관한다.)
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    match = _NUM_RE.search(str(value).replace(",", ""))
+    return float(match.group()) if match else None
 
 
 def _bizdate_to_iso(bizdate: str) -> str:
@@ -204,6 +223,110 @@ def fetch_intraday(code: str) -> list[dict]:
                 "low_price": _to_float(it.get("lowPrice")),
                 "price": _to_float(it.get("currentPrice")),
                 "volume": _to_int(it.get("accumulatedTradingVolume")),
+            }
+        )
+    return rows
+
+
+def fetch_stock_fundamentals(code: str) -> Optional[dict]:
+    """주식 요약 펀더멘털: integration.totalInfos의 안정적 `code` 키로 파싱.
+
+    반환: {per, pbr, eps, bps, est_per, est_eps, dividend_yield, dividend,
+           foreign_rate, high_52w, low_52w, market_value}
+    (market_value는 '1,514조 1,862억' 형태라 표시용 문자열로 그대로 둔다.)
+    """
+    url = f"{MSTOCK_BASE}/{code}/integration"
+    try:
+        with _client() as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_stock_fundamentals(%s) failed: %s", code, exc)
+        return None
+
+    infos = data.get("totalInfos") or []
+    by_code = {i.get("code"): i.get("value") for i in infos}
+    if not by_code:
+        return None
+    return {
+        "per": _num(by_code.get("per")),
+        "pbr": _num(by_code.get("pbr")),
+        "eps": _num(by_code.get("eps")),
+        "bps": _num(by_code.get("bps")),
+        "est_per": _num(by_code.get("cnsPer")),
+        "est_eps": _num(by_code.get("cnsEps")),
+        "dividend_yield": _num(by_code.get("dividendYieldRatio")),
+        "dividend": _num(by_code.get("dividend")),
+        "foreign_rate": _num(by_code.get("foreignRate")),
+        "high_52w": _num(by_code.get("highPriceOf52Weeks")),
+        "low_52w": _num(by_code.get("lowPriceOf52Weeks")),
+        "market_value": by_code.get("marketValue"),
+    }
+
+
+def fetch_etf_fundamentals(code: str) -> Optional[dict]:
+    """ETF 핵심지표: integration.etfKeyIndicator 파싱.
+
+    반환: {issuer_name, market_value, nav, total_nav, deviation_rate,
+           total_fee, dividend_yield, return_1m, return_3m, return_1y}
+    괴리율(deviation_rate)은 deviationSign('+'/'-')을 부호로 반영한다.
+    market_value·total_nav는 조/억 표기라 문자열 그대로 둔다.
+    """
+    url = f"{MSTOCK_BASE}/{code}/integration"
+    try:
+        with _client() as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_etf_fundamentals(%s) failed: %s", code, exc)
+        return None
+
+    ind = data.get("etfKeyIndicator")
+    if not ind:
+        return None
+    deviation = _num(ind.get("deviationRate"))
+    if deviation is not None and ind.get("deviationSign") == "-":
+        deviation = -deviation
+    return {
+        "issuer_name": ind.get("issuerName"),
+        "market_value": ind.get("marketValue"),
+        "nav": _num(ind.get("nav")),
+        "total_nav": ind.get("totalNav"),
+        "deviation_rate": deviation,
+        "total_fee": _num(ind.get("totalFee")),
+        "dividend_yield": _num(ind.get("dividendYieldTtm")),
+        "return_1m": _num(ind.get("returnRate1m")),
+        "return_3m": _num(ind.get("returnRate3m")),
+        "return_1y": _num(ind.get("returnRate1y")),
+    }
+
+
+def fetch_etf_holdings(code: str) -> list[dict]:
+    """ETF 구성종목 Top10: etfAnalysis.etfTop10MajorConstituentAssets 파싱.
+
+    각 행: {seq, item_code, item_name, weight}  (weight는 % 숫자)
+    """
+    url = f"{MSTOCK_BASE}/{code}/etfAnalysis"
+    try:
+        with _client() as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_etf_holdings(%s) failed: %s", code, exc)
+        return []
+
+    items = data.get("etfTop10MajorConstituentAssets") or []
+    rows: list[dict] = []
+    for it in items:
+        rows.append(
+            {
+                "seq": _to_int(it.get("seq")),
+                "item_code": it.get("itemCode"),
+                "item_name": it.get("itemName"),
+                "weight": _num(it.get("etfWeight")),
             }
         )
     return rows

@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from app.models import (
+    FundamentalsResponse,
     IntradayPoint,
     PricePoint,
     Stock,
@@ -45,6 +46,14 @@ def get_trading_flow(ticker: str, days: int = Query(20, ge=1, le=120)):
 def get_intraday(ticker: str):
     _ensure_stock(ticker)
     return repository.get_intraday(ticker)
+
+
+@router.get("/{ticker}/fundamentals", response_model=FundamentalsResponse)
+def get_fundamentals(ticker: str):
+    data = repository.get_fundamentals(ticker)
+    if data is None:
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+    return data
 
 
 def _ensure_stock(ticker: str) -> None:

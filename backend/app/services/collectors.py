@@ -11,7 +11,7 @@ import logging
 from app.config import PRICE_PAGES, TRADING_FLOW_PAGES
 from app.database import get_connection
 from app.models import CollectResult
-from app.services import naver_client
+from app.services import naver_client, repository
 
 logger = logging.getLogger(__name__)
 
@@ -107,13 +107,105 @@ def collect_intraday(ticker: str) -> int:
     return len(rows)
 
 
+def collect_stock_fundamentals(ticker: str) -> int:
+    data = naver_client.fetch_stock_fundamentals(ticker)
+    if not data:
+        return 0
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO stock_fundamentals
+                (ticker, per, pbr, eps, bps, est_per, est_eps,
+                 dividend_yield, dividend, foreign_rate, high_52w, low_52w,
+                 market_value, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(ticker) DO UPDATE SET
+                per=excluded.per, pbr=excluded.pbr, eps=excluded.eps,
+                bps=excluded.bps, est_per=excluded.est_per,
+                est_eps=excluded.est_eps, dividend_yield=excluded.dividend_yield,
+                dividend=excluded.dividend, foreign_rate=excluded.foreign_rate,
+                high_52w=excluded.high_52w, low_52w=excluded.low_52w,
+                market_value=excluded.market_value, updated_at=excluded.updated_at
+            """,
+            (
+                ticker, data["per"], data["pbr"], data["eps"], data["bps"],
+                data["est_per"], data["est_eps"], data["dividend_yield"],
+                data["dividend"], data["foreign_rate"], data["high_52w"],
+                data["low_52w"], data["market_value"],
+            ),
+        )
+    return 1
+
+
+def collect_etf_fundamentals(ticker: str) -> int:
+    data = naver_client.fetch_etf_fundamentals(ticker)
+    if not data:
+        return 0
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO etf_fundamentals
+                (ticker, issuer_name, market_value, nav, total_nav,
+                 deviation_rate, total_fee, dividend_yield,
+                 return_1m, return_3m, return_1y, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(ticker) DO UPDATE SET
+                issuer_name=excluded.issuer_name,
+                market_value=excluded.market_value, nav=excluded.nav,
+                total_nav=excluded.total_nav,
+                deviation_rate=excluded.deviation_rate,
+                total_fee=excluded.total_fee,
+                dividend_yield=excluded.dividend_yield,
+                return_1m=excluded.return_1m, return_3m=excluded.return_3m,
+                return_1y=excluded.return_1y, updated_at=excluded.updated_at
+            """,
+            (
+                ticker, data["issuer_name"], data["market_value"], data["nav"],
+                data["total_nav"], data["deviation_rate"], data["total_fee"],
+                data["dividend_yield"], data["return_1m"], data["return_3m"],
+                data["return_1y"],
+            ),
+        )
+    return 1
+
+
+def collect_etf_holdings(ticker: str) -> int:
+    rows = naver_client.fetch_etf_holdings(ticker)
+    if not rows:
+        return 0
+    with get_connection() as conn:
+        # 구성종목은 순위·편입이 바뀌므로 전체 삭제 후 재삽입한다.
+        conn.execute("DELETE FROM etf_holdings WHERE ticker = ?", (ticker,))
+        conn.executemany(
+            """
+            INSERT INTO etf_holdings
+                (ticker, seq, item_code, item_name, weight, updated_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            """,
+            [
+                (ticker, r["seq"], r["item_code"], r["item_name"], r["weight"])
+                for r in rows
+                if r.get("seq") is not None
+            ],
+        )
+    return len(rows)
+
+
 def collect_stock(ticker: str) -> CollectResult:
-    """Collect all three datasets for a single ticker."""
+    """Collect all datasets for a single ticker (STOCK/ETF에 따라 펀더멘털 분기)."""
     result = CollectResult(ticker=ticker)
     try:
         result.prices = collect_prices(ticker)
         result.trading_flow = collect_trading_flow(ticker)
         result.intraday = collect_intraday(ticker)
+
+        # 이미 동기화된 stocks.type으로 주식/ETF 펀더멘털을 분기 수집한다.
+        stock = repository.get_stock(ticker)
+        if stock and stock.get("type") == "ETF":
+            result.fundamentals = collect_etf_fundamentals(ticker)
+            result.holdings = collect_etf_holdings(ticker)
+        else:
+            result.fundamentals = collect_stock_fundamentals(ticker)
     except Exception as exc:  # noqa: BLE001 - report per-ticker, keep going
         logger.error("collect_stock(%s) failed: %s", ticker, exc, exc_info=True)
         result.ok = False

@@ -92,6 +92,57 @@ def get_intraday(ticker: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_fundamentals(ticker: str) -> dict | None:
+    """종목 유형(STOCK/ETF)에 따라 펀더멘털을 조회해 통합 응답으로 반환.
+
+    종목이 없으면 None. 펀더멘털이 아직 수집되지 않았으면 stock/etf가 None인
+    응답을 반환한다(빈 카드 표시용).
+    """
+    stock = get_stock(ticker)
+    if not stock:
+        return None
+    type_ = stock.get("type", "STOCK")
+    with get_connection() as conn:
+        if type_ == "ETF":
+            row = conn.execute(
+                """
+                SELECT issuer_name, market_value, nav, total_nav, deviation_rate,
+                       total_fee, dividend_yield, return_1m, return_3m, return_1y,
+                       updated_at
+                FROM etf_fundamentals WHERE ticker = ?
+                """,
+                (ticker,),
+            ).fetchone()
+            holdings = conn.execute(
+                """
+                SELECT seq, item_code, item_name, weight
+                FROM etf_holdings WHERE ticker = ? ORDER BY seq
+                """,
+                (ticker,),
+            ).fetchall()
+            return {
+                "ticker": ticker,
+                "type": "ETF",
+                "etf": dict(row) if row else None,
+                "holdings": [dict(h) for h in holdings],
+            }
+
+        row = conn.execute(
+            """
+            SELECT per, pbr, eps, bps, est_per, est_eps, dividend_yield,
+                   dividend, foreign_rate, high_52w, low_52w, market_value,
+                   updated_at
+            FROM stock_fundamentals WHERE ticker = ?
+            """,
+            (ticker,),
+        ).fetchone()
+        return {
+            "ticker": ticker,
+            "type": "STOCK",
+            "stock": dict(row) if row else None,
+        }
+
+
 def data_stats() -> dict:
     with get_connection() as conn:
         def count(table: str) -> int:

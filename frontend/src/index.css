@@ -106,3 +106,36 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
   padding: 48px 0;
   font-size: 0.9rem;
 }
+
+/* 펀더멘털 카드: 지표 그리드 */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.metric {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.metric-label { color: var(--muted); font-size: 0.78rem; margin-bottom: 4px; }
+.metric-value { font-weight: 600; font-size: 0.98rem; }
+
+/* ETF 구성종목 표 */
+.holdings { margin-top: 20px; }
+.holdings h3 { font-size: 0.95rem; margin: 0 0 10px; }
+.holdings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.holdings-table th,
+.holdings-table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.holdings-table th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+.holdings-table .num { text-align: right; }
+.holdings-code { color: var(--muted); font-size: 0.78rem; }

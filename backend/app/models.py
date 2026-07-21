@@ -55,8 +55,55 @@ class CollectResult(BaseModel):
     prices: int = 0
     trading_flow: int = 0
     intraday: int = 0
+    fundamentals: int = 0  # 주식/ETF 펀더멘털 스냅샷(0 또는 1)
+    holdings: int = 0  # ETF 구성종목 행 수
     ok: bool = True
     error: Optional[str] = None
+
+
+class StockFundamentals(BaseModel):
+    per: Optional[float] = None
+    pbr: Optional[float] = None
+    eps: Optional[float] = None
+    bps: Optional[float] = None
+    est_per: Optional[float] = None
+    est_eps: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    dividend: Optional[float] = None
+    foreign_rate: Optional[float] = None
+    high_52w: Optional[float] = None
+    low_52w: Optional[float] = None
+    market_value: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class EtfFundamentals(BaseModel):
+    issuer_name: Optional[str] = None
+    market_value: Optional[str] = None
+    nav: Optional[float] = None
+    total_nav: Optional[str] = None
+    deviation_rate: Optional[float] = None
+    total_fee: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    return_1m: Optional[float] = None
+    return_3m: Optional[float] = None
+    return_1y: Optional[float] = None
+    updated_at: Optional[str] = None
+
+
+class EtfHolding(BaseModel):
+    seq: int
+    item_code: Optional[str] = None
+    item_name: Optional[str] = None
+    weight: Optional[float] = None
+
+
+class FundamentalsResponse(BaseModel):
+    ticker: str
+    type: str  # STOCK | ETF
+    stock: Optional[StockFundamentals] = None
+    etf: Optional[EtfFundamentals] = None
+    holdings: list[EtfHolding] = []
 
 
 class CollectAllResult(BaseModel):
