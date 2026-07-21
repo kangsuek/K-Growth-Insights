@@ -113,7 +113,48 @@ just build      # 프론트 빌드
   순으로 완성하고 커밋. 커밋 전 `just test` + `npm run build`로 회귀 확인.
 - 새 엔드포인트 추가 시 라우트 순서 주의: 고정 경로(`/summary` 등)를 `/{ticker}`보다 먼저.
 
-## 6. 진행 체크리스트
+## 6. 백엔드 작업 흐름
+
+백엔드는 **아래에서 위로**(수집 → 조회 → 라우트) 쌓고, 각 단계를 라이브 API로
+즉시 검증한다. 예시는 작업 1(펀더멘털) 기준.
+
+### 파일 수정 순서 (계층별)
+1. **`services/naver_client.py`** — fetch 함수 추가 (예: `fetch_stock_fundamentals(code)`).
+   네이버 응답을 정규화해 반환. 스펙/필드는 [2절](#2-검증된-네이버-모바일-api-엔드포인트-재조사-불필요) 참고.
+2. **`database.py`** — `SCHEMA`에 테이블 추가. `init_db()`는 멱등이라 `just db` 재실행으로 반영.
+3. **`services/collectors.py`** — fetch 결과를 SQLite에 upsert. `collect_stock`에서
+   `stockEndType`(stock/etf)에 따라 분기.
+4. **`services/repository.py`** — 조회 쿼리 (예: `get_fundamentals(ticker)`).
+5. **`models.py`** — Pydantic 응답 모델.
+6. **`routers/stocks.py`** — 엔드포인트 추가. ⚠️ 고정 경로는 `/{ticker}`보다 **먼저** 선언.
+
+### fetch 함수는 서버 없이 즉시 검증 (권장 습관)
+```bash
+cd backend && uv run python -c "
+from app.services import naver_client as nc
+import json; print(json.dumps(nc.fetch_stock_fundamentals('005930'), ensure_ascii=False, indent=2))
+"
+```
+
+### 커밋 전 검증 (필수)
+```bash
+# 수집 트리거 후 REST 응답 확인
+curl -s -X POST http://localhost:8000/api/data/collect/005930
+curl -s http://localhost:8000/api/stocks/005930/fundamentals | python3 -m json.tool
+
+# 라우트 등록 확인
+curl -s http://localhost:8000/openapi.json | python3 -c "import sys,json;[print(m.upper(),p) for p,ms in json.load(sys.stdin)['paths'].items() for m in ms]"
+
+# 테스트
+cd backend && uv run pytest -q
+```
+
+### 원칙
+- **백엔드/프론트 커밋 분리.** 백엔드 완성 → 커밋 → 프론트 → 커밋.
+- 커밋 전 `pytest`(+ 프론트 변경 시 `npm run build`).
+- 각 작업/세부 항목 완료 시 [7절 체크리스트](#7-진행-체크리스트) 갱신.
+
+## 7. 진행 체크리스트
 
 > 각 작업을 마치면 해당 항목을 `- [x]`로 갱신하고 커밋한다. 다음 세션이
 > 이 목록만 보고도 어디까지 됐는지 알 수 있게 유지한다.
