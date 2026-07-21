@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { formatNumber } from '../utils/format'
 
+// 일별 시세 차트: 종가(선) + 거래량(막대). data는 날짜 오름차순.
 export default function PriceChart({ data }) {
   if (!data || data.length === 0) {
     return <div className="empty">가격 데이터가 없습니다.</div>
@@ -21,6 +22,7 @@ export default function PriceChart({ data }) {
       <ComposedChart data={data} margin={{ top: 10, right: 16, left: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
         <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={24} />
+        {/* 좌축: 가격, 우축: 거래량(숨김) — 두 축 스케일을 분리한다 */}
         <YAxis
           yAxisId="price"
           tickFormatter={formatNumber}
@@ -29,10 +31,7 @@ export default function PriceChart({ data }) {
           width={64}
         />
         <YAxis yAxisId="vol" orientation="right" hide domain={[0, 'dataMax']} />
-        <Tooltip
-          formatter={(value, name) => [formatNumber(value), name]}
-          labelStyle={{ fontWeight: 600 }}
-        />
+        <Tooltip formatter={(value, name) => [formatNumber(value), name]} />
         <Legend />
         <Bar yAxisId="vol" dataKey="volume" name="거래량" fill="#d7e3ff" />
         <Line

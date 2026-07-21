@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { formatSigned } from '../utils/format'
 
-// Net buy quantities per investor group. Positive = net buy, negative = net sell.
+// 투자자별 순매수 막대. 양수=순매수, 음수=순매도. data는 날짜 오름차순.
 export default function TradingFlowChart({ data }) {
   if (!data || data.length === 0) {
     return <div className="empty">매매동향 데이터가 없습니다.</div>
@@ -25,6 +25,7 @@ export default function TradingFlowChart({ data }) {
         <YAxis tickFormatter={formatSigned} tick={{ fontSize: 11 }} width={72} />
         <Tooltip formatter={(value, name) => [formatSigned(value), name]} />
         <Legend />
+        {/* 0 기준선: 순매수/순매도 경계 */}
         <ReferenceLine y={0} stroke="#999" />
         <Bar dataKey="individual_net" name="개인" fill="#8c9bab" />
         <Bar dataKey="institutional_net" name="기관" fill="#f0a202" />

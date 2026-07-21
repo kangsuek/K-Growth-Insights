@@ -3,7 +3,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models import IntradayPoint, PricePoint, Stock, TradingFlowPoint
+from app.models import (
+    IntradayPoint,
+    PricePoint,
+    Stock,
+    StockSummary,
+    TradingFlowPoint,
+)
 from app.services import repository
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
@@ -12,6 +18,12 @@ router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 @router.get("", response_model=list[Stock])
 def list_stocks():
     return repository.list_stocks()
+
+
+# 주의: 고정 경로 "/summary"는 "/{ticker}"보다 먼저 선언해야 매칭된다.
+@router.get("/summary", response_model=list[StockSummary])
+def list_stocks_summary():
+    return repository.list_stocks_summary()
 
 
 @router.get("/{ticker}", response_model=Stock)

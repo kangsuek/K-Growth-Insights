@@ -10,6 +10,7 @@ export default function StockDetail() {
   const { ticker } = useParams()
   const queryClient = useQueryClient()
 
+  // 상세에 필요한 4가지 데이터를 각각 조회 (종목/시세/매매동향/분봉).
   const { data: stock } = useQuery({
     queryKey: ['stock', ticker],
     queryFn: () => stockApi.detail(ticker).then((r) => r.data),
@@ -27,11 +28,13 @@ export default function StockDetail() {
     queryFn: () => stockApi.intraday(ticker).then((r) => r.data),
   })
 
+  // 이 종목만 재수집 후 관련 쿼리 무효화.
   const collect = useMutation({
     mutationFn: () => dataApi.collectOne(ticker).then((r) => r.data),
     onSuccess: () => queryClient.invalidateQueries(),
   })
 
+  // 시세/매매동향은 오름차순 정렬이므로 마지막 원소가 최신일.
   const latest = prices && prices.length ? prices[prices.length - 1] : null
   const recentFlow = flow && flow.length ? flow[flow.length - 1] : null
 
@@ -46,8 +49,7 @@ export default function StockDetail() {
 
       <header className="stock-head">
         <h1>
-          {stock ? stock.name : ticker}{' '}
-          <span className="tag">{stock?.type}</span>
+          {stock ? stock.name : ticker} <span className="tag">{stock?.type}</span>
         </h1>
         <div className="muted">
           {ticker}

@@ -3,13 +3,9 @@ import { Link } from 'react-router-dom'
 import { stockApi, dataApi } from '../api'
 import { formatPrice, formatPct, changeColor } from '../utils/format'
 
+// 종목 한 줄. 최신 종가·등락률은 summary 배치 응답에 이미 포함되어 있어
+// 행마다 별도 요청을 하지 않는다.
 function StockRow({ stock }) {
-  const { data } = useQuery({
-    queryKey: ['prices', stock.ticker, 2],
-    queryFn: () => stockApi.prices(stock.ticker, 2).then((r) => r.data),
-  })
-  const latest = data && data.length ? data[data.length - 1] : null
-
   return (
     <Link to={`/stock/${stock.ticker}`} className="card row">
       <div>
@@ -20,10 +16,10 @@ function StockRow({ stock }) {
         </div>
       </div>
       <div className="row-right">
-        <div className="row-price">{latest ? formatPrice(latest.close_price) : '-'}</div>
-        {latest && (
-          <div style={{ color: changeColor(latest.change_pct) }}>
-            {formatPct(latest.change_pct)}
+        <div className="row-price">{formatPrice(stock.close_price)}</div>
+        {stock.change_pct != null && (
+          <div style={{ color: changeColor(stock.change_pct) }}>
+            {formatPct(stock.change_pct)}
           </div>
         )}
       </div>
@@ -33,15 +29,18 @@ function StockRow({ stock }) {
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
+
+  // 종목 목록 + 최신가를 한 번의 요청으로 조회 (N+1 제거).
   const { data: stocks, isLoading } = useQuery({
-    queryKey: ['stocks'],
-    queryFn: () => stockApi.list().then((r) => r.data),
+    queryKey: ['stocks-summary'],
+    queryFn: () => stockApi.summary().then((r) => r.data),
   })
   const { data: stats } = useQuery({
     queryKey: ['stats'],
     queryFn: () => dataApi.stats().then((r) => r.data),
   })
 
+  // 전체 수집 후 모든 쿼리를 무효화해 화면을 최신화한다.
   const collect = useMutation({
     mutationFn: () => dataApi.collectAll().then((r) => r.data),
     onSuccess: () => queryClient.invalidateQueries(),
@@ -54,11 +53,7 @@ export default function Dashboard() {
           <h1>K-Growth Insights</h1>
           <p className="muted">한국 고성장 섹터 ETF·주식 · 네이버 모바일 API 기반</p>
         </div>
-        <button
-          className="btn"
-          onClick={() => collect.mutate()}
-          disabled={collect.isPending}
-        >
+        <button className="btn" onClick={() => collect.mutate()} disabled={collect.isPending}>
           {collect.isPending ? '수집 중…' : '전체 데이터 수집'}
         </button>
       </header>

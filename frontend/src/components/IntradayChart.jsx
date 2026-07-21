@@ -11,12 +11,13 @@ import {
 } from 'recharts'
 import { formatNumber } from '../utils/format'
 
-// Minute bars for the latest trading session.
+// 최근 세션의 분봉 차트: 체결가(선) + 분당 거래량(막대).
 export default function IntradayChart({ data }) {
   if (!data || data.length === 0) {
     return <div className="empty">분봉 데이터가 없습니다. (장중이 아니거나 미수집)</div>
   }
 
+  // datetime("2026-07-21T09:00:00")에서 시:분만 X축 라벨로 사용.
   const rows = data.map((d) => ({ ...d, time: d.datetime.slice(11, 16) }))
 
   return (

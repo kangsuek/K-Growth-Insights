@@ -13,6 +13,16 @@ class Stock(BaseModel):
     theme: Optional[str] = None
 
 
+class StockSummary(BaseModel):
+    ticker: str
+    name: str
+    type: str = "STOCK"
+    theme: Optional[str] = None
+    close_price: Optional[float] = None
+    change_pct: Optional[float] = None
+    date: Optional[str] = None
+
+
 class PricePoint(BaseModel):
     date: str
     open_price: Optional[float] = None
