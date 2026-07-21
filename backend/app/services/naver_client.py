@@ -23,7 +23,11 @@ import httpx
 logger = logging.getLogger(__name__)
 
 MSTOCK_BASE = "https://m.stock.naver.com/api/stock"
+MSTOCKS_BASE = "https://m.stock.naver.com/api/stocks"
 CHART_BASE = "https://api.stock.naver.com/chart/domestic/item"
+
+# 카탈로그 수집 대상 시장. 네이버 URL 세그먼트 그대로 사용.
+MARKETS = ("KOSPI", "KOSDAQ")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -330,3 +334,42 @@ def fetch_etf_holdings(code: str) -> list[dict]:
             }
         )
     return rows
+
+
+def fetch_market_catalog(market: str, limit: int = 100) -> list[dict]:
+    """시총 상위 순 종목 카탈로그: stocks/marketValue/{market} 페이지네이션 수집.
+
+    한 페이지 최대 60건이므로 limit에 도달할 때까지 여러 페이지를 요청한다.
+    각 행: {ticker, name, type('STOCK'|'ETF'), exchange('KOSPI'|'KOSDAQ')}
+    """
+    if market not in MARKETS:
+        raise ValueError(f"지원하지 않는 시장: {market}")
+
+    rows: list[dict] = []
+    url = f"{MSTOCKS_BASE}/marketValue/{market}"
+    try:
+        with _client() as client:
+            page = 1
+            while len(rows) < limit:
+                resp = client.get(url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
+                resp.raise_for_status()
+                items = resp.json().get("stocks") or []
+                if not items:
+                    break
+                for it in items:
+                    code = it.get("itemCode")
+                    if not code:
+                        continue
+                    rows.append(
+                        {
+                            "ticker": code,
+                            "name": it.get("stockName"),
+                            "type": "ETF" if it.get("stockEndType") == "etf" else "STOCK",
+                            "exchange": market,
+                        }
+                    )
+                page += 1
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_market_catalog(%s) failed: %s", market, exc)
+
+    return rows[:limit]

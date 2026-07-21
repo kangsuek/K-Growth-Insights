@@ -226,10 +226,10 @@ def test_fetch_daily_prices_parses_naver():
 - [x] `just test` + `npm run build` 후 커밋
 
 ### 작업 2 — 종목 카탈로그 자동 확장
-- [ ] `services/catalog.py`: `marketValue/{KOSPI,KOSDAQ}` 페이지네이션 수집
-- [ ] `POST /api/data/sync-catalog?market=&limit=` (또는 sync-stocks 확장)
-- [ ] collect-all 백그라운드/진행률 고려
-- [ ] 커밋
+- [x] `services/catalog.py`: `marketValue/{KOSPI,KOSDAQ}` 페이지네이션 수집 (수기 theme 보존)
+- [x] `POST /api/data/sync-catalog?market=&limit=`
+- [~] collect-all 백그라운드/진행률 고려 → 종목 수↑ 시 collect-all 시간↑ 확인. 전체 백그라운드화·진행률 폴링은 작업 6로 이관
+- [x] 커밋
 
 ### 작업 3 — 뉴스
 - [ ] `config.py`에 `NAVER_CLIENT_ID/SECRET` env (없으면 비활성화)

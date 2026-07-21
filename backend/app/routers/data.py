@@ -1,10 +1,10 @@
 """Data collection endpoints (Naver mobile API -> SQLite)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.models import CollectAllResult, CollectResult
-from app.services import collectors, repository, stocks_sync
+from app.services import catalog, collectors, naver_client, repository, stocks_sync
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
@@ -13,6 +13,16 @@ router = APIRouter(prefix="/api/data", tags=["data"])
 def sync_stocks():
     count = stocks_sync.sync_stocks(refresh_from_api=True)
     return {"synced": count}
+
+
+@router.post("/sync-catalog")
+def sync_catalog(
+    market: str | None = Query(None, description="KOSPI 또는 KOSDAQ, 생략 시 둘 다"),
+    limit: int = Query(100, ge=1, le=1000, description="시장별 시총 상위 N 종목"),
+):
+    if market is not None and market not in naver_client.MARKETS:
+        raise HTTPException(status_code=400, detail="market은 KOSPI 또는 KOSDAQ이어야 합니다")
+    return {"synced": catalog.sync_catalog(market=market, limit=limit)}
 
 
 @router.post("/collect/{ticker}", response_model=CollectResult)

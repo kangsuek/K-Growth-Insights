@@ -1,4 +1,8 @@
 """Unit tests for Naver mobile API response normalization (no network)."""
+import httpx
+import pytest
+import respx
+
 from app.services import naver_client as nc
 
 
@@ -36,3 +40,49 @@ def test_date_normalizers():
     assert nc._bizdate_to_iso("20260721") == "2026-07-21"
     assert nc._localdatetime_to_iso("20260721090000") == "2026-07-21T09:00:00"
     assert nc._localdatetime_to_iso("20260721153000") == "2026-07-21T15:30:00"
+
+
+def _catalog_page(codes):
+    return {
+        "stocks": [
+            {"itemCode": c, "stockName": f"종목{c}", "stockEndType": t}
+            for c, t in codes
+        ]
+    }
+
+
+@respx.mock
+def test_fetch_market_catalog_paginates_and_normalizes():
+    route = respx.get(f"{nc.MSTOCKS_BASE}/marketValue/KOSPI")
+    # 페이지1은 60건(가득), 페이지2는 나머지 → limit까지 페이지네이션
+    page1 = [(f"{i:06d}", "stock") for i in range(60)]
+    page2 = [("900001", "etf"), ("900002", "stock")]
+    route.side_effect = [
+        httpx.Response(200, json=_catalog_page(page1)),
+        httpx.Response(200, json=_catalog_page(page2)),
+    ]
+
+    rows = nc.fetch_market_catalog("KOSPI", limit=62)
+
+    assert len(rows) == 62
+    assert route.call_count == 2  # 두 페이지 요청
+    assert rows[0] == {"ticker": "000000", "name": "종목000000", "type": "STOCK", "exchange": "KOSPI"}
+    assert rows[60]["type"] == "ETF"  # stockEndType 'etf' → 'ETF'
+
+
+@respx.mock
+def test_fetch_market_catalog_stops_on_empty_page():
+    route = respx.get(f"{nc.MSTOCKS_BASE}/marketValue/KOSDAQ")
+    route.side_effect = [
+        httpx.Response(200, json=_catalog_page([("111111", "stock")])),
+        httpx.Response(200, json={"stocks": []}),
+    ]
+
+    rows = nc.fetch_market_catalog("KOSDAQ", limit=100)
+
+    assert [r["ticker"] for r in rows] == ["111111"]
+
+
+def test_fetch_market_catalog_rejects_unknown_market():
+    with pytest.raises(ValueError):
+        nc.fetch_market_catalog("NASDAQ", limit=1)
