@@ -204,27 +204,10 @@ def fetch_trading_flow(code: str, pages: int = 1) -> list[dict]:
     return rows
 
 
-def fetch_intraday(code: str) -> list[dict]:
-    """
-    Minute bars for the latest trading session, chronological order.
-
-    `accumulatedTradingVolume` in this endpoint is per-bar volume (it rises and
-    falls between bars), so it is used directly as the bar volume.
-
-    Each row: {datetime, open_price, high_price, low_price, price, volume}
-    """
-    url = f"{CHART_BASE}/{code}/minute"
-    try:
-        with _client() as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            items = resp.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("fetch_intraday(%s) failed: %s", code, exc)
-        return []
-
+def _parse_minute_bars(items) -> list[dict]:
+    """분봉 원본 배열을 정규화. accumulatedTradingVolume은 분당 거래량이다."""
     rows: list[dict] = []
-    for it in items:
+    for it in items or []:
         rows.append(
             {
                 "datetime": _localdatetime_to_iso(it.get("localDateTime")),
@@ -236,6 +219,53 @@ def fetch_intraday(code: str) -> list[dict]:
             }
         )
     return rows
+
+
+def _latest_trading_date(code: str) -> Optional[str]:
+    """가장 최근 거래일을 YYYYMMDD로 반환(일별 시세 최상단). 실패 시 None."""
+    prices = fetch_daily_prices(code, pages=1)
+    if not prices:
+        return None
+    # fetch_daily_prices는 최신순이므로 첫 행이 최근 거래일. date는 'YYYY-MM-DD'.
+    date = prices[0].get("date")
+    return date.replace("-", "") if date else None
+
+
+def fetch_intraday(code: str) -> list[dict]:
+    """
+    Minute bars for the latest trading session, chronological order.
+
+    장 시작 전이라 당일 분봉이 아직 없으면(빈 응답) 직전 거래일 분봉으로 폴백한다.
+    `accumulatedTradingVolume` in this endpoint is per-bar volume (it rises and
+    falls between bars), so it is used directly as the bar volume.
+
+    Each row: {datetime, open_price, high_price, low_price, price, volume}
+    """
+    url = f"{CHART_BASE}/{code}/minute"
+    try:
+        with _client() as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            rows = _parse_minute_bars(resp.json())
+            if rows:
+                return rows
+
+            # 당일 세션이 비었으면 직전 거래일 09:00~16:00 구간으로 재요청.
+            date = _latest_trading_date(code)
+            if not date:
+                return []
+            resp = client.get(
+                url,
+                params={
+                    "startDateTime": f"{date}0900",
+                    "endDateTime": f"{date}1600",
+                },
+            )
+            resp.raise_for_status()
+            return _parse_minute_bars(resp.json())
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_intraday(%s) failed: %s", code, exc)
+        return []
 
 
 def fetch_stock_fundamentals(code: str) -> Optional[dict]:

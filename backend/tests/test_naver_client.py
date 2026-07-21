@@ -86,3 +86,58 @@ def test_fetch_market_catalog_stops_on_empty_page():
 def test_fetch_market_catalog_rejects_unknown_market():
     with pytest.raises(ValueError):
         nc.fetch_market_catalog("NASDAQ", limit=1)
+
+
+@respx.mock
+def test_fetch_intraday_returns_current_session_when_available():
+    respx.get(f"{nc.CHART_BASE}/005930/minute").mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"localDateTime": "20260722090000", "currentPrice": 100.0}],
+        )
+    )
+    rows = nc.fetch_intraday("005930")
+    assert len(rows) == 1
+    assert rows[0]["datetime"] == "2026-07-22T09:00:00"
+
+
+@respx.mock
+def test_fetch_intraday_falls_back_to_previous_trading_day():
+    # 1차 /minute(당일)는 빈 응답 → 일별시세로 최근 거래일 확인 → 그 날짜로 재요청
+    minute = respx.get(f"{nc.CHART_BASE}/005930/minute")
+    minute.side_effect = [
+        httpx.Response(200, json=[]),  # 당일 세션 비어 있음
+        httpx.Response(
+            200,
+            json=[
+                {"localDateTime": "20260721090000", "currentPrice": 245500.0},
+                {"localDateTime": "20260721153000", "currentPrice": 259000.0},
+            ],
+        ),
+    ]
+    respx.get(f"{nc.MSTOCK_BASE}/005930/price").mock(
+        return_value=httpx.Response(
+            200, json=[{"localTradedAt": "2026-07-21", "closePrice": "259,000"}]
+        )
+    )
+
+    rows = nc.fetch_intraday("005930")
+
+    assert len(rows) == 2
+    assert rows[0]["datetime"] == "2026-07-21T09:00:00"
+    assert rows[-1]["price"] == 259000.0
+    # 폴백 재요청 시 직전 거래일 구간 파라미터가 전달되었는지 확인
+    fallback_req = minute.calls[1].request
+    assert "startDateTime=202607210900" in str(fallback_req.url)
+    assert "endDateTime=202607211600" in str(fallback_req.url)
+
+
+@respx.mock
+def test_fetch_intraday_empty_when_no_trading_date():
+    respx.get(f"{nc.CHART_BASE}/005930/minute").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.get(f"{nc.MSTOCK_BASE}/005930/price").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    assert nc.fetch_intraday("005930") == []
