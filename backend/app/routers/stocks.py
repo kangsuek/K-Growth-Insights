@@ -9,15 +9,10 @@ from app.models import (
     Stock,
     StockSummary,
     TradingFlowPoint,
-)
+)  # Stock: /{ticker} 응답 모델, StockSummary: /summary 응답 모델
 from app.services import repository
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
-
-
-@router.get("", response_model=list[Stock])
-def list_stocks():
-    return repository.list_stocks()
 
 
 # 주의: 고정 경로 "/summary"는 "/{ticker}"보다 먼저 선언해야 매칭된다.

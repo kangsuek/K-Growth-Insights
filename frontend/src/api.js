@@ -5,8 +5,6 @@ const api = axios.create({ baseURL: '/api' })
 
 // 종목 및 시장 데이터 조회 엔드포인트
 export const stockApi = {
-  // 종목 목록 (티커/이름/유형/테마만)
-  list: () => api.get('/stocks'),
   // 종목 목록 + 각 종목의 최신 종가·등락률을 한 번에 조회.
   // 대시보드가 종목마다 개별 요청(N+1)하지 않도록 하는 배치 엔드포인트.
   summary: () => api.get('/stocks/summary'),
@@ -21,7 +19,6 @@ export const stockApi = {
 export const dataApi = {
   collectAll: () => api.post('/data/collect-all'),
   collectOne: (ticker) => api.post(`/data/collect/${ticker}`),
-  syncStocks: () => api.post('/data/sync-stocks'),
   stats: () => api.get('/data/stats'),
 }
 
