@@ -107,6 +107,11 @@ just test       # 백엔드 pytest
 just build      # 프론트 빌드
 ```
 
+- **API 탐색**: 서버 기동 후 http://localhost:8000/docs (Swagger UI, 자동 생성)에서
+  전체 엔드포인트를 확인·호출할 수 있다.
+- **환경 변수**: `just setup`이 `.env.example` → `.env`를 생성한다. 기본값(SQLite 경로,
+  CORS, 수집 페이지 수)으로 바로 동작하며, 필요 시 `.env`만 수정한다.
+
 ## 5. 작업 방식 제안
 
 - 작업 단위로 브랜치 없이 `main`에 커밋해도 무방(개인 저장소). 각 작업은 백엔드→프론트
@@ -152,9 +157,55 @@ cd backend && uv run pytest -q
 ### 원칙
 - **백엔드/프론트 커밋 분리.** 백엔드 완성 → 커밋 → 프론트 → 커밋.
 - 커밋 전 `pytest`(+ 프론트 변경 시 `npm run build`).
-- 각 작업/세부 항목 완료 시 [7절 체크리스트](#7-진행-체크리스트) 갱신.
+- 각 작업/세부 항목 완료 시 [9절 체크리스트](#9-진행-체크리스트) 갱신.
 
-## 7. 진행 체크리스트
+## 7. 네이버 API 주의사항 / 트러블슈팅
+
+- **pageSize ≤ 60**: 초과 시 400. 더 많은 데이터는 `page`로 페이지네이션.
+- **`trend`는 `page`를 무시**하고 항상 최근 ~20건만 반환 → 매매동향은 약 20거래일이 한계.
+- **빈 배열 = 장 마감·휴장·미상장**이지 오류가 아니다. 빈 결과는 저장/캐시하지 말고
+  다음 수집에서 다시 시도되게 둔다.
+- **`Referer: https://m.stock.naver.com` 헤더 필수** (없으면 차단될 수 있음).
+  `naver_client.HEADERS`를 그대로 사용.
+- **대량 수집 rate-limit 주의**: 현재 `naver_client`에는 재시도·요청 간격 로직이 **없다**.
+  카탈로그(수백 종목) 작업 전에 요청 간 짧은 지연(예: 0.2~0.5s)과 429/타임아웃 재시도를 먼저 추가할 것.
+- **문자열 포맷**: 응답 값은 콤마·`+/-`·`%` 문자열, `bizdate`=YYYYMMDD,
+  `localDateTime`=YYYYMMDDHHMMSS. 반드시 `naver_client`의 정규화 헬퍼를 거친다.
+- **라우트 404 vs 405**: 고정 경로를 `/{ticker}`보다 먼저 선언하지 않으면
+  `/summary` 같은 경로가 `{ticker}`로 잡혀 404가 난다.
+- **분봉 거래량**: 필드명은 `accumulatedTradingVolume`이지만 분봉에서는 **분당 거래량**(누적 아님).
+
+## 8. 테스트 전략
+
+- 순수 파싱(정규화 헬퍼)은 네트워크 없이 단위 테스트 (`tests/test_naver_client.py` 참고).
+- 수집기/클라이언트의 HTTP는 **respx**(이미 dev 의존성)로 네이버 응답을 모킹한다.
+  실제 네이버를 호출하지 않아 빠르고 결정적이다.
+
+최소 예시 (`httpx` + `respx`):
+
+```python
+import respx, httpx
+from app.services import naver_client as nc
+
+@respx.mock
+def test_fetch_daily_prices_parses_naver():
+    respx.get(url__regex=r".*/api/stock/005930/price").mock(
+        return_value=httpx.Response(200, json=[
+            {"localTradedAt": "2026-07-21", "closePrice": "260,000",
+             "openPrice": "249,000", "highPrice": "263,500", "lowPrice": "243,000",
+             "accumulatedTradingVolume": 33369432, "fluctuationsRatio": "6.15"},
+        ])
+    )
+    rows = nc.fetch_daily_prices("005930", pages=1)
+    assert rows[0]["close_price"] == 260000.0
+    assert rows[0]["volume"] == 33369432
+```
+
+- collectors 테스트는 임시 SQLite(`DATABASE_PATH`를 tmp로 오버라이드)에 upsert 후
+  행 수·값을 검증한다.
+- 커밋 전 `cd backend && uv run pytest -q`.
+
+## 9. 진행 체크리스트
 
 > 각 작업을 마치면 해당 항목을 `- [x]`로 갱신하고 커밋한다. 다음 세션이
 > 이 목록만 보고도 어디까지 됐는지 알 수 있게 유지한다.
