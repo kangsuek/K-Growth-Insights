@@ -1,0 +1,9 @@
+[
+  { "ticker": "005930", "name": "삼성전자", "type": "STOCK", "theme": "반도체" },
+  { "ticker": "000660", "name": "SK하이닉스", "type": "STOCK", "theme": "반도체" },
+  { "ticker": "042700", "name": "한미반도체", "type": "STOCK", "theme": "반도체 장비" },
+  { "ticker": "373220", "name": "LG에너지솔루션", "type": "STOCK", "theme": "2차전지" },
+  { "ticker": "247540", "name": "에코프로비엠", "type": "STOCK", "theme": "2차전지" },
+  { "ticker": "487240", "name": "KODEX AI전력핵심설비", "type": "ETF", "theme": "AI/전력" },
+  { "ticker": "261220", "name": "KODEX WTI원유선물(H)", "type": "ETF", "theme": "원자재" }
+]
