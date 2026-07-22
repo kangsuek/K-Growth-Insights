@@ -172,39 +172,70 @@ def fetch_daily_prices(code: str, pages: int = 1) -> list[dict]:
     return rows
 
 
-def fetch_trading_flow(code: str, pages: int = 1) -> list[dict]:
+def _flow_row(it: dict) -> dict:
+    return {
+        "date": _bizdate_to_iso(it.get("bizdate")),
+        "individual_net": _to_int(it.get("individualPureBuyQuant")),
+        "institutional_net": _to_int(it.get("organPureBuyQuant")),
+        "foreign_net": _to_int(it.get("foreignerPureBuyQuant")),
+        "foreign_hold_ratio": _to_float(it.get("foreignerHoldRatio")),
+    }
+
+
+# 매매동향 bizdate 역페이지네이션 안전 상한(각 호출 ~10건, 60회 ≈ 2.5년).
+_FLOW_MAX_PAGES = 60
+
+
+def fetch_trading_flow(code: str, pages: int = 1, days: int | None = None) -> list[dict]:
     """
     Investor trading flow (net buy quantities), newest first.
 
-    Unlike the legacy desktop scrape, the mobile API returns the *actual*
-    individual net (individualPureBuyQuant) rather than deriving it as
-    -(institutional + foreign), so 개인 순매수 is exact here.
+    모바일 trend API는 한 번에 최근 ~10~20건만 반환한다. days가 주어지면 `bizdate`
+    파라미터로 과거 창을 뒤로 페이지네이션해 해당 일수만큼의 이력을 모은다(모바일
+    API만 사용, 데스크톱 HTML 스크래핑 없음).
 
     Each row: {date, individual_net, institutional_net, foreign_net,
                foreign_hold_ratio}
     """
+    url = f"{MSTOCK_BASE}/{code}/trend"
     rows: list[dict] = []
+    seen: set[str] = set()
     try:
         with _client() as client:
-            for page in range(1, pages + 1):
-                url = f"{MSTOCK_BASE}/{code}/trend"
-                resp = client.get(
-                    url, params={"trendType": 1, "pageSize": 20, "page": page}
-                )
+            if days is None:
+                # 기존 동작: 최근 1회 창.
+                resp = client.get(url, params={"trendType": 1})
                 resp.raise_for_status()
-                items = resp.json()
+                for it in resp.json() or []:
+                    rows.append(_flow_row(it))
+                return rows
+
+            from datetime import date, timedelta
+            target_start = (date.today() - timedelta(days=days)).strftime("%Y%m%d")
+            bizdate: str | None = None
+            for _ in range(_FLOW_MAX_PAGES):
+                params = {"trendType": 1}
+                if bizdate:
+                    params["bizdate"] = bizdate
+                resp = client.get(url, params=params)
+                resp.raise_for_status()
+                items = resp.json() or []
                 if not items:
                     break
+                oldest = None
+                new_count = 0
                 for it in items:
-                    rows.append(
-                        {
-                            "date": _bizdate_to_iso(it.get("bizdate")),
-                            "individual_net": _to_int(it.get("individualPureBuyQuant")),
-                            "institutional_net": _to_int(it.get("organPureBuyQuant")),
-                            "foreign_net": _to_int(it.get("foreignerPureBuyQuant")),
-                            "foreign_hold_ratio": _to_float(it.get("foreignerHoldRatio")),
-                        }
-                    )
+                    bd = it.get("bizdate")
+                    if not bd or bd in seen:
+                        continue
+                    seen.add(bd)
+                    new_count += 1
+                    rows.append(_flow_row(it))
+                    if oldest is None or bd < oldest:
+                        oldest = bd
+                if new_count == 0 or oldest is None or oldest <= target_start:
+                    break
+                bizdate = oldest  # 그 이전 창으로 이동
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_trading_flow(%s) failed: %s", code, exc)
     return rows

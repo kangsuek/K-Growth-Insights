@@ -55,8 +55,9 @@ def collect_prices(ticker: str, pages: int = PRICE_PAGES, days: int | None = Non
     return len(rows)
 
 
-def collect_trading_flow(ticker: str, pages: int = TRADING_FLOW_PAGES) -> int:
-    rows = naver_client.fetch_trading_flow(ticker, pages=pages)
+def collect_trading_flow(ticker: str, pages: int = TRADING_FLOW_PAGES,
+                         days: int | None = None) -> int:
+    rows = naver_client.fetch_trading_flow(ticker, pages=pages, days=days)
     if not rows:
         return 0
     with get_connection() as conn:
@@ -238,7 +239,7 @@ def collect_stock(ticker: str, days: int | None = None) -> CollectResult:
     result = CollectResult(ticker=ticker)
     try:
         result.prices = collect_prices(ticker, days=days)
-        result.trading_flow = collect_trading_flow(ticker)
+        result.trading_flow = collect_trading_flow(ticker, days=days)
         result.intraday = collect_intraday(ticker)
 
         # 이미 동기화된 stocks.type으로 주식/ETF 펀더멘털을 분기 수집한다.
