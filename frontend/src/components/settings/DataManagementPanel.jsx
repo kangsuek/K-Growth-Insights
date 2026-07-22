@@ -243,6 +243,21 @@ export default function DataManagementPanel() {
     },
   })
 
+  // 종목 카탈로그 삭제 Mutation
+  const clearTickerCatalogMutation = useMutation({
+    mutationFn: async () => {
+      const response = await settingsApi.clearTickerCatalog()
+      return response.data
+    },
+    onSuccess: (data) => {
+      toast.success(`종목 카탈로그 ${(data.deleted || 0).toLocaleString('ko-KR')}개 삭제됨`, 4000)
+      queryClient.invalidateQueries({ queryKey: ['data-stats'] })
+    },
+    onError: (error) => {
+      toast.error(`카탈로그 삭제 실패: ${error.message}`)
+    },
+  })
+
   // 데이터베이스 초기화 Mutation
   const resetMutation = useMutation({
     mutationFn: async () => {
@@ -401,10 +416,16 @@ export default function DataManagementPanel() {
             </div>
           ) : stats ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* 종목 수 */}
+              {/* 종목 수 (관심종목 워치리스트) */}
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">종목 수</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">종목 수 (관심)</div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatNumber(stats.etfs)}</div>
+              </div>
+
+              {/* 종목 카탈로그 (발굴 유니버스) */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">종목 카탈로그</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatNumber(stats.stock_catalog)}</div>
               </div>
 
               {/* 가격 레코드 */}
@@ -497,9 +518,18 @@ export default function DataManagementPanel() {
                 />
               )}
 
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                최초 1회 실행 권장. 이후에는 분기별 1회 정도 실행하면 충분합니다.
-              </p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  최초 1회 실행 권장. 이후에는 분기별 1회 정도 실행하면 충분합니다.
+                </p>
+                <button
+                  onClick={() => clearTickerCatalogMutation.mutate()}
+                  disabled={clearTickerCatalogMutation.isPending || collectTickerCatalogMutation.isPending}
+                  className="text-xs font-medium text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 whitespace-nowrap ml-3"
+                >
+                  {clearTickerCatalogMutation.isPending ? '삭제 중...' : '카탈로그 삭제'}
+                </button>
+              </div>
             </div>
 
             {/* 가격/뉴스 데이터 수집 */}

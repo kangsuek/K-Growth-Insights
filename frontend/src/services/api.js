@@ -251,6 +251,9 @@ export const settingsApi = {
   // 종목 목록 수집 진행률 조회 (빠른 조회)
   getTickerCatalogProgress: () => api.get('/settings/ticker-catalog/collect-progress', { timeout: FAST_API_TIMEOUT }),
 
+  // 종목 카탈로그(발굴 유니버스) 전체 삭제
+  clearTickerCatalog: () => api.delete('/settings/ticker-catalog', { timeout: NORMAL_API_TIMEOUT }),
+
   // 종목 순서 변경 (일반 작업)
   reorderStocks: (tickers) => api.post('/settings/stocks/reorder', tickers, { timeout: NORMAL_API_TIMEOUT }),
 

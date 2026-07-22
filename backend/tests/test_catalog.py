@@ -97,3 +97,19 @@ def test_sync_catalog_endpoint_returns_counts():
     r = client.post("/api/data/sync-catalog", params={"market": "KOSDAQ", "limit": 10})
     assert r.status_code == 200
     assert r.json() == {"synced": {"KOSDAQ": 1}}
+
+
+def test_clear_catalog_endpoint():
+    from app.database import get_connection
+    with get_connection() as conn:
+        conn.execute("INSERT INTO stock_catalog (ticker, name, type, market) VALUES ('005930','삼성전자','STOCK','KOSPI')")
+    r = client.delete("/api/settings/ticker-catalog").json()
+    assert r["deleted"] == 1
+    with get_connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM stock_catalog").fetchone()[0] == 0
+
+
+def test_catalog_progress_shape():
+    body = client.get("/api/settings/ticker-catalog/collect-progress").json()
+    for f in ("status", "step_index", "total_steps", "items_collected", "message"):
+        assert f in body

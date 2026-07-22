@@ -122,8 +122,15 @@ def collect_ticker_catalog(limit: int | None = Query(None, ge=1, le=10000)):
 
 @router.get("/ticker-catalog/collect-progress")
 def ticker_catalog_progress():
-    # 카탈로그 수집은 동기 처리라 별도 진행상태를 두지 않는다(항상 idle).
-    return {"is_collecting": False, "status": "idle"}
+    """종목목록수집 진행률(코스피→코스닥→ETF→저장 단계). 동시 폴링용."""
+    return catalog.get_progress()
+
+
+@router.delete("/ticker-catalog")
+def clear_ticker_catalog():
+    """발굴 카탈로그(stock_catalog) 전체 삭제."""
+    deleted = catalog.clear_catalog()
+    return {"deleted": deleted}
 
 
 # --- API 키 ------------------------------------------------------------------

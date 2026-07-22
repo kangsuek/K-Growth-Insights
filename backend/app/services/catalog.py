@@ -7,11 +7,29 @@
 from __future__ import annotations
 
 import logging
+import threading
 
 from app.database import get_connection
 from app.services import naver_client
 
 logger = logging.getLogger(__name__)
+
+# 종목목록수집 진행상태(동기 수집 중, 동시 폴링이 읽는다).
+# 단계: 0=코스피, 1=코스닥, 2=ETF, 3=저장 (프론트 StepProgressBar와 동일)
+_lock = threading.Lock()
+_progress: dict = {
+    "status": "idle",       # idle | in_progress | completed | error
+    "step_index": 0,
+    "total_steps": 4,
+    "items_collected": 0,
+    "message": "",
+}
+_STEP = {"KOSPI": 0, "KOSDAQ": 1}
+
+
+def get_progress() -> dict:
+    with _lock:
+        return dict(_progress)
 
 
 def _upsert_row(conn, row: dict) -> None:
@@ -56,17 +74,35 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
     """
     per_market: dict[str, int] = {}
     etf_count = 0
-    with get_connection() as conn:
-        for mkt in naver_client.MARKETS:
-            rows = naver_client.fetch_market_catalog(mkt, limit=limit)
-            for row in rows:
-                _upsert_row(conn, row)
-                if row["type"] == "ETF":
-                    etf_count += 1
-            per_market[mkt] = len(rows)
-            logger.info("Catalog synced %s: %d stocks", mkt, len(rows))
+    with _lock:
+        _progress.update(status="in_progress", step_index=0, items_collected=0,
+                         message="종목 목록 수집 시작...")
+    try:
+        with get_connection() as conn:
+            for mkt in naver_client.MARKETS:
+                with _lock:
+                    _progress.update(step_index=_STEP[mkt], message=f"{mkt} 종목 수집 중...")
+                rows = naver_client.fetch_market_catalog(mkt, limit=limit)
+                for row in rows:
+                    _upsert_row(conn, row)
+                    if row["type"] == "ETF":
+                        etf_count += 1
+                per_market[mkt] = len(rows)
+                with _lock:
+                    _progress["items_collected"] += len(rows)
+                logger.info("Catalog synced %s: %d stocks", mkt, len(rows))
+            with _lock:
+                _progress.update(step_index=2, message="ETF 분류 중...")
+                _progress.update(step_index=3, message="저장 중...")
+    except Exception:
+        with _lock:
+            _progress.update(status="error", message="수집 실패")
+        raise
 
     total = sum(per_market.values())
+    with _lock:
+        _progress.update(status="completed", step_index=4, items_collected=total,
+                         message="수집 완료")
     return {
         "kospi_count": per_market.get("KOSPI", 0),
         "kosdaq_count": per_market.get("KOSDAQ", 0),
@@ -74,3 +110,12 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
         "total_collected": total,
         "saved_count": total,
     }
+
+
+def clear_catalog() -> int:
+    """발굴 카탈로그(stock_catalog) 전체 삭제. 삭제 건수 반환."""
+    with get_connection() as conn:
+        cur = conn.execute("DELETE FROM stock_catalog")
+    with _lock:
+        _progress.update(status="idle", step_index=0, items_collected=0, message="")
+    return cur.rowcount
