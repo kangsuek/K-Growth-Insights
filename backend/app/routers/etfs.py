@@ -116,7 +116,9 @@ def get_etf(ticker: str):
 
 @router.get("/{ticker}/prices")
 def get_etf_prices(ticker: str, days: int = Query(60, ge=1, le=365)):
-    return [_price_out(p) for p in repository.get_prices(ticker, days=days)]
+    # 원본과 동일하게 최신순(date DESC)으로 반환한다(상세의 '최근 가격'은 prices[0]).
+    rows = repository.get_prices(ticker, days=days)  # 오래된→최신
+    return [_price_out(p) for p in reversed(rows)]
 
 
 @router.get("/{ticker}/trading-flow")
@@ -134,12 +136,25 @@ def get_etf_fundamentals(ticker: str):
     data = repository.get_fundamentals(ticker)
     if data is None:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+    # 구성종목 필드를 프론트 계약(stock_code/stock_name/daily_change_pct)으로 매핑.
+    holdings = data.get("holdings")
+    if holdings:
+        data["holdings"] = [
+            {
+                "seq": h.get("seq"),
+                "stock_code": h.get("item_code"),
+                "stock_name": h.get("item_name"),
+                "weight": h.get("weight"),
+                "daily_change_pct": None,
+            }
+            for h in holdings
+        ]
     return data
 
 
 @router.get("/{ticker}/insights")
 def get_etf_insights(ticker: str, period: str = Query("1m")):
-    data = insights.build_insights(ticker)
+    data = insights.build_insights(ticker, period=period)
     if data is None:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
     return data

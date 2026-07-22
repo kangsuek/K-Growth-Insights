@@ -77,13 +77,16 @@
 - [x] **수집 시간 최소화**: collect-all 종목 단위 병렬화(ThreadPoolExecutor) + SQLite
       WAL/busy_timeout → 10종목 3.3s→0.7s(약 5배). `COLLECT_CONCURRENCY` env로 조정
 
-### Phase 3 — 종목 상세(ETFDetail)
-- [ ] 상세 페이지 이식, 시세/매매동향/분봉/펀더멘털/인사이트/뉴스 연결
-- [ ] 백엔드 ➕: `/etfs/{t}/metrics`(지표 계산), 필요 시 `batch-summary`
-- [ ] **원본 정렬 필요(개념 차이)**: `/etfs/{t}/insights`를 원본 ETFInsights 형태로
-      재구현 (strategy{short/medium/long_term, recommendation, comment}, key_points[], risks[]).
-      현재는 내 자체 규칙(summary/signals) → 원본 로직 참조해 교체.
-- [ ] fundamentals 응답도 원본 형태 대조 후 정렬
+### Phase 3 — 종목 상세(ETFDetail) ✅
+- [x] 상세 페이지 연결(시세/매매동향/분봉/펀더멘털/인사이트/뉴스) — 브라우저 검증
+- [x] `/etfs/{t}/insights`를 **원본 insights_service 로직 그대로** 재구현
+      (strategy{short/medium/long_term, recommendation, comment}, key_points[], risks[];
+      returns 1w/1m/ytd·연환산 변동성, 외국인 임계값=5%×평균거래량×일수)
+- [x] `/etfs/{t}/prices`를 원본과 동일 최신순(DESC)으로 반환(상세 '최근 가격' 정상화)
+- [x] fundamentals 구성종목 필드 매핑(item_*→stock_code/stock_name/daily_change_pct)
+- [x] `/api/news/{ticker}` 라우터 추가(원본 NewsListResponse 형태 {news, analysis})
+- [x] 레거시 `/api/stocks/{ticker}/insights` + 미사용 InsightsResponse 제거
+- 참고: `/etfs/{t}/metrics`는 어느 페이지도 사용 안 함 → 미구현(불필요)
 
 ### Phase 4 — 종목발굴(Screening/Scanner)
 - [ ] 백엔드 ➕: `/scanner`, `/scanner/themes`, `/scanner/recommendations`

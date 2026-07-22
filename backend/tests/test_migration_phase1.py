@@ -113,3 +113,28 @@ def test_reset_clears_collected_data():
         s = conn.execute("SELECT COUNT(*) FROM stocks").fetchone()[0]
     assert n == 0      # 시세 삭제됨
     assert s == 1      # 종목 목록은 보존
+
+
+def test_etf_prices_returned_newest_first():
+    """상세 prices는 원본과 동일하게 최신순(DESC)."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_prices("005930", [100, 101, 102])  # 07-01, 07-02, 07-03
+    rows = client.get("/api/etfs/005930/prices?days=10").json()
+    assert rows[0]["date"] == "2026-07-03"   # 최신이 먼저
+    assert rows[-1]["date"] == "2026-07-01"
+
+
+def test_etf_fundamentals_holdings_field_mapping():
+    """구성종목은 프론트 계약(stock_code/stock_name/daily_change_pct)으로 매핑."""
+    seed_stock("487240", "KODEX ETF", "ETF")
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO etf_holdings (ticker, seq, item_code, item_name, weight) VALUES (?,?,?,?,?)",
+            ("487240", 1, "005930", "삼성전자", 20.5),
+        )
+    body = client.get("/api/etfs/487240/fundamentals").json()
+    h = body["holdings"][0]
+    assert h["stock_code"] == "005930"
+    assert h["stock_name"] == "삼성전자"
+    assert h["weight"] == 20.5
+    assert "daily_change_pct" in h

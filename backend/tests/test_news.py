@@ -114,3 +114,24 @@ def test_news_endpoint_empty_list_when_none_collected():
     r = client.get("/api/stocks/005930/news")
     assert r.status_code == 200
     assert r.json() == []
+
+
+# --- 이식 프론트 계약: /api/news/{ticker} ---
+
+def test_news_router_list_shape():
+    seed_stock("005930", "삼성전자", "STOCK")
+    from app.database import get_connection
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO news (ticker, title, link, description, pub_date) VALUES (?,?,?,?,?)",
+            ("005930", "삼성 신고가", "https://www.news.example.com/a", "설명", "2026-07-21T09:00:00+09:00"),
+        )
+    body = client.get("/api/news/005930").json()
+    assert "news" in body and "analysis" in body
+    item = body["news"][0]
+    assert item["title"] == "삼성 신고가"
+    assert item["url"].endswith("/a")
+    assert item["source"] == "news.example.com"  # www. 제거
+    assert item["date"] == "2026-07-21"
+    for f in ("published_at", "sentiment", "tags", "relevance_score"):
+        assert f in item

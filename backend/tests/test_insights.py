@@ -1,4 +1,4 @@
-"""작업 4(AI 인사이트) 테스트: 수급 비율 스케일링·지속성·요약·엔드포인트."""
+"""인사이트 테스트: 원본 insights_service 로직 재현(strategy/key_points/risks)."""
 from fastapi.testclient import TestClient
 
 from app.database import get_connection
@@ -9,20 +9,19 @@ from tests.conftest import seed_stock
 client = TestClient(app)
 
 
-def _seed_prices(ticker, closes, volume=1_000_000):
-    """closes(오래된→최신)로 prices를 채운다. 날짜는 순번으로 부여."""
+def _seed_prices(ticker, closes, volume=1_000_000, change_pct=0.0):
+    """closes(오래된→최신)로 prices를 채운다."""
     with get_connection() as conn:
         for i, c in enumerate(closes):
             conn.execute(
                 """INSERT INTO prices (ticker, date, open_price, high_price,
                    low_price, close_price, volume, change_pct)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 0)""",
-                (ticker, f"2026-07-{i + 1:02d}", c, c, c, c, volume),
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (ticker, f"2026-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}", c, c, c, c, volume, change_pct),
             )
 
 
 def _seed_flow(ticker, foreign_nets):
-    """foreign_nets(오래된→최신)로 trading_flow를 채운다."""
     with get_connection() as conn:
         for i, fn in enumerate(foreign_nets):
             conn.execute(
@@ -33,83 +32,66 @@ def _seed_flow(ticker, foreign_nets):
             )
 
 
-# --- 수급 비율 스케일링 -------------------------------------------------------
+# --- 전략 판정 ---------------------------------------------------------------
 
-def test_flow_signal_none_without_volume():
-    assert insights._flow_signal("k", "외국인", [100, 200], None) is None
-    assert insights._flow_signal("k", "외국인", [None, None], 1000) is None
-
-
-def test_flow_signal_neutral_below_threshold():
-    # 누적/일평균거래량 = 4% < 5% → 중립
-    sig = insights._flow_signal("foreign_flow", "외국인", [10_000, 10_000, 20_000], 1_000_000)
-    assert sig["level"] == "neutral"
-    assert "방향성이 없습니다" in sig["text"]
+def test_strategy_from_return_thresholds():
+    assert insights._strategy_from_return(None) == "관망"
+    assert insights._strategy_from_return(12) == "비중확대"   # >10
+    assert insights._strategy_from_return(7) == "보유"        # >5
+    assert insights._strategy_from_return(0) == "관망"        # >-5
+    assert insights._strategy_from_return(-8) == "비중축소"   # <=-5
 
 
-def test_flow_signal_large_and_persistent():
-    # 5일 모두 순매수, 누적 1,000,000 / 일평균 1,000,000 = 100% → 대규모 + 지속
-    sig = insights._flow_signal(
-        "foreign_flow", "외국인", [200_000] * 5, 1_000_000
-    )
-    assert sig["level"] == "positive"
-    assert "대규모" in sig["text"]
-    assert "지속" in sig["text"]
+def test_foreign_net_threshold_scales_with_volume():
+    prices = [{"volume": 1_000_000}] * 20
+    # 0.05 × 1,000,000 × 5일 = 250,000
+    assert insights._foreign_net_threshold(prices, 5) == 250_000
+    # 거래량 없으면 폴백
+    assert insights._foreign_net_threshold([], 5) == insights.FOREIGN_NET_SUSTAINED_FALLBACK_THRESHOLD
 
 
-def test_flow_signal_net_sell_direction():
-    sig = insights._flow_signal("foreign_flow", "외국인", [-200_000] * 5, 1_000_000)
-    assert sig["level"] == "negative"
-    assert "순매도" in sig["text"]
+# --- 지표 계산 ---------------------------------------------------------------
+
+def test_compute_metrics_returns_and_volatility():
+    # 최신순: 상승 추세, 변동성 데이터 충분
+    prices_desc = [{"date": f"2026-07-{30 - i:02d}", "close_price": 100 - i, "change_pct": 1.0,
+                    "volume": 1000} for i in range(25)]
+    returns, vol = insights._compute_metrics(prices_desc)
+    # 1주(5거래일): 최신 100 / index4(96) → (100-96)/96*100
+    assert round(returns["1w"], 2) == round((100 - 96) / 96 * 100, 2)
+    assert returns["1m"] is not None  # 20거래일 이상
+    assert vol is not None            # 10개 이상 변화율
 
 
-def test_flow_signal_not_persistent_when_mixed_direction():
-    # 합계는 양(+)이지만 같은 방향 거래일이 3일뿐 → '지속' 미표기
-    sig = insights._flow_signal(
-        "foreign_flow", "외국인", [300_000, 300_000, 300_000, -100_000, -100_000], 1_000_000
-    )
-    assert sig["level"] == "positive"
-    assert "지속" not in sig["text"]
+# --- 통합 + 엔드포인트 --------------------------------------------------------
 
-
-# --- 추세/요약 통합 -----------------------------------------------------------
-
-def test_build_insights_bullish_regime():
+def test_build_insights_shape_and_bullish():
     seed_stock("005930", "삼성전자", "STOCK")
-    _seed_prices("005930", [100, 102, 104, 106, 108, 110])  # 상승
-    _seed_flow("005930", [200_000] * 5)  # 외국인 대규모 순매수
+    # 최근일 종가 대비 1주/1달 전보다 크게 상승 → 비중확대 성향
+    closes = list(range(80, 130))  # 오래된→최신 상승(50일)
+    _seed_prices("005930", closes, change_pct=1.5)
+    _seed_flow("005930", [500_000] * 5)  # 외국인 대규모 순매수
     data = insights.build_insights("005930")
-    assert data["type"] == "STOCK"
-    keys = {s["key"] for s in data["signals"]}
-    assert "foreign_flow" in keys and "price_trend" in keys
-    assert "강세 국면" in data["summary"]
-    assert data["disclaimer"]
+    assert set(data) == {"strategy", "key_points", "risks"}
+    s = data["strategy"]
+    assert set(s) == {"short_term", "medium_term", "long_term", "recommendation", "comment"}
+    valid = {"비중확대", "보유", "관망", "비중축소"}
+    assert s["short_term"] in valid and s["recommendation"] in valid
+    assert any("외국인 대규모 순매수" in p for p in data["key_points"])
 
 
-def test_build_insights_unknown_ticker_returns_none():
+def test_build_insights_unknown_ticker_none():
     assert insights.build_insights("999999") is None
-
-
-def test_build_insights_data_scarce():
-    seed_stock("111111", "신규종목", "STOCK")  # 시세·수급 없음
-    data = insights.build_insights("111111")
-    assert data["signals"] == []
-    assert "데이터가 부족" in data["summary"]
-
-
-# --- 엔드포인트 ---------------------------------------------------------------
-
-def test_insights_endpoint_404_for_unknown():
-    assert client.get("/api/stocks/999999/insights").status_code == 404
 
 
 def test_insights_endpoint_shape():
     seed_stock("005930", "삼성전자", "STOCK")
-    _seed_prices("005930", [100, 102, 104, 106, 108, 110])
-    _seed_flow("005930", [200_000] * 5)
-    r = client.get("/api/stocks/005930/insights")
+    _seed_prices("005930", list(range(80, 130)), change_pct=1.0)
+    r = client.get("/api/etfs/005930/insights?period=1m")
     assert r.status_code == 200
     body = r.json()
-    assert body["ticker"] == "005930"
-    assert len(body["signals"]) >= 2
-    assert all({"key", "label", "level", "text"} <= set(s) for s in body["signals"])
+    assert "strategy" in body and "key_points" in body and "risks" in body
+
+
+def test_insights_endpoint_404():
+    assert client.get("/api/etfs/999999/insights").status_code == 404

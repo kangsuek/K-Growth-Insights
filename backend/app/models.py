@@ -69,20 +69,6 @@ class News(BaseModel):
     pub_date: Optional[str] = None
 
 
-class InsightSignal(BaseModel):
-    key: str          # foreign_flow / institutional_flow / price_trend / range_52w / valuation
-    label: str
-    level: str        # positive | negative | neutral (프론트 색상용)
-    text: str
-
-
-class InsightsResponse(BaseModel):
-    ticker: str
-    type: str         # STOCK | ETF
-    summary: str
-    signals: list[InsightSignal] = []
-    generated_at: str
-    disclaimer: str
 
 
 class StockFundamentals(BaseModel):
