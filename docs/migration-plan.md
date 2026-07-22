@@ -116,9 +116,11 @@
 - [x] `/etfs/`가 stocks의 실제 구매정보(purchase_date/price/quantity) 반환하도록 수정
 - [x] 페이지 연결(브라우저 검증: 투자금 330만·평가 378만·+14.65%, 비중/수익률 차트)
 
-### Phase 8 — 알림(Alerts)
-- [ ] 백엔드 ➕: `alerts` 테이블 + CRUD(`/alerts/*`)
-- [ ] 페이지 연결
+### Phase 8 — 알림(Alerts) ✅
+- [x] 백엔드 ➕: `alert_rules`·`alert_history` 테이블 + CRUD
+      (POST/GET`/{ticker}`/PUT/DELETE, POST`/trigger`, GET`/history/{ticker}`)
+- [x] 페이지 연결(브라우저 검증: 알림 관리 화면·필터, 규칙 CRUD API 확인)
+      규칙은 상세 PriceTargetPanel에서 관리, 트리거는 클라이언트 체크→기록
 
 ### Phase 9 — 마감/정리
 - [ ] 미사용 코드·미지원 안내 정리, 접근성/반응형 점검

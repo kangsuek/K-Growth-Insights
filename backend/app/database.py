@@ -135,10 +135,33 @@ CREATE TABLE IF NOT EXISTS news (
     PRIMARY KEY (ticker, link)
 );
 
+-- 가격 알림 규칙: 종목별 목표가/방향 등. 트리거 이력은 alert_history.
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker            TEXT NOT NULL,
+    alert_type        TEXT NOT NULL,   -- buy | sell | price_change | trading_signal
+    direction         TEXT NOT NULL,   -- above | below | both
+    target_price      REAL NOT NULL,
+    memo              TEXT,
+    is_active         INTEGER DEFAULT 1,
+    created_at        TEXT DEFAULT (datetime('now')),
+    last_triggered_at TEXT
+);
+CREATE TABLE IF NOT EXISTS alert_history (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id      INTEGER,
+    ticker       TEXT NOT NULL,
+    alert_type   TEXT,
+    message      TEXT,
+    triggered_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_prices_ticker_date
     ON prices (ticker, date DESC);
 CREATE INDEX IF NOT EXISTS idx_news_ticker_date
     ON news (ticker, pub_date DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_ticker
+    ON alert_rules (ticker, is_active);
 CREATE INDEX IF NOT EXISTS idx_flow_ticker_date
     ON trading_flow (ticker, date DESC);
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_dt
