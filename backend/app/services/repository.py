@@ -157,6 +157,36 @@ def get_news(ticker: str, limit: int = 10) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def reset_collected_data() -> dict:
+    """수집 데이터 전체 삭제(stocks 목록은 보존). 테이블별 삭제 건수 반환."""
+    tables = [
+        "prices", "trading_flow", "intraday_prices", "news",
+        "stock_fundamentals", "etf_fundamentals", "etf_holdings",
+    ]
+    deleted: dict[str, int] = {}
+    with get_connection() as conn:
+        for t in tables:
+            cur = conn.execute(f"DELETE FROM {t}")
+            deleted[t] = cur.rowcount
+    return deleted
+
+
+def last_collection_time() -> str | None:
+    """가장 최근 수집 시각. updated_at을 가진 테이블들의 최대값. 없으면 None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT MAX(t) AS t FROM (
+                SELECT MAX(updated_at) AS t FROM news
+                UNION ALL SELECT MAX(updated_at) FROM stock_fundamentals
+                UNION ALL SELECT MAX(updated_at) FROM etf_fundamentals
+                UNION ALL SELECT MAX(updated_at) FROM etf_holdings
+            )
+            """
+        ).fetchone()
+    return row["t"] if row else None
+
+
 def data_stats() -> dict:
     with get_connection() as conn:
         def count(table: str) -> int:

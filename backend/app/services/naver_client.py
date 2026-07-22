@@ -28,12 +28,18 @@ logger = logging.getLogger(__name__)
 
 MSTOCK_BASE = "https://m.stock.naver.com/api/stock"
 MSTOCKS_BASE = "https://m.stock.naver.com/api/stocks"
+MINDEX_BASE = "https://m.stock.naver.com/api/index"
 CHART_BASE = "https://api.stock.naver.com/chart/domestic/item"
 # 뉴스는 시장 데이터가 아니라 네이버 공식 검색 API(JSON)를 사용한다.
 SEARCH_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
 
 # 카탈로그 수집 대상 시장. 네이버 URL 세그먼트 그대로 사용.
 MARKETS = ("KOSPI", "KOSDAQ")
+
+# 시장 지수 코드 → 한글명. 대시보드 시장현황에 사용.
+INDEX_NAMES = {"KOSPI": "코스피", "KOSDAQ": "코스닥"}
+# 지수 차트 기간 → 수집할 거래일 수(대략치).
+INDEX_PERIOD_COUNT = {"1M": 25, "3M": 70, "6M": 135, "1Y": 260, "3Y": 780}
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -469,4 +475,69 @@ def fetch_news(query: str, display: int = 10) -> list[dict]:
                 "pub_date": _pubdate_to_iso(it.get("pubDate")),
             }
         )
+    return rows
+
+
+def fetch_index_basic(code: str) -> Optional[dict]:
+    """시장 지수 현황: index/{code}/basic. 반환 {code, name, close_price, change, change_ratio}."""
+    if code not in INDEX_NAMES:
+        raise ValueError(f"지원하지 않는 지수: {code}")
+    url = f"{MINDEX_BASE}/{code}/basic"
+    try:
+        with _client() as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_index_basic(%s) failed: %s", code, exc)
+        return None
+
+    return {
+        "code": code,
+        "name": INDEX_NAMES.get(code, code),
+        "close_price": _to_float(data.get("closePrice")),
+        "change": _to_float(data.get("compareToPreviousClosePrice")),
+        "change_ratio": _to_float(data.get("fluctuationsRatio")),
+    }
+
+
+def fetch_index_chart(code: str, period: str = "3M") -> list[dict]:
+    """시장 지수 일별 차트: index/{code}/price 페이지네이션(오래된→최신 순 반환).
+
+    각 행: {date, open_price, high_price, low_price, close_price, volume}
+    """
+    if code not in INDEX_NAMES:
+        raise ValueError(f"지원하지 않는 지수: {code}")
+    count = INDEX_PERIOD_COUNT.get(period, 70)
+    rows: list[dict] = []
+    url = f"{MINDEX_BASE}/{code}/price"
+    try:
+        with _client() as client:
+            page = 1
+            while len(rows) < count:
+                resp = client.get(url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
+                resp.raise_for_status()
+                items = resp.json()
+                if not items:
+                    break
+                for it in items:
+                    rows.append(
+                        {
+                            "date": it.get("localTradedAt"),
+                            "open_price": _to_float(it.get("openPrice")),
+                            "high_price": _to_float(it.get("highPrice")),
+                            "low_price": _to_float(it.get("lowPrice")),
+                            "close_price": _to_float(it.get("closePrice")),
+                            "volume": _to_int(it.get("accumulatedTradingVolume")),
+                        }
+                    )
+                if len(items) < MAX_PAGE_SIZE:
+                    break
+                page += 1
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("fetch_index_chart(%s) failed: %s", code, exc)
+        return []
+
+    rows = rows[:count]
+    rows.reverse()  # 최신순 수신 → 차트용 오래된→최신
     return rows

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
 from app.database import init_db
-from app.routers import data, stocks
+from app.routers import data, etfs, market, stocks
 from app.services import scheduler, stocks_sync
 
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +50,8 @@ app.add_middleware(
 
 app.include_router(stocks.router)
 app.include_router(data.router)
+app.include_router(etfs.router)
+app.include_router(market.router)
 
 
 @app.get("/api/health")

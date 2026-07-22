@@ -57,15 +57,16 @@
 
 ## 3. 단계별 계획 (각 단계 완료 시 커밋 + 이 문서 체크)
 
-### Phase 1 — 프론트 셸 + 대시보드 (보이는 화면 우선)
-- [ ] 프론트 소스/설정 이식: `src/`, `tailwind.config.js`, `postcss.config.js`,
+### Phase 1 — 프론트 셸 + 대시보드 (보이는 화면 우선) ✅
+- [x] 프론트 소스/설정 이식: `src/`, `tailwind.config.js`, `postcss.config.js`,
       `index.html`, `public/`, Tailwind·dnd-kit 등 의존성
-- [ ] vite 설정 병합(내 프록시 `/api`→`:8000`, 포트 5173), `npm install`
-- [ ] `services/api.js`를 내 백엔드 계약으로 재작성(어댑터 계층)
-- [ ] 백엔드 ➕: `GET /market/overview`(코스피/코스닥), `GET /market/index/{c}/chart`
-- [ ] 백엔드 🔧: `/data/collect-status`를 `collect-progress` 형태로도 제공
-- [ ] Dashboard·Header·Footer 렌더 확인(다크 테마, 시장현황, 종목 그리드, 정렬)
-- [ ] `npm run build` + 브라우저에서 5174와 비교
+- [x] vite 설정 병합(내 프록시 `/api`→`:8000`, 포트 5173), `npm install`
+- [x] **api.js는 그대로 유지**하고 내 백엔드가 프론트 계약(`/etfs`·`/market`·`/data`)을 제공
+- [x] 백엔드 ➕: `GET /market/overview`(코스피/코스닥), `GET /market/index/{c}/chart`
+- [x] 백엔드 ➕: `/etfs/`·`/etfs/batch-summary`·`/etfs/{t}/*`, `/data/scheduler-status`·
+      `/data/collect-progress`·`DELETE /data/reset`
+- [x] Dashboard·Header·Footer 렌더 확인(다크 테마, 시장현황, 종목 그리드, 정렬) — 브라우저 검증 완료
+- [x] `npm run build` + 브라우저에서 5174와 동일 확인, 백엔드 테스트 69건 통과
 
 ### Phase 2 — 설정(Settings)  *(원래 8번 → 우선순위 상향)*
 - [ ] 백엔드 ➕: `/settings/stocks*`(관리·정렬·검증·검색), `/settings/api-keys`
@@ -98,6 +99,7 @@
 ### Phase 9 — 마감/정리
 - [ ] 미사용 코드·미지원 안내 정리, 접근성/반응형 점검
 - [ ] 프론트 테스트(vitest) 정비, 전체 회귀
+- [ ] **frontend/package.json 정리**: 불필요하거나 버전이 오래된 의존성 삭제·개선(사용자 요청)
 
 ## 4. 주의/원칙
 
