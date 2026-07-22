@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.services import api_keys, catalog, jobs, naver_client, repository
+from app.services import api_keys, catalog, naver_client, repository
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -113,14 +113,14 @@ def delete_stock(ticker: str):
 
 @router.post("/ticker-catalog/collect")
 def collect_ticker_catalog(limit: int = Query(100, ge=1, le=1000)):
-    result = catalog.sync_catalog(market=None, limit=limit)
-    return {"synced": result}
+    """시총 상위 종목 카탈로그 수집. 프론트 계약(카운트) 형태로 반환."""
+    return catalog.sync_catalog_detailed(limit=limit)
 
 
 @router.get("/ticker-catalog/collect-progress")
 def ticker_catalog_progress():
-    snap = jobs.snapshot()
-    return {"is_collecting": snap["status"] == "running", "status": snap["status"]}
+    # 카탈로그 수집은 동기 처리라 별도 진행상태를 두지 않는다(항상 idle).
+    return {"is_collecting": False, "status": "idle"}
 
 
 # --- API 키 ------------------------------------------------------------------

@@ -121,10 +121,10 @@ def reorder_stocks(tickers: list[str]) -> int:
 
 
 def search_catalog(query: str, stock_type: str | None = None, limit: int = 20) -> list[dict]:
-    """추적/카탈로그 종목을 티커·종목명으로 검색(자동완성용)."""
+    """종목 발굴 카탈로그(stock_catalog)를 티커·종목명으로 검색(워치리스트 추가 자동완성용)."""
     like = f"%{query}%"
     sql = (
-        "SELECT ticker, name, type FROM stocks "
+        "SELECT ticker, name, type, market FROM stock_catalog "
         "WHERE (ticker LIKE ? OR name LIKE ?)"
     )
     params: list = [like, like]
@@ -137,7 +137,7 @@ def search_catalog(query: str, stock_type: str | None = None, limit: int = 20) -
     with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [{"ticker": r["ticker"], "name": r["name"], "type": r["type"],
-             "market": None, "sector": None} for r in rows]
+             "market": r["market"], "sector": None} for r in rows]
 
 
 def list_stocks_summary() -> list[dict]:
@@ -316,14 +316,28 @@ def last_collection_time() -> str | None:
 
 
 def data_stats() -> dict:
+    from pathlib import Path
+
+    from app.config import DATABASE_PATH
+
     with get_connection() as conn:
         def count(table: str) -> int:
             return conn.execute(f"SELECT COUNT(*) AS c FROM {table}").fetchone()["c"]
 
-        return {
-            "stocks": count("stocks"),
+        stocks = count("stocks")           # 워치리스트(종목관리)
+        result = {
+            "stocks": stocks,
+            "etfs": stocks,                # 프론트 '종목 수'(관찰 종목)
+            "stock_catalog": count("stock_catalog"),  # 발굴 카탈로그(별개)
             "prices": count("prices"),
             "trading_flow": count("trading_flow"),
             "intraday_prices": count("intraday_prices"),
             "news": count("news"),
         }
+    result["last_collection"] = last_collection_time()
+    try:
+        size_mb = Path(DATABASE_PATH).stat().st_size / (1024 * 1024)
+        result["database_size_mb"] = round(size_mb, 2)
+    except OSError:
+        result["database_size_mb"] = None
+    return result

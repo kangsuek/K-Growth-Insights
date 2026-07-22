@@ -1,18 +1,12 @@
-"""작업 6: 전체 수집 백그라운드 진행률(jobs) 테스트."""
-import time
-
+"""작업 6/이식: 전체 수집(collect_all_sync) 집계·진행률·엔드포인트 테스트."""
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models import CollectResult
 from app.services import jobs
 from tests.conftest import seed_stock
 
 client = TestClient(app)
-
-
-class _R:
-    def __init__(self, ok=True):
-        self.ok = ok
 
 
 def _reset_state():
@@ -21,64 +15,62 @@ def _reset_state():
                            failed=0, current=None, started_at=None, finished_at=None)
 
 
-def _wait_done(timeout=3.0):
-    start = time.time()
-    while time.time() - start < timeout:
-        if jobs.snapshot()["status"] in ("done", "error"):
-            return
-        time.sleep(0.02)
+def test_collect_all_sync_aggregates(monkeypatch):
+    _reset_state()
+    seed_stock("005930", "삼성전자", "STOCK")
+    seed_stock("000660", "SK하이닉스", "STOCK")
+
+    def fake(ticker):
+        return CollectResult(ticker=ticker, prices=60, trading_flow=20, news=5,
+                             fundamentals=1, ok=True)
+
+    monkeypatch.setattr(jobs.collectors, "collect_stock", fake)
+    result = jobs.collect_all_sync()
+    assert result["total_tickers"] == 2
+    assert result["total_price_records"] == 120
+    assert result["total_trading_flow_records"] == 40
+    assert result["total_news_records"] == 10
+    assert result["fundamentals_success"] == 2
+    assert result["fundamentals_failed"] == 0
+    assert jobs.snapshot()["status"] == "done"
 
 
-def test_run_tracks_progress_and_counts(monkeypatch):
+def test_collect_all_sync_counts_fundamentals_failed(monkeypatch):
     _reset_state()
     seed_stock("005930", "삼성전자", "STOCK")
     seed_stock("000660", "SK하이닉스", "STOCK")
     monkeypatch.setattr(jobs.collectors, "collect_stock",
-                        lambda t: _R(ok=(t != "000660")))
-    jobs._run([{"ticker": "005930"}, {"ticker": "000660"}])
-    snap = jobs.snapshot()
-    assert snap["status"] == "done"
-    assert snap["total"] == 2 or snap["completed"] == 2
-    assert snap["completed"] == 2
-    assert snap["succeeded"] == 1
-    assert snap["failed"] == 1
-    assert snap["finished_at"] is not None
+                        lambda t: CollectResult(ticker=t, fundamentals=(1 if t == "005930" else 0), ok=True))
+    result = jobs.collect_all_sync()
+    assert result["fundamentals_success"] == 1
+    assert result["fundamentals_failed"] == 1
 
 
-def test_run_sets_error_status_on_exception(monkeypatch):
-    _reset_state()
-    def boom(_):
-        raise RuntimeError("네트워크 오류")
-    monkeypatch.setattr(jobs.collectors, "collect_stock", boom)
-    jobs._run([{"ticker": "005930"}])
-    assert jobs.snapshot()["status"] == "error"
-
-
-def test_start_is_single_flight(monkeypatch):
+def test_collect_all_endpoint_returns_result(monkeypatch):
     _reset_state()
     seed_stock("005930", "삼성전자", "STOCK")
-
-    def slow(_):
-        time.sleep(0.1)
-        return _R(True)
-
-    monkeypatch.setattr(jobs.collectors, "collect_stock", slow)
-    assert jobs.start() is True     # 첫 시작
-    assert jobs.start() is False    # 실행 중 재시작 거부
-    _wait_done()
-    assert jobs.snapshot()["status"] == "done"
+    monkeypatch.setattr(jobs.collectors, "collect_stock",
+                        lambda t: CollectResult(ticker=t, prices=60, ok=True))
+    body = client.post("/api/data/collect-all").json()
+    assert "result" in body
+    assert body["result"]["total_tickers"] == 1
+    assert body["result"]["total_price_records"] == 60
 
 
-def test_collect_all_endpoint_starts_and_status_polls(monkeypatch):
+def test_collect_progress_status_mapping():
     _reset_state()
+    body = client.get("/api/data/collect-progress").json()
+    assert body["status"] == "idle"
+    assert body["is_collecting"] is False
+    with jobs._lock:
+        jobs._state.update(status="done", total=10, completed=10)
+    body = client.get("/api/data/collect-progress").json()
+    assert body["status"] == "completed"  # done → completed 매핑
+
+
+def test_stats_has_frontend_fields():
     seed_stock("005930", "삼성전자", "STOCK")
-    monkeypatch.setattr(jobs.collectors, "collect_stock", lambda t: _R(True))
-    r = client.post("/api/data/collect-all")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["started"] is True
-    assert "total" in body and "completed" in body
-    _wait_done()
-    status = client.get("/api/data/collect-status").json()
-    assert status["status"] == "done"
-    assert status["succeeded"] == 1
+    body = client.get("/api/data/stats").json()
+    for field in ("etfs", "stock_catalog", "last_collection", "database_size_mb"):
+        assert field in body
+    assert body["etfs"] == 1

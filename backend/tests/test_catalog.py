@@ -1,4 +1,4 @@
-"""작업 2(카탈로그 자동 확장) 통합 테스트: 수집 → upsert(수기 theme 보존) → 엔드포인트."""
+"""카탈로그(종목발굴 유니버스) 수집 테스트: stock_catalog 적재. 워치리스트와 분리."""
 import httpx
 import respx
 from fastapi.testclient import TestClient
@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from app.database import get_connection
 from app.main import app
 from app.services import catalog, naver_client
-from tests.conftest import seed_stock
 
 client = TestClient(app)
 
@@ -24,20 +23,19 @@ def _page(codes):
 
 
 @respx.mock
-def test_sync_catalog_inserts_and_preserves_theme():
-    # 수기 목록에 이미 theme가 있는 종목
+def test_sync_catalog_populates_catalog_not_watchlist():
+    # 워치리스트(stocks)에 관심종목 1개 등록
+    from tests.conftest import seed_stock
     seed_stock("005930", "삼성전자", "STOCK", theme="반도체")
 
     respx.get(_catalog_url("KOSPI")).mock(
         return_value=httpx.Response(
             200,
-            json=_page(
-                [
-                    ("005930", "삼성전자", "stock"),  # 기존 → theme 보존
-                    ("373220", "LG에너지솔루션", "stock"),  # 신규
-                    ("487240", "KODEX ETF", "etf"),  # 신규 ETF
-                ]
-            ),
+            json=_page([
+                ("005930", "삼성전자", "stock"),
+                ("373220", "LG에너지솔루션", "stock"),
+                ("487240", "KODEX ETF", "etf"),
+            ]),
         )
     )
 
@@ -45,15 +43,15 @@ def test_sync_catalog_inserts_and_preserves_theme():
     assert result == {"KOSPI": 3}
 
     with get_connection() as conn:
-        rows = {
-            r["ticker"]: dict(r)
-            for r in conn.execute("SELECT ticker, name, type, theme FROM stocks")
-        }
-    # 신규 종목 추가됨
-    assert rows["373220"]["type"] == "STOCK"
-    assert rows["487240"]["type"] == "ETF"
-    # 기존 종목의 수기 theme는 카탈로그 동기화로 덮어써지지 않음
-    assert rows["005930"]["theme"] == "반도체"
+        cat = {r["ticker"]: dict(r) for r in
+               conn.execute("SELECT ticker, name, type, market FROM stock_catalog")}
+        watch = [r["ticker"] for r in conn.execute("SELECT ticker FROM stocks")]
+    # 카탈로그(발굴 유니버스)에 적재
+    assert set(cat) == {"005930", "373220", "487240"}
+    assert cat["487240"]["type"] == "ETF"
+    assert cat["005930"]["market"] == "KOSPI"
+    # 워치리스트는 그대로(카탈로그 수집이 관심종목을 오염시키지 않음)
+    assert watch == ["005930"]
 
 
 @respx.mock
@@ -71,6 +69,24 @@ def test_sync_catalog_both_markets_when_market_omitted():
 def test_sync_catalog_endpoint_rejects_bad_market():
     r = client.post("/api/data/sync-catalog", params={"market": "NASDAQ"})
     assert r.status_code == 400
+
+
+@respx.mock
+def test_sync_catalog_detailed_returns_frontend_counts():
+    # 설정 화면 '종목 목록 수집' 계약: kospi/kosdaq/etf/total/saved 카운트
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page([
+            ("005930", "삼성전자", "stock"), ("069500", "KODEX 200", "etf")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    r = client.post("/api/settings/ticker-catalog/collect", params={"limit": 50}).json()
+    assert r["kospi_count"] == 2
+    assert r["kosdaq_count"] == 1
+    assert r["etf_count"] == 1
+    assert r["total_collected"] == 3
+    assert r["saved_count"] == 3
 
 
 @respx.mock

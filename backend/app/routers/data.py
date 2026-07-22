@@ -42,27 +42,28 @@ def collect_one(ticker: str):
 
 @router.post("/collect-all")
 def collect_all():
-    """전체 수집을 백그라운드로 시작하고 즉시 진행 상태를 반환한다."""
-    started = jobs.start()
-    return {"started": started, **jobs.snapshot()}
+    """전체 종목을 병렬 수집(동기)하고 집계 결과를 반환한다.
+
+    수집 중 진행률은 /collect-progress 폴링으로 확인할 수 있다.
+    """
+    return {"result": jobs.collect_all_sync()}
 
 
-@router.get("/collect-status")
-def collect_status():
-    """전체 수집 진행률(폴링용)."""
-    return jobs.snapshot()
+# 내부 상태 → 프론트 진행률 status 매핑.
+_PROGRESS_STATUS = {"idle": "idle", "running": "collecting", "done": "completed", "error": "error"}
 
 
 @router.get("/collect-progress")
 def collect_progress():
-    """이식 프론트 호환: 수집 진행률(collect-status 별칭 형태)."""
+    """수집 진행률(폴링용). 프론트 collectAllProgress 계약."""
     snap = jobs.snapshot()
     return {
+        "status": _PROGRESS_STATUS.get(snap["status"], snap["status"]),
         "is_collecting": snap["status"] == "running",
         "total": snap["total"],
         "completed": snap["completed"],
         "current": snap["current"],
-        "status": snap["status"],
+        "message": f"{snap['completed']}/{snap['total']}" if snap["total"] else "",
     }
 
 

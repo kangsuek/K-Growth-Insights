@@ -48,10 +48,23 @@ def test_reorder_sets_sort_order():
     assert [r["ticker"] for r in rows[:2]] == ["000660", "005930"]  # 지정 순서 반영
 
 
+def _seed_catalog(rows):
+    """stock_catalog(발굴 유니버스)에 종목을 시드."""
+    with get_connection() as conn:
+        for ticker, name, type_, market in rows:
+            conn.execute(
+                "INSERT INTO stock_catalog (ticker, name, type, market) VALUES (?, ?, ?, ?)",
+                (ticker, name, type_, market),
+            )
+
+
 def test_search_matches_name_and_ticker():
-    seed_stock("005930", "삼성전자", "STOCK")
-    seed_stock("005935", "삼성전자우", "STOCK")
-    seed_stock("000660", "SK하이닉스", "STOCK")
+    # 검색은 워치리스트가 아니라 발굴 카탈로그를 대상으로 한다
+    _seed_catalog([
+        ("005930", "삼성전자", "STOCK", "KOSPI"),
+        ("005935", "삼성전자우", "STOCK", "KOSPI"),
+        ("000660", "SK하이닉스", "STOCK", "KOSPI"),
+    ])
     res = client.get("/api/settings/stocks/search", params={"q": "삼성"}).json()
     tickers = {s["ticker"] for s in res}
     assert tickers == {"005930", "005935"}

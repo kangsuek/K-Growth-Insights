@@ -103,6 +103,16 @@ CREATE TABLE IF NOT EXISTS etf_holdings (
     PRIMARY KEY (ticker, seq)
 );
 
+-- 종목 발굴(Screening)용 전체 종목 카탈로그(유니버스). 워치리스트(stocks)와 별개.
+-- '종목목록수집'이 KOSPI/KOSDAQ 시총 상위 종목을 이 테이블에 적재한다.
+CREATE TABLE IF NOT EXISTS stock_catalog (
+    ticker      TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    type        TEXT NOT NULL DEFAULT 'STOCK',   -- STOCK | ETF
+    market      TEXT,      -- KOSPI | KOSDAQ
+    updated_at  TEXT DEFAULT (datetime('now'))
+);
+
 -- 종목 뉴스: 네이버 검색 API. link를 종목 내 고유키로 사용해 중복을 막는다.
 CREATE TABLE IF NOT EXISTS news (
     ticker      TEXT NOT NULL,
