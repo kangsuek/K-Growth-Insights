@@ -378,10 +378,11 @@ def fetch_etf_holdings(code: str) -> list[dict]:
     return rows
 
 
-def fetch_market_catalog(market: str, limit: int = 100) -> list[dict]:
-    """시총 상위 순 종목 카탈로그: stocks/marketValue/{market} 페이지네이션 수집.
+def fetch_market_catalog(market: str, limit: int | None = None) -> list[dict]:
+    """시장 전체 종목 카탈로그: stocks/marketValue/{market} 페이지네이션 수집.
 
-    한 페이지 최대 60건이므로 limit에 도달할 때까지 여러 페이지를 요청한다.
+    limit=None이면 해당 시장의 **전체 종목**을 끝까지 수집한다(마지막 부분 페이지에서
+    종료). limit이 주어지면 그 개수까지만 수집한다.
     각 행: {ticker, name, type('STOCK'|'ETF'), exchange('KOSPI'|'KOSDAQ')}
     """
     if market not in MARKETS:
@@ -392,7 +393,7 @@ def fetch_market_catalog(market: str, limit: int = 100) -> list[dict]:
     try:
         with _client() as client:
             page = 1
-            while len(rows) < limit:
+            while True:
                 resp = client.get(url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
                 resp.raise_for_status()
                 items = resp.json().get("stocks") or []
@@ -410,14 +411,16 @@ def fetch_market_catalog(market: str, limit: int = 100) -> list[dict]:
                             "exchange": market,
                         }
                     )
-                # 한 페이지가 가득 차지 않으면 마지막 페이지이므로 종료.
+                # limit 도달 또는 마지막(부분) 페이지면 종료.
+                if limit is not None and len(rows) >= limit:
+                    break
                 if len(items) < MAX_PAGE_SIZE:
                     break
                 page += 1
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_market_catalog(%s) failed: %s", market, exc)
 
-    return rows[:limit]
+    return rows[:limit] if limit is not None else rows
 
 
 _TAG_RE = re.compile(r"<[^>]+>")

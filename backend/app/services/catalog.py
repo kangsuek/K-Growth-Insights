@@ -34,8 +34,8 @@ def _upsert_row(conn, row: dict) -> None:
     )
 
 
-def sync_catalog(market: str | None = None, limit: int = 100) -> dict:
-    """시장별 시총 상위 limit 종목을 stock_catalog에 upsert. 반환: {시장: 반영 건수}."""
+def sync_catalog(market: str | None = None, limit: int | None = None) -> dict:
+    """시장 종목을 stock_catalog에 upsert. limit=None이면 전체. 반환: {시장: 반영 건수}."""
     markets = (market,) if market else naver_client.MARKETS
     result: dict[str, int] = {}
     with get_connection() as conn:
@@ -48,9 +48,10 @@ def sync_catalog(market: str | None = None, limit: int = 100) -> dict:
     return result
 
 
-def sync_catalog_detailed(limit: int = 100) -> dict:
-    """KOSPI·KOSDAQ 카탈로그 수집 후 프론트 계약용 상세 카운트 반환.
+def sync_catalog_detailed(limit: int | None = None) -> dict:
+    """KOSPI·KOSDAQ 전체 카탈로그 수집 후 프론트 계약용 상세 카운트 반환.
 
+    limit=None이면 각 시장 전체 종목을 수집한다(원본과 동일한 전체 목록).
     반환: {kospi_count, kosdaq_count, etf_count, total_collected, saved_count}
     """
     per_market: dict[str, int] = {}

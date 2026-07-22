@@ -112,8 +112,11 @@ def delete_stock(ticker: str):
 # --- 카탈로그 수집(시총 상위 종목 자동 확장) ---------------------------------
 
 @router.post("/ticker-catalog/collect")
-def collect_ticker_catalog(limit: int = Query(100, ge=1, le=1000)):
-    """시총 상위 종목 카탈로그 수집. 프론트 계약(카운트) 형태로 반환."""
+def collect_ticker_catalog(limit: int | None = Query(None, ge=1, le=10000)):
+    """전체 종목 목록 카탈로그 수집(KOSPI+KOSDAQ 전 종목). 프론트 계약(카운트) 반환.
+
+    limit 미지정 시 각 시장 전체를 수집한다(원본과 동일).
+    """
     return catalog.sync_catalog_detailed(limit=limit)
 
 
