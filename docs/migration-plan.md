@@ -105,9 +105,11 @@
       (순수 파이썬 계산, numpy 없이) — 원본 응답 형태 재현
 - [x] 페이지 연결(브라우저 검증: 종목 선택→정규화차트·산점도·히트맵·성과표)
 
-### Phase 6 — 시뮬레이션(Simulation)
-- [ ] 백엔드 ➕: `/simulation/lump-sum`·`/dca`·`/portfolio`
-- [ ] 페이지 연결
+### Phase 6 — 시뮬레이션(Simulation) ✅
+- [x] 백엔드 ➕: `POST /simulation/lump-sum`·`/dca`·`/portfolio` — 원본 로직 재현
+      (shares=int(금액//가격), 평가액=주수×종가+잔여금, max_gain/loss, price_series/
+      monthly_data/daily_series)
+- [x] 페이지 연결(브라우저 검증: 일시투자 실행→평가액 추이 차트 렌더)
 
 ### Phase 7 — 포트폴리오(Portfolio)
 - [ ] 포트폴리오 저장/조회(로컬 or 백엔드), 페이지 연결

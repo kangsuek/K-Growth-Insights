@@ -9,7 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
 from app.database import init_db
-from app.routers import data, etfs, market, news, scanner, settings, stocks
+from app.routers import (
+    data, etfs, market, news, scanner, settings, simulation, stocks,
+)
 from app.services import api_keys, scheduler, stocks_sync
 
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +59,7 @@ app.include_router(market.router)
 app.include_router(settings.router)
 app.include_router(news.router)
 app.include_router(scanner.router)
+app.include_router(simulation.router)
 
 
 @app.get("/api/health")
