@@ -396,7 +396,7 @@ PriceChart.propTypes = {
   ),
   ticker: PropTypes.string.isRequired,
   height: PropTypes.number,
-  dateRange: PropTypes.oneOf(['7d', '1m', '3m', 'custom']),
+  dateRange: PropTypes.oneOf(['7d', '1m', '3m', '6m', 'ytd', '1y', 'custom']),
   scrollRef: PropTypes.object,
   onScroll: PropTypes.func,
   purchasePrice: PropTypes.number,
