@@ -138,3 +138,24 @@ def test_etf_fundamentals_holdings_field_mapping():
     assert h["stock_name"] == "삼성전자"
     assert h["weight"] == 20.5
     assert "daily_change_pct" in h
+
+
+def test_etf_prices_range_filter():
+    """상세 차트: start_date/end_date로 기간 필터(1년치 등)."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    with get_connection() as conn:
+        for m in range(1, 13):  # 2026-01 ~ 2026-12, 월 1건
+            conn.execute(
+                """INSERT INTO prices (ticker, date, open_price, high_price,
+                   low_price, close_price, volume, change_pct)
+                   VALUES ('005930', ?, 100, 100, 100, 100, 1000, 0)""",
+                (f"2026-{m:02d}-15",),
+            )
+    # 기간 필터: 3~6월 → 4건
+    rows = client.get("/api/etfs/005930/prices",
+                      params={"start_date": "2026-03-01", "end_date": "2026-06-30"}).json()
+    assert len(rows) == 4
+    # 기본(days)은 60 제한이지만 range는 제한 없이 해당 구간 전체
+    all_rows = client.get("/api/etfs/005930/prices",
+                          params={"start_date": "2026-01-01", "end_date": "2026-12-31"}).json()
+    assert len(all_rows) == 12  # 1년 전체

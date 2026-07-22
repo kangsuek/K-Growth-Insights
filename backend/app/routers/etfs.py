@@ -128,14 +128,29 @@ def get_etf(ticker: str):
 
 
 @router.get("/{ticker}/prices")
-def get_etf_prices(ticker: str, days: int = Query(60, ge=1, le=365)):
-    # 원본과 동일하게 최신순(date DESC)으로 반환한다(상세의 '최근 가격'은 prices[0]).
-    rows = repository.get_prices(ticker, days=days)  # 오래된→최신
+def get_etf_prices(
+    ticker: str,
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    days: int = Query(60, ge=1, le=1000),
+):
+    # 기간(start/end)이 오면 그 범위, 아니면 최근 days일. 최신순(DESC)으로 반환.
+    if start_date or end_date:
+        rows = repository.get_prices_range(ticker, start_date, end_date)
+    else:
+        rows = repository.get_prices(ticker, days=days)  # 오래된→최신
     return [_price_out(p) for p in reversed(rows)]
 
 
 @router.get("/{ticker}/trading-flow")
-def get_etf_trading_flow(ticker: str, days: int = Query(20, ge=1, le=120)):
+def get_etf_trading_flow(
+    ticker: str,
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    days: int = Query(20, ge=1, le=1000),
+):
+    if start_date or end_date:
+        return repository.get_trading_flow_range(ticker, start_date, end_date)
     return repository.get_trading_flow(ticker, days=days)
 
 

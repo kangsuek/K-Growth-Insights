@@ -184,6 +184,46 @@ def get_prices(ticker: str, days: int = 60) -> list[dict]:
     return [dict(r) for r in reversed(rows)]
 
 
+def get_prices_range(ticker: str, start: str | None, end: str | None) -> list[dict]:
+    """기간(start~end)으로 시세 조회(오래된→최신). 상세 차트의 날짜 범위용."""
+    where = ["ticker = ?"]
+    params: list = [ticker]
+    if start:
+        where.append("date >= ?")
+        params.append(start)
+    if end:
+        where.append("date <= ?")
+        params.append(end)
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""SELECT date, open_price, high_price, low_price, close_price,
+                       volume, change_pct
+                FROM prices WHERE {' AND '.join(where)} ORDER BY date""",
+            params,
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_trading_flow_range(ticker: str, start: str | None, end: str | None) -> list[dict]:
+    """기간으로 매매동향 조회(오래된→최신)."""
+    where = ["ticker = ?"]
+    params: list = [ticker]
+    if start:
+        where.append("date >= ?")
+        params.append(start)
+    if end:
+        where.append("date <= ?")
+        params.append(end)
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""SELECT date, individual_net, institutional_net, foreign_net,
+                       foreign_hold_ratio
+                FROM trading_flow WHERE {' AND '.join(where)} ORDER BY date""",
+            params,
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_trading_flow(ticker: str, days: int = 20) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
