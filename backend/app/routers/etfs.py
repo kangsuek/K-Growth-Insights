@@ -40,19 +40,19 @@ def _news_out(row: dict) -> dict:
 
 @router.get("/")
 def list_etfs():
-    """추적 종목 목록(주식·ETF). 프론트 ETF 카드 목록에 사용."""
-    stocks = repository.list_stocks()
+    """추적 종목 목록(주식·ETF, 구매정보 포함). 대시보드·포트폴리오에 사용."""
+    stocks = repository.list_stocks_full()
     return [
         {
             "ticker": s["ticker"],
             "name": s["name"],
             "type": s.get("type", "STOCK"),
             "theme": s.get("theme"),
-            "purchase_date": None,
-            "purchase_price": None,
-            "quantity": None,
-            "search_keyword": None,
-            "relevance_keywords": None,
+            "purchase_date": s.get("purchase_date"),
+            "purchase_price": s.get("purchase_price"),
+            "quantity": s.get("quantity"),
+            "search_keyword": s.get("search_keyword"),
+            "relevance_keywords": s.get("relevance_keywords"),
         }
         for s in stocks
     ]

@@ -111,8 +111,10 @@
       monthly_data/daily_series)
 - [x] 페이지 연결(브라우저 검증: 일시투자 실행→평가액 추이 차트 렌더)
 
-### Phase 7 — 포트폴리오(Portfolio)
-- [ ] 포트폴리오 저장/조회(로컬 or 백엔드), 페이지 연결
+### Phase 7 — 포트폴리오(Portfolio) ✅
+- [x] 신규 백엔드 불필요 — getAll(구매정보)+batchSummary(현재가)로 클라이언트 계산
+- [x] `/etfs/`가 stocks의 실제 구매정보(purchase_date/price/quantity) 반환하도록 수정
+- [x] 페이지 연결(브라우저 검증: 투자금 330만·평가 378만·+14.65%, 비중/수익률 차트)
 
 ### Phase 8 — 알림(Alerts)
 - [ ] 백엔드 ➕: `alerts` 테이블 + CRUD(`/alerts/*`)
