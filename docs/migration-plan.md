@@ -68,10 +68,14 @@
 - [x] Dashboard·Header·Footer 렌더 확인(다크 테마, 시장현황, 종목 그리드, 정렬) — 브라우저 검증 완료
 - [x] `npm run build` + 브라우저에서 5174와 동일 확인, 백엔드 테스트 69건 통과
 
-### Phase 2 — 설정(Settings)  *(원래 8번 → 우선순위 상향)*
-- [ ] 백엔드 ➕: `/settings/stocks*`(관리·정렬·검증·검색), `/settings/api-keys`
-- [ ] `/data/scheduler-status`, `/data/reset`
-- [ ] 페이지 연결(종목 관리·API 키·데이터 관리·일반 설정)
+### Phase 2 — 설정(Settings)  *(원래 8번 → 우선순위 상향)* ✅
+- [x] 백엔드 ➕: `/settings/stocks*`(관리·정렬·검증·검색), `/settings/api-keys`,
+      `/settings/ticker-catalog/*`
+- [x] `/data/scheduler-status`, `/data/reset`(Phase 1에서 추가)
+- [x] stocks 테이블 컬럼 확장(구매정보·검색키워드·sort_order) + 기존 DB 마이그레이션
+- [x] 페이지 연결(종목 관리·API 키·데이터 관리·일반 설정) — 브라우저 검증 완료
+- [x] **수집 시간 최소화**: collect-all 종목 단위 병렬화(ThreadPoolExecutor) + SQLite
+      WAL/busy_timeout → 10종목 3.3s→0.7s(약 5배). `COLLECT_CONCURRENCY` env로 조정
 
 ### Phase 3 — 종목 상세(ETFDetail)
 - [ ] 상세 페이지 이식, 시세/매매동향/분봉/펀더멘털/인사이트/뉴스 연결

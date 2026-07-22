@@ -12,11 +12,17 @@ logger = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS stocks (
-    ticker      TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    type        TEXT NOT NULL DEFAULT 'STOCK',   -- STOCK | ETF
-    theme       TEXT,
-    updated_at  TEXT DEFAULT (datetime('now'))
+    ticker              TEXT PRIMARY KEY,
+    name                TEXT NOT NULL,
+    type                TEXT NOT NULL DEFAULT 'STOCK',   -- STOCK | ETF
+    theme               TEXT,
+    purchase_date       TEXT,      -- 구매일(YYYY-MM-DD, 선택)
+    purchase_price      REAL,      -- 매입 평균가(선택)
+    quantity            INTEGER,   -- 보유 수량(선택)
+    search_keyword      TEXT,      -- 뉴스 검색 키워드(선택)
+    relevance_keywords  TEXT,      -- 관련 키워드 JSON 배열(선택)
+    sort_order          INTEGER,   -- 사용자 지정 정렬 순서
+    updated_at          TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS prices (
@@ -121,11 +127,16 @@ CREATE INDEX IF NOT EXISTS idx_intraday_ticker_dt
 
 @contextmanager
 def get_connection():
-    """Yield a SQLite connection with row access by column name."""
+    """Yield a SQLite connection with row access by column name.
+
+    병렬 수집(collect-all)에서 여러 스레드가 동시에 쓰기를 시도하므로 WAL 모드와
+    busy_timeout으로 잠금 대기를 허용해 'database is locked' 오류를 피한다.
+    """
     Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DATABASE_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
     try:
         yield conn
         conn.commit()
@@ -136,9 +147,32 @@ def get_connection():
         conn.close()
 
 
+# 기존 stocks 테이블에 나중에 추가된 컬럼(구버전 DB 마이그레이션용).
+_STOCKS_ADDED_COLUMNS = {
+    "purchase_date": "TEXT",
+    "purchase_price": "REAL",
+    "quantity": "INTEGER",
+    "search_keyword": "TEXT",
+    "relevance_keywords": "TEXT",
+    "sort_order": "INTEGER",
+}
+
+
+def _migrate(conn) -> None:
+    """기존 DB에 없는 컬럼을 추가한다(멱등). SQLite는 컬럼 IF NOT EXISTS가 없어 직접 확인."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(stocks)")}
+    for col, coltype in _STOCKS_ADDED_COLUMNS.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE stocks ADD COLUMN {col} {coltype}")
+            logger.info("Migrated: added stocks.%s", col)
+
+
 def init_db() -> None:
     """Create tables/indexes if they do not exist (idempotent)."""
     Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
     with get_connection() as conn:
+        # WAL 모드: 읽기와 쓰기 동시성 향상(병렬 수집 시 잠금 경합 감소).
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA)
+        _migrate(conn)
     logger.info("Database initialized at %s", DATABASE_PATH)

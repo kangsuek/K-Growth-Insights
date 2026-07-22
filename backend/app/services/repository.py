@@ -1,15 +1,143 @@
 """Read-side queries against SQLite for the API layer."""
 from __future__ import annotations
 
+import json
+
 from app.database import get_connection
+
+# 사용자 지정 정렬(sort_order) 우선, 없으면 종목명. 대시보드·목록 공통 순서.
+_ORDER_BY = "ORDER BY sort_order IS NULL, sort_order, name"
 
 
 def list_stocks() -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT ticker, name, type, theme FROM stocks ORDER BY type, name"
+            f"SELECT ticker, name, type, theme FROM stocks {_ORDER_BY}"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def _stock_full(row) -> dict:
+    """stocks 전체 컬럼 행 → 설정 화면용 dict(relevance_keywords는 JSON 파싱)."""
+    d = dict(row)
+    rk = d.get("relevance_keywords")
+    if rk:
+        try:
+            d["relevance_keywords"] = json.loads(rk)
+        except (TypeError, ValueError):
+            d["relevance_keywords"] = None
+    return d
+
+
+_FULL_COLS = (
+    "ticker, name, type, theme, purchase_date, purchase_price, quantity, "
+    "search_keyword, relevance_keywords"
+)
+
+
+def list_stocks_full() -> list[dict]:
+    """설정 화면용 전체 종목(구매정보·키워드 포함), 사용자 지정 순서."""
+    with get_connection() as conn:
+        rows = conn.execute(f"SELECT {_FULL_COLS} FROM stocks {_ORDER_BY}").fetchall()
+    return [_stock_full(r) for r in rows]
+
+
+def create_stock(data: dict) -> dict:
+    """종목 추가. 중복이면 ValueError."""
+    ticker = data["ticker"]
+    with get_connection() as conn:
+        exists = conn.execute("SELECT 1 FROM stocks WHERE ticker = ?", (ticker,)).fetchone()
+        if exists:
+            raise ValueError(f"이미 존재하는 종목입니다: {ticker}")
+        rk = data.get("relevance_keywords")
+        # 신규 종목은 목록 맨 뒤로(최대 sort_order + 1).
+        max_order = conn.execute("SELECT MAX(sort_order) AS m FROM stocks").fetchone()["m"]
+        conn.execute(
+            """
+            INSERT INTO stocks (ticker, name, type, theme, purchase_date,
+                purchase_price, quantity, search_keyword, relevance_keywords,
+                sort_order, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            """,
+            (
+                ticker, data.get("name") or ticker, data.get("type", "STOCK"),
+                data.get("theme"), data.get("purchase_date"), data.get("purchase_price"),
+                data.get("quantity"), data.get("search_keyword"),
+                json.dumps(rk, ensure_ascii=False) if rk else None,
+                (max_order or 0) + 1,
+            ),
+        )
+    return get_stock_full(ticker)
+
+
+def update_stock(ticker: str, data: dict) -> dict | None:
+    """부분 업데이트. 제공된 필드만 갱신. 종목 없으면 None."""
+    with get_connection() as conn:
+        if not conn.execute("SELECT 1 FROM stocks WHERE ticker = ?", (ticker,)).fetchone():
+            return None
+        fields, values = [], []
+        for col in ("name", "type", "theme", "purchase_date", "purchase_price",
+                    "quantity", "search_keyword"):
+            if col in data and data[col] is not None:
+                fields.append(f"{col} = ?")
+                values.append(data[col])
+        if "relevance_keywords" in data and data["relevance_keywords"] is not None:
+            fields.append("relevance_keywords = ?")
+            values.append(json.dumps(data["relevance_keywords"], ensure_ascii=False))
+        if fields:
+            fields.append("updated_at = datetime('now')")
+            conn.execute(f"UPDATE stocks SET {', '.join(fields)} WHERE ticker = ?",
+                         (*values, ticker))
+    return get_stock_full(ticker)
+
+
+def get_stock_full(ticker: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            f"SELECT {_FULL_COLS} FROM stocks WHERE ticker = ?", (ticker,)
+        ).fetchone()
+    return _stock_full(row) if row else None
+
+
+def delete_stock(ticker: str) -> dict:
+    """종목 + 관련 수집 데이터 전체 삭제(cascade). 삭제 건수 반환."""
+    tables = ["prices", "trading_flow", "intraday_prices", "news",
+              "stock_fundamentals", "etf_fundamentals", "etf_holdings"]
+    deleted: dict[str, int] = {}
+    with get_connection() as conn:
+        for t in tables:
+            cur = conn.execute(f"DELETE FROM {t} WHERE ticker = ?", (ticker,))
+            deleted[t] = cur.rowcount
+        conn.execute("DELETE FROM stocks WHERE ticker = ?", (ticker,))
+    return deleted
+
+
+def reorder_stocks(tickers: list[str]) -> int:
+    """주어진 순서대로 sort_order를 부여. 반영 건수 반환."""
+    with get_connection() as conn:
+        for i, ticker in enumerate(tickers):
+            conn.execute("UPDATE stocks SET sort_order = ? WHERE ticker = ?", (i, ticker))
+    return len(tickers)
+
+
+def search_catalog(query: str, stock_type: str | None = None, limit: int = 20) -> list[dict]:
+    """추적/카탈로그 종목을 티커·종목명으로 검색(자동완성용)."""
+    like = f"%{query}%"
+    sql = (
+        "SELECT ticker, name, type FROM stocks "
+        "WHERE (ticker LIKE ? OR name LIKE ?)"
+    )
+    params: list = [like, like]
+    if stock_type:
+        sql += " AND type = ?"
+        params.append(stock_type)
+    # 정확한 티커 일치를 우선.
+    sql += " ORDER BY (ticker = ?) DESC, name LIMIT ?"
+    params.extend([query, limit])
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [{"ticker": r["ticker"], "name": r["name"], "type": r["type"],
+             "market": None, "sector": None} for r in rows]
 
 
 def list_stocks_summary() -> list[dict]:

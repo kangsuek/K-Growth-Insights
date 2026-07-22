@@ -9,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
 from app.database import init_db
-from app.routers import data, etfs, market, stocks
-from app.services import scheduler, stocks_sync
+from app.routers import data, etfs, market, settings, stocks
+from app.services import api_keys, scheduler, stocks_sync
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # 저장된 API 키를 런타임에 적용(네이버 검색 등).
+    api_keys.load_to_runtime()
     try:
         # Seed the catalog from stocks.json without hitting the network on boot;
         # names/types get refreshed by POST /api/data/sync-stocks.
@@ -52,6 +54,7 @@ app.include_router(stocks.router)
 app.include_router(data.router)
 app.include_router(etfs.router)
 app.include_router(market.router)
+app.include_router(settings.router)
 
 
 @app.get("/api/health")
