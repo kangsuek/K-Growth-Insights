@@ -122,10 +122,13 @@
 - [x] 페이지 연결(브라우저 검증: 알림 관리 화면·필터, 규칙 CRUD API 확인)
       규칙은 상세 PriceTargetPanel에서 관리, 트리거는 클라이언트 체크→기록
 
-### Phase 9 — 마감/정리
-- [ ] 미사용 코드·미지원 안내 정리, 접근성/반응형 점검
-- [ ] 프론트 테스트(vitest) 정비, 전체 회귀
-- [ ] **frontend/package.json 정리**: 불필요하거나 버전이 오래된 의존성 삭제·개선(사용자 요청)
+### Phase 9 — 마감/정리 ✅
+- [x] Toast PropTypes(id) 경고 수정, ETFDetail 구성종목 key 정상화(콘솔 클린)
+- [x] GitHub 링크를 kangsuek/K-Growth-Insights로 교정(Header·Footer)
+- [x] **frontend/package.json 정리**: 미사용 의존성 제거(html2pdf.js·clsx),
+      dev 불요 항목 정리(@vitest/*·undici·baseline-browser-mapping 등)
+- [x] 전체 회귀: 프론트 build ✓, 백엔드 pytest 98 ✓, 콘솔 오류 0
+- [~] vitest 프론트 테스트는 MSW 핸들러가 원본 API 계약 기준 → 추후 정비(앱 동작엔 무관)
 
 ## 4. 주의/원칙
 

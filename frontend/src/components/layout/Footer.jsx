@@ -76,7 +76,7 @@ export default function Footer() {
               </div>
               <p className="pl-6 text-gray-300">{formatUpdateTime(schedulerStatus?.last_collection_time)}</p>
               <a
-                href="https://github.com/kangsuek/ETFWeeklyReport"
+                href="https://github.com/kangsuek/K-Growth-Insights"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link inline-flex items-center gap-2 text-blue-400 hover:text-blue-300"

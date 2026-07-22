@@ -85,7 +85,7 @@ const Toast = ({ id, message, type = 'info', duration = 3000 }) => {
 }
 
 Toast.propTypes = {
-  id: PropTypes.number.isRequired,
+  id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
   message: PropTypes.string.isRequired,
   type: PropTypes.oneOf(['success', 'error', 'warning', 'info']),
   duration: PropTypes.number
