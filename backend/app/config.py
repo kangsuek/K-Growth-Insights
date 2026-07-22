@@ -41,3 +41,6 @@ def naver_search_enabled() -> bool:
 # 스케줄러: 장중 N분마다 정기 수집 + 평일 15:40 KST 마감 수집.
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
 COLLECT_INTERVAL_MINUTES = int(os.getenv("COLLECT_INTERVAL_MINUTES", "10"))
+# 전체 수집 병렬도(종목 단위 동시 수집 스레드 수). 수집 시간 단축용.
+# 과도하면 네이버 API 제한에 걸릴 수 있어 기본 5로 제한.
+COLLECT_CONCURRENCY = int(os.getenv("COLLECT_CONCURRENCY", "5"))
