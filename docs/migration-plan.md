@@ -99,9 +99,11 @@
 > **개념 구분(중요)**: `stocks`=관심종목 워치리스트(종목관리→대시보드),
 > `stock_catalog`=발굴 유니버스(종목목록수집→종목발굴). 두 목록은 분리 저장한다.
 
-### Phase 5 — 비교(Comparison)
-- [ ] 백엔드 ➕: `/etfs/compare`
-- [ ] 페이지 연결
+### Phase 5 — 비교(Comparison) ✅
+- [x] 백엔드 ➕: `GET /etfs/compare?tickers=&start_date=&end_date=`
+- [x] 정규화 가격(시작=100)·통계(기간/연환산 수익률·변동성·최대낙폭·샤프)·상관관계 행렬
+      (순수 파이썬 계산, numpy 없이) — 원본 응답 형태 재현
+- [x] 페이지 연결(브라우저 검증: 종목 선택→정규화차트·산점도·히트맵·성과표)
 
 ### Phase 6 — 시뮬레이션(Simulation)
 - [ ] 백엔드 ➕: `/simulation/lump-sum`·`/dca`·`/portfolio`

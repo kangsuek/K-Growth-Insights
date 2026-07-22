@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.services import insights, repository
+from app.services import comparison, insights, repository
 
 router = APIRouter(prefix="/api/etfs", tags=["etfs"])
 
@@ -97,6 +97,19 @@ def batch_summary(req: BatchSummaryRequest):
             "latest_news": [_news_out(n) for n in news],
         }
     return {"data": out}
+
+
+@router.get("/compare")
+def compare_etfs(
+    tickers: str = Query(..., description="쉼표 구분 종목 코드(2~20개)"),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+):
+    """여러 종목 비교: 정규화 가격·통계·상관관계."""
+    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+    if len(ticker_list) < 2:
+        raise HTTPException(status_code=400, detail="비교하려면 최소 2개 종목이 필요합니다")
+    return comparison.compare(ticker_list[:20], start_date, end_date)
 
 
 # --- 상세(ETFDetail) 읽기 — 고정 경로 뒤에 배치 -------------------------------
