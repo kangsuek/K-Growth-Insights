@@ -106,11 +106,22 @@ CREATE TABLE IF NOT EXISTS etf_holdings (
 -- 종목 발굴(Screening)용 전체 종목 카탈로그(유니버스). 워치리스트(stocks)와 별개.
 -- '종목목록수집'이 KOSPI/KOSDAQ 시총 상위 종목을 이 테이블에 적재한다.
 CREATE TABLE IF NOT EXISTS stock_catalog (
-    ticker      TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    type        TEXT NOT NULL DEFAULT 'STOCK',   -- STOCK | ETF
-    market      TEXT,      -- KOSPI | KOSDAQ
-    updated_at  TEXT DEFAULT (datetime('now'))
+    ticker             TEXT PRIMARY KEY,
+    name               TEXT NOT NULL,
+    type               TEXT NOT NULL DEFAULT 'STOCK',   -- STOCK | ETF
+    market             TEXT,      -- KOSPI | KOSDAQ
+    sector             TEXT,      -- 섹터/테마(발굴 그룹핑)
+    is_active          INTEGER DEFAULT 1,
+    close_price        REAL,      -- 최신 종가(스크리닝용 스냅샷)
+    daily_change_pct   REAL,
+    volume             INTEGER,
+    weekly_return      REAL,      -- 주간 수익률
+    monthly_return     REAL,      -- 월간 수익률
+    ytd_return         REAL,      -- 연초대비 수익률
+    foreign_net        INTEGER,   -- 최근 외국인 순매수
+    institutional_net  INTEGER,   -- 최근 기관 순매수
+    catalog_updated_at TEXT,      -- 지표 갱신 시각
+    updated_at         TEXT DEFAULT (datetime('now'))
 );
 
 -- 종목 뉴스: 네이버 검색 API. link를 종목 내 고유키로 사용해 중복을 막는다.
@@ -168,6 +179,22 @@ _STOCKS_ADDED_COLUMNS = {
 }
 
 
+# 기존 stock_catalog에 나중에 추가된 스크리닝 컬럼(구버전 DB 마이그레이션용).
+_CATALOG_ADDED_COLUMNS = {
+    "sector": "TEXT",
+    "is_active": "INTEGER DEFAULT 1",
+    "close_price": "REAL",
+    "daily_change_pct": "REAL",
+    "volume": "INTEGER",
+    "weekly_return": "REAL",
+    "monthly_return": "REAL",
+    "ytd_return": "REAL",
+    "foreign_net": "INTEGER",
+    "institutional_net": "INTEGER",
+    "catalog_updated_at": "TEXT",
+}
+
+
 def _migrate(conn) -> None:
     """기존 DB에 없는 컬럼을 추가한다(멱등). SQLite는 컬럼 IF NOT EXISTS가 없어 직접 확인."""
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(stocks)")}
@@ -175,6 +202,12 @@ def _migrate(conn) -> None:
         if col not in existing:
             conn.execute(f"ALTER TABLE stocks ADD COLUMN {col} {coltype}")
             logger.info("Migrated: added stocks.%s", col)
+    cat_existing = {row["name"] for row in conn.execute("PRAGMA table_info(stock_catalog)")}
+    if cat_existing:  # 테이블이 이미 있는 경우에만 컬럼 보강
+        for col, coltype in _CATALOG_ADDED_COLUMNS.items():
+            if col not in cat_existing:
+                conn.execute(f"ALTER TABLE stock_catalog ADD COLUMN {col} {coltype}")
+                logger.info("Migrated: added stock_catalog.%s", col)
 
 
 def init_db() -> None:
@@ -184,5 +217,12 @@ def init_db() -> None:
         # WAL 모드: 읽기와 쓰기 동시성 향상(병렬 수집 시 잠금 경합 감소).
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA)
-        _migrate(conn)
+        _migrate(conn)  # 스크리닝 컬럼 보강 후에 인덱스 생성
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_catalog_screening "
+            "ON stock_catalog (type, is_active, weekly_return)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_catalog_sector ON stock_catalog (sector, is_active)"
+        )
     logger.info("Database initialized at %s", DATABASE_PATH)

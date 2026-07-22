@@ -88,11 +88,13 @@
 - [x] 레거시 `/api/stocks/{ticker}/insights` + 미사용 InsightsResponse 제거
 - 참고: `/etfs/{t}/metrics`는 어느 페이지도 사용 안 함 → 미구현(불필요)
 
-### Phase 4 — 종목발굴(Screening/Scanner)
-- [ ] 백엔드 ➕: `/scanner`, `/scanner/themes`, `/scanner/recommendations`
-- [ ] 페이지 연결
-- 참고: **발굴은 `stock_catalog`(종목목록수집으로 적재한 유니버스)를 대상**으로 한다.
-  워치리스트(`stocks`, 종목관리)와 별개.
+### Phase 4 — 종목발굴(Screening/Scanner) ✅
+- [x] 백엔드 ➕: `/scanner`(검색·필터·정렬·페이지), `/scanner/themes`,
+  `/scanner/recommendations`(프리셋 5), `/scanner/collect-data`·`collect-progress`·`cancel-collect`
+- [x] stock_catalog 스크리닝 지표 컬럼(close/daily/volume/weekly/monthly/ytd/foreign/inst) + 수집기
+- [x] market 규약: ETF는 market='ETF', 주식은 KOSPI/KOSDAQ(원본 동일) — 프론트 필터 매칭
+- [x] 페이지 연결(브라우저 검증: 203종목 지표 수집, ETF 목록·수익률·거래량 렌더)
+- 참고: **발굴은 `stock_catalog`(종목목록수집 유니버스)를 대상**으로 한다(워치리스트와 별개).
 
 > **개념 구분(중요)**: `stocks`=관심종목 워치리스트(종목관리→대시보드),
 > `stock_catalog`=발굴 유니버스(종목목록수집→종목발굴). 두 목록은 분리 저장한다.

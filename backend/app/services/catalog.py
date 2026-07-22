@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def _upsert_row(conn, row: dict) -> None:
-    """카탈로그 종목 1건 upsert(stock_catalog)."""
+    """카탈로그 종목 1건 upsert(stock_catalog).
+
+    원본과 동일하게 발굴 필터용 market 값은 ETF는 'ETF', 주식은 시장(KOSPI/KOSDAQ)으로 둔다.
+    """
+    market = "ETF" if row["type"] == "ETF" else row.get("exchange")
     conn.execute(
         """
         INSERT INTO stock_catalog (ticker, name, type, market, updated_at)
@@ -26,7 +30,7 @@ def _upsert_row(conn, row: dict) -> None:
             market=excluded.market,
             updated_at=excluded.updated_at
         """,
-        (row["ticker"], row["name"] or row["ticker"], row["type"], row.get("exchange")),
+        (row["ticker"], row["name"] or row["ticker"], row["type"], market),
     )
 
 
