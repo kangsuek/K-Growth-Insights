@@ -326,18 +326,24 @@ export default function ETFDetail() {
     retry: 1,
   })
 
-  // RSI/MACD 계산 (확장 데이터 사용, 오름차순으로 변환)
+  // RSI/MACD 계산 (확장 데이터로 계산, 표시는 선택 기간으로 슬라이스해 가격 차트와 정렬)
+  // 앞선 60일(워밍업)은 지표 정확도를 위해 계산에만 쓰고 화면에는 노출하지 않는다.
+  const inSelectedRange = useCallback(
+    (d) => d.date >= dateRange.startDate && d.date <= dateRange.endDate,
+    [dateRange.startDate, dateRange.endDate],
+  )
+
   const rsiData = useMemo(() => {
     if (!showRSI || !extendedPricesData || extendedPricesData.length < 15) return []
     const ascending = [...extendedPricesData].reverse()
-    return calculateRSI(ascending, 14)
-  }, [showRSI, extendedPricesData])
+    return calculateRSI(ascending, 14).filter(inSelectedRange)
+  }, [showRSI, extendedPricesData, inSelectedRange])
 
   const macdData = useMemo(() => {
     if (!showMACD || !extendedPricesData || extendedPricesData.length < 35) return []
     const ascending = [...extendedPricesData].reverse()
-    return calculateMACD(ascending, 12, 26, 9)
-  }, [showMACD, extendedPricesData])
+    return calculateMACD(ascending, 12, 26, 9).filter(inSelectedRange)
+  }, [showMACD, extendedPricesData, inSelectedRange])
 
   // 지지선/저항선 계산 (pricesData는 내림차순)
   const supportResistanceData = useMemo(() => {
