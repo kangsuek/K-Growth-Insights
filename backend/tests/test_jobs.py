@@ -20,18 +20,20 @@ def test_collect_all_sync_aggregates(monkeypatch):
     seed_stock("005930", "삼성전자", "STOCK")
     seed_stock("000660", "SK하이닉스", "STOCK")
 
-    def fake(ticker):
+    def fake(ticker, days=None):
         return CollectResult(ticker=ticker, prices=60, trading_flow=20, news=5,
                              fundamentals=1, ok=True)
 
     monkeypatch.setattr(jobs.collectors, "collect_stock", fake)
     result = jobs.collect_all_sync()
     assert result["total_tickers"] == 2
+    assert result["success_count"] == 2 and result["fail_count"] == 0
     assert result["total_price_records"] == 120
     assert result["total_trading_flow_records"] == 40
     assert result["total_news_records"] == 10
     assert result["fundamentals_success"] == 2
     assert result["fundamentals_failed"] == 0
+    assert "details" in result and "005930" in result["details"]
     assert jobs.snapshot()["status"] == "done"
 
 
@@ -40,7 +42,7 @@ def test_collect_all_sync_counts_fundamentals_failed(monkeypatch):
     seed_stock("005930", "삼성전자", "STOCK")
     seed_stock("000660", "SK하이닉스", "STOCK")
     monkeypatch.setattr(jobs.collectors, "collect_stock",
-                        lambda t: CollectResult(ticker=t, fundamentals=(1 if t == "005930" else 0), ok=True))
+                        lambda t, days=None: CollectResult(ticker=t, fundamentals=(1 if t == "005930" else 0), ok=True))
     result = jobs.collect_all_sync()
     assert result["fundamentals_success"] == 1
     assert result["fundamentals_failed"] == 1
@@ -50,9 +52,9 @@ def test_collect_all_endpoint_returns_result(monkeypatch):
     _reset_state()
     seed_stock("005930", "삼성전자", "STOCK")
     monkeypatch.setattr(jobs.collectors, "collect_stock",
-                        lambda t: CollectResult(ticker=t, prices=60, ok=True))
+                        lambda t, days=None: CollectResult(ticker=t, prices=60, ok=True))
     body = client.post("/api/data/collect-all").json()
-    assert "result" in body
+    assert "message" in body and "result" in body
     assert body["result"]["total_tickers"] == 1
     assert body["result"]["total_price_records"] == 60
 

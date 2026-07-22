@@ -45,33 +45,49 @@ def is_running() -> bool:
         return _state["status"] == "running"
 
 
-def _collect_one(ticker: str) -> CollectResult:
+def _collect_one(stock: dict, days: int | None) -> CollectResult:
     """종목 하나를 수집하고 진행 상태를 스레드 안전하게 갱신."""
+    ticker = stock["ticker"]
     with _lock:
         _state["current"] = ticker
-    result = collectors.collect_stock(ticker)
+    result = collectors.collect_stock(ticker, days=days)
     with _lock:
         _state["completed"] += 1
         _state["succeeded" if result.ok else "failed"] += 1
     return result
 
 
-def _aggregate(results: list[CollectResult], total_tickers: int) -> dict:
-    """프론트 계약용 수집 집계."""
+def _aggregate(results: list[CollectResult], stocks: list[dict]) -> dict:
+    """원본 collect-all 계약과 동일한 집계 결과."""
+    by_ticker = {s["ticker"]: s for s in stocks}
     fundamentals_success = sum(1 for r in results if r.fundamentals)
+    details = {
+        r.ticker: {
+            "name": by_ticker.get(r.ticker, {}).get("name", r.ticker),
+            "success": r.ok,
+            "price_records": r.prices,
+            "trading_flow_records": r.trading_flow,
+            "news_records": r.news,
+        }
+        for r in results
+    }
     return {
-        "total_tickers": total_tickers,
+        "total_tickers": len(stocks),
+        "success_count": sum(1 for r in results if r.ok),
+        "fail_count": sum(1 for r in results if not r.ok),
         "total_price_records": sum(r.prices for r in results),
         "total_trading_flow_records": sum(r.trading_flow for r in results),
         "total_news_records": sum(r.news for r in results),
         "fundamentals_success": fundamentals_success,
-        "fundamentals_failed": total_tickers - fundamentals_success,
+        "fundamentals_failed": len(stocks) - fundamentals_success,
+        "details": details,
     }
 
 
-def collect_all_sync() -> dict:
+def collect_all_sync(days: int | None = None) -> dict:
     """전체 종목을 병렬 수집하고 집계 결과를 반환(동기).
 
+    days가 주어지면 그 일수만큼 일별 시세를 수집한다(원본과 동일).
     진행 상태(_state)를 갱신하므로 /collect-progress 폴링으로 실시간 진행을 볼 수 있다.
     """
     stocks = repository.list_stocks()
@@ -83,14 +99,14 @@ def collect_all_sync() -> dict:
     workers = max(1, min(config.COLLECT_CONCURRENCY, len(stocks) or 1))
     try:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            results = list(pool.map(lambda s: _collect_one(s["ticker"]), stocks))
+            results = list(pool.map(lambda s: _collect_one(s, days), stocks))
         with _lock:
             _state.update(status="done", current=None, finished_at=_now())
         logger.info(
-            "[collect-all] 완료 %d/%d (병렬 %d)",
-            _state["succeeded"], _state["total"], workers,
+            "[collect-all] 완료 %d/%d (병렬 %d, days=%s)",
+            _state["succeeded"], _state["total"], workers, days,
         )
-        return _aggregate(results, len(stocks))
+        return _aggregate(results, stocks)
     except Exception as exc:  # noqa: BLE001 - 상태에 기록 후 재발생
         logger.error("[collect-all] 실패: %s", exc, exc_info=True)
         with _lock:

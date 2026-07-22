@@ -41,12 +41,16 @@ def collect_one(ticker: str):
 
 
 @router.post("/collect-all")
-def collect_all():
-    """전체 종목을 병렬 수집(동기)하고 집계 결과를 반환한다.
+def collect_all(days: int = Query(1, ge=1, le=365, description="수집할 일수(기본 1)")):
+    """전체 종목을 병렬 수집(동기)하고 집계 결과를 반환한다(원본 계약과 동일).
 
     수집 중 진행률은 /collect-progress 폴링으로 확인할 수 있다.
     """
-    return {"result": jobs.collect_all_sync()}
+    result = jobs.collect_all_sync(days=days)
+    return {
+        "message": f"Data collection completed for {result['total_tickers']} tickers",
+        "result": result,
+    }
 
 
 # 내부 상태 → 프론트 진행률 status 매핑.

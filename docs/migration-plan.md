@@ -80,6 +80,10 @@
 ### Phase 3 — 종목 상세(ETFDetail)
 - [ ] 상세 페이지 이식, 시세/매매동향/분봉/펀더멘털/인사이트/뉴스 연결
 - [ ] 백엔드 ➕: `/etfs/{t}/metrics`(지표 계산), 필요 시 `batch-summary`
+- [ ] **원본 정렬 필요(개념 차이)**: `/etfs/{t}/insights`를 원본 ETFInsights 형태로
+      재구현 (strategy{short/medium/long_term, recommendation, comment}, key_points[], risks[]).
+      현재는 내 자체 규칙(summary/signals) → 원본 로직 참조해 교체.
+- [ ] fundamentals 응답도 원본 형태 대조 후 정렬
 
 ### Phase 4 — 종목발굴(Screening/Scanner)
 - [ ] 백엔드 ➕: `/scanner`, `/scanner/themes`, `/scanner/recommendations`

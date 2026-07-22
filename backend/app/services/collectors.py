@@ -7,6 +7,7 @@ progress. All writes are idempotent upserts keyed on (ticker, date/datetime).
 from __future__ import annotations
 
 import logging
+import math
 
 from app import config
 from app.config import PRICE_PAGES, TRADING_FLOW_PAGES
@@ -16,8 +17,14 @@ from app.services import naver_client, repository
 
 logger = logging.getLogger(__name__)
 
+# 네이버 일별 시세는 페이지당 최대 60행이라 days를 페이지 수로 환산한다.
+_PRICE_PAGE_SIZE = 60
 
-def collect_prices(ticker: str, pages: int = PRICE_PAGES) -> int:
+
+def collect_prices(ticker: str, pages: int = PRICE_PAGES, days: int | None = None) -> int:
+    # days가 지정되면 그만큼(최소 1페이지) 수집. 원본(collect-all의 days)과 동일 동작.
+    if days is not None:
+        pages = max(1, math.ceil(days / _PRICE_PAGE_SIZE))
     rows = naver_client.fetch_daily_prices(ticker, pages=pages)
     if not rows:
         return 0
@@ -223,11 +230,14 @@ def collect_news(ticker: str) -> int:
     return len(rows)
 
 
-def collect_stock(ticker: str) -> CollectResult:
-    """Collect all datasets for a single ticker (STOCK/ETF에 따라 펀더멘털 분기)."""
+def collect_stock(ticker: str, days: int | None = None) -> CollectResult:
+    """Collect all datasets for a single ticker (STOCK/ETF에 따라 펀더멘털 분기).
+
+    days가 주어지면 그 일수만큼 일별 시세를 수집한다(원본 collect-all과 동일).
+    """
     result = CollectResult(ticker=ticker)
     try:
-        result.prices = collect_prices(ticker)
+        result.prices = collect_prices(ticker, days=days)
         result.trading_flow = collect_trading_flow(ticker)
         result.intraday = collect_intraday(ticker)
 
