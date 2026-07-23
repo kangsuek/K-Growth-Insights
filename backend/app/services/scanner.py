@@ -277,10 +277,13 @@ def themes() -> list[dict]:
     """섹터별 그룹(종목 수·평균 주간수익률·상위 종목)."""
     registered = _registered_tickers()
     with get_connection() as conn:
+        # 평균 주간수익률 내림차순 정렬(원본 ETFWeeklyReport와 동일).
+        # 프론트 그리드가 배열 순서대로 좌→우로 채우므로 수익률 높은 섹터가 앞에 온다.
+        # 평균값이 없는(멤버 전원 미수집) 섹터는 뒤로 보낸다.
         sectors = conn.execute(
             """SELECT sector, COUNT(*) AS cnt, AVG(weekly_return) AS avg_wr
                FROM stock_catalog WHERE is_active=1 AND sector IS NOT NULL
-               GROUP BY sector ORDER BY cnt DESC"""
+               GROUP BY sector ORDER BY (avg_wr IS NULL), avg_wr DESC"""
         ).fetchall()
         result = []
         for s in sectors:

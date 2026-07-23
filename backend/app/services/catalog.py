@@ -26,6 +26,75 @@ _progress: dict = {
 }
 _STEP = {"KOSPI": 0, "KOSDAQ": 1}
 
+# 종목명 키워드 → 섹터(테마) 매핑. 네이버 모바일 API가 업종·테마 텍스트를 제공하지
+# 않아, 이름 기반으로 섹터를 추론한다(발굴 '테마탐색' 그룹핑용). 원본
+# ETFWeeklyReport의 catalog_data_collector._update_sectors 규칙을 그대로 이식했다.
+# 순서 중요: 위에서부터 먼저 매칭되는 섹터를 쓴다. ETF 이름은 대부분 매칭되고,
+# 테마 키워드가 없는 개별 종목명은 매칭되지 않아 sector가 비어 남는다(원본과 동일).
+_SECTOR_KEYWORDS: list[tuple[list[str], str]] = [
+    (["반도체", "필라델피아", "SOX"], "반도체"),
+    (["2차전지", "배터리", "리튬", "에너지저장"], "2차전지"),
+    (["AI", "인공지능", "로봇", "자율주행", "GPT", "생성형"], "AI/로봇"),
+    (["바이오", "헬스케어", "제약", "의료", "게놈", "진단"], "바이오"),
+    (["자동차", "전기차", "EV", "모빌리티", "완성차"], "자동차"),
+    (["은행", "금융", "보험", "증권", "KRX은행"], "금융"),
+    (["태양광", "풍력", "신재생", "에너지", "원자력", "우라늄", "탄소"], "에너지"),
+    (["소프트웨어", "IT", "클라우드", "사이버보안", "게임", "미디어", "메타버스", "플랫폼"], "IT/SW"),
+    (["건설", "인프라", "조선", "해운", "항공", "운송"], "건설/인프라"),
+    (["화학", "소재", "철강", "비철금속", "희토류"], "화학/소재"),
+    (["식품", "유통", "음식료", "필수소비재"], "식품/유통"),
+    (["방산", "우주항공", "국방", "방위"], "방산/우주"),
+    (["통신", "5G", "6G", "K-뉴딜"], "통신"),
+    (["부동산", "리츠", "REIT"], "부동산"),
+    (["배당", "고배당", "커버드콜", "인컴"], "배당"),
+    (["채권", "국채", "회사채", "금리", "국고채", "통안채"], "채권"),
+    (["골드", "GOLD", "금현물", "순금", "은현물", "실버", "원자재", "구리", "곡물",
+      "원유", "WTI", "천연가스", "금선물"], "원자재"),
+    (["미국", "S&P", "나스닥", "NASDAQ", "S&P500", "다우", "선진국", "글로벌"], "해외"),
+    (["중국", "차이나", "인도", "베트남", "일본", "신흥국"], "해외/신흥"),
+    (["레버리지", "2X", "3X"], "레버리지"),
+    (["인버스", "INVERSE"], "인버스"),
+    (["코스피200", "KOSPI", "TOP10"], "지수"),
+    (["코스닥150", "KOSDAQ"], "코스닥지수"),
+]
+
+
+def match_sector(name: str) -> str | None:
+    """종목명에서 섹터(테마)를 추론한다(대소문자 무시, 첫 매칭 우선). 없으면 None.
+
+    새 종목 추가 '네이버에서 자동 입력' 시 테마·키워드 제안에도 재사용한다.
+    """
+    if not name:
+        return None
+    name_upper = name.upper()
+    for keywords, sector in _SECTOR_KEYWORDS:
+        if any(kw.upper() in name_upper for kw in keywords):
+            return sector
+    return None
+
+
+def map_sectors(conn) -> int:
+    """sector가 비어 있는 활성 종목을 이름 기반으로 섹터 매핑한다. 갱신 건수 반환.
+
+    이미 sector가 채워진 행은 건드리지 않는다(재수집 시 안정적·저비용).
+    """
+    rows = conn.execute(
+        "SELECT ticker, name FROM stock_catalog "
+        "WHERE (sector IS NULL OR sector = '') AND is_active = 1"
+    ).fetchall()
+    updated = 0
+    for r in rows:
+        sector = match_sector(r["name"])
+        if sector:
+            conn.execute(
+                "UPDATE stock_catalog SET sector = ? WHERE ticker = ?",
+                (sector, r["ticker"]),
+            )
+            updated += 1
+    if updated:
+        logger.info("섹터 자동 매핑: %d/%d건 갱신", updated, len(rows))
+    return updated
+
 
 def get_progress() -> dict:
     with _lock:
@@ -73,6 +142,7 @@ def sync_catalog(market: str | None = None, limit: int | None = None) -> dict:
                 _upsert_row(conn, row)
             result[mkt] = len(rows)
             logger.info("Catalog synced %s: %d stocks", mkt, len(rows))
+        map_sectors(conn)  # 이름 기반 섹터(테마) 매핑 — 발굴 '테마탐색' 그룹핑용
     return result
 
 
@@ -106,6 +176,7 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
             with _lock:
                 _progress.update(step_index=2, message="ETF 분류 중...")
                 _progress.update(step_index=3, message="저장 중...")
+            map_sectors(conn)  # 이름 기반 섹터(테마) 매핑 — 발굴 '테마탐색' 그룹핑용
             # 미수집 잔존 행 정리: 이번 수집에 없는(상폐·순위 이탈 등) 종목 삭제.
             # 전체 수집(limit=None)일 때만 안전하다 — 부분 수집에선 정상 종목까지 지워질 수 있음.
             removed = _prune_stale(conn, seen) if limit is None else 0

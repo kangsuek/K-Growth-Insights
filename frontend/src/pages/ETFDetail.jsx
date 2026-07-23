@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { etfApi, newsApi, alertApi } from '../services/api'
+import { etfApi, newsApi, alertApi, settingsApi } from '../services/api'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/common/PageHeader'
 import Spinner from '../components/common/Spinner'
@@ -42,8 +42,23 @@ function convertDateRangeFormat(settingRange) {
  */
 export default function ETFDetail() {
   const { ticker } = useParams()
+  const navigate = useNavigate()
   const { settings } = useSettings()
   const queryClient = useQueryClient()
+
+  // 종목관리에 등록된 종목 목록 (구성종목 클릭 시 등록 여부 판단에 사용)
+  const { data: registeredStocks } = useQuery({
+    queryKey: ['settings-stocks'],
+    queryFn: async () => {
+      const response = await settingsApi.getStocks()
+      return response.data
+    },
+    staleTime: CACHE_STALE_TIME_STATIC,
+  })
+  const registeredTickers = useMemo(
+    () => new Set((registeredStocks || []).map((s) => s.ticker)),
+    [registeredStocks]
+  )
   
   // 설정에서 기본 날짜 범위 가져오기 (변환 필요: '7D' -> '7d')
   const defaultRangeFromSettings = useMemo(
@@ -493,7 +508,40 @@ export default function ETFDetail() {
                   <tbody>
                     {fundamentalsData.holdings.map((h) => (
                       <tr key={h.stock_code || h.seq} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <td className="py-1.5 text-gray-900 dark:text-gray-100">{h.stock_name}</td>
+                        <td className="py-1.5 text-gray-900 dark:text-gray-100">
+                          {!h.stock_code ? (
+                            // 종목코드 없는 구성종목(해외자산·선물 등)은 조회·추가 불가
+                            <span>{h.stock_name}</span>
+                          ) : registeredTickers.has(h.stock_code) ? (
+                            // 이미 종목관리에 등록됨 → 상세 페이지로 이동
+                            <Link
+                              to={`/etf/${h.stock_code}`}
+                              className="text-primary-600 dark:text-primary-400 hover:underline transition-colors"
+                            >
+                              {h.stock_name}
+                            </Link>
+                          ) : (
+                            // 미등록 → 종목관리 추가 폼으로 프리필 이동
+                            <button
+                              type="button"
+                              onClick={() => navigate('/settings', {
+                                state: {
+                                  addStock: {
+                                    ticker: h.stock_code,
+                                    name: h.stock_name,
+                                    type: 'STOCK',
+                                    theme: '',
+                                  },
+                                },
+                              })}
+                              className="group inline-flex items-center gap-1 text-left text-gray-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                              title="종목관리에 추가"
+                            >
+                              {h.stock_name}
+                              <span className="text-xs text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">＋추가</span>
+                            </button>
+                          )}
+                        </td>
                         <td className="py-1.5 text-right text-gray-700 dark:text-gray-300">
                           {h.weight != null ? `${h.weight.toFixed(2)}%` : '-'}
                         </td>
