@@ -5,12 +5,97 @@
 """
 from __future__ import annotations
 
+import logging
+import threading
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.services import comparison, insights, repository
+from app.services import collectors, comparison, insights, repository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/etfs", tags=["etfs"])
+
+# 분봉 백그라운드 수집 상태(중복 실행 방지). 프론트는 background_collect_started가
+# 참인 동안 3초 간격으로 폴링해 수집 완료를 감지한다.
+_intraday_collecting: set[str] = set()
+_intraday_lock = threading.Lock()
+
+
+def _start_intraday_collect(ticker: str) -> bool:
+    """분봉 백그라운드 수집을 시작한다. 이미 수집 중이면 새로 시작하지 않는다.
+
+    반환값은 "수집이 진행 중인가"이며, 새로 시작했든 이미 돌고 있든 True다.
+    """
+    with _intraday_lock:
+        if ticker in _intraday_collecting:
+            return True
+        _intraday_collecting.add(ticker)
+
+    def _run() -> None:
+        try:
+            collectors.collect_intraday(ticker)
+        except Exception as exc:  # noqa: BLE001 - 로깅 후 상태만 해제
+            logger.warning("분봉 백그라운드 수집 실패(%s): %s", ticker, exc)
+        finally:
+            with _intraday_lock:
+                _intraday_collecting.discard(ticker)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True
+
+
+def _intraday_response(
+    ticker: str, target_date: str | None, auto_collect: bool, force_refresh: bool
+) -> dict:
+    """프론트 계약(ETFWeeklyReport)과 동일한 분봉 응답을 구성한다.
+
+    당일 분봉이 없으면 repository가 가장 최근 거래일로 폴백하므로, 직전 거래일
+    데이터가 그대로 표시된다. 데이터가 아예 없거나 force_refresh면 백그라운드
+    수집을 트리거하고 background_collect_started 플래그를 실어 보낸다.
+    """
+    actual_date, rows = repository.get_intraday_dated(ticker, target_date)
+
+    # 전일 종가 대비 변동(전일비)을 계산해 막대 색상·툴팁에 쓰이게 한다.
+    prev_close = repository.close_before(ticker, actual_date) if actual_date else None
+    for r in rows:
+        if prev_close is not None and r.get("price") is not None:
+            r["change_amount"] = round(r["price"] - prev_close, 2)
+
+    bg_started = False
+    if auto_collect and (not rows or force_refresh):
+        bg_started = _start_intraday_collect(ticker)
+
+    if not rows:
+        return {
+            "ticker": ticker,
+            "date": actual_date,
+            "data": [],
+            "count": 0,
+            "first_time": None,
+            "last_time": None,
+            "background_collect_started": bg_started,
+            "message": (
+                "분봉 데이터 수집 중입니다. 잠시 후 자동으로 갱신됩니다."
+                if bg_started
+                else "데이터 없음 (장 마감 또는 휴장일)"
+            ),
+        }
+
+    first_time = rows[0]["datetime"].split("T")[1][:5]
+    last_time = rows[-1]["datetime"].split("T")[1][:5]
+    response = {
+        "ticker": ticker,
+        "date": actual_date,
+        "data": rows,
+        "count": len(rows),
+        "first_time": first_time,
+        "last_time": last_time,
+    }
+    if bg_started:
+        response["background_collect_started"] = True
+    return response
 
 
 def _price_out(row: dict) -> dict:
@@ -155,8 +240,13 @@ def get_etf_trading_flow(
 
 
 @router.get("/{ticker}/intraday")
-def get_etf_intraday(ticker: str):
-    return repository.get_intraday(ticker)
+def get_etf_intraday(
+    ticker: str,
+    target_date: str | None = Query(None),
+    auto_collect: bool = Query(True),
+    force_refresh: bool = Query(False),
+):
+    return _intraday_response(ticker, target_date, auto_collect, force_refresh)
 
 
 @router.get("/{ticker}/fundamentals")

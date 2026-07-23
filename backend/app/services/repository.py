@@ -238,16 +238,27 @@ def get_trading_flow(ticker: str, days: int = 20) -> list[dict]:
     return [dict(r) for r in reversed(rows)]
 
 
-def get_intraday(ticker: str) -> list[dict]:
-    """Return the most recent trading day's minute bars, chronological."""
+def get_intraday_dated(
+    ticker: str, target_date: str | None = None
+) -> tuple[str | None, list[dict]]:
+    """분봉을 (실제날짜, 행목록)로 반환. 시간순 정렬.
+
+    target_date(YYYY-MM-DD)가 주어지면 그 날짜만 조회한다. 없으면 가장 최근
+    거래일로 폴백하므로, 당일 분봉이 아직 없을 때 자연히 직전 거래일 데이터를
+    돌려준다. 실제 반환한 날짜를 함께 주어 화면에 표기할 수 있게 한다.
+    """
     with get_connection() as conn:
-        latest = conn.execute(
-            "SELECT MAX(substr(datetime, 1, 10)) AS d FROM intraday_prices "
-            "WHERE ticker = ?",
-            (ticker,),
-        ).fetchone()
-        if not latest or not latest["d"]:
-            return []
+        if target_date:
+            day = target_date
+        else:
+            latest = conn.execute(
+                "SELECT MAX(substr(datetime, 1, 10)) AS d FROM intraday_prices "
+                "WHERE ticker = ?",
+                (ticker,),
+            ).fetchone()
+            day = latest["d"] if latest else None
+        if not day:
+            return None, []
         rows = conn.execute(
             """
             SELECT datetime, open_price, high_price, low_price, price, volume
@@ -255,9 +266,29 @@ def get_intraday(ticker: str) -> list[dict]:
             WHERE ticker = ? AND substr(datetime, 1, 10) = ?
             ORDER BY datetime ASC
             """,
-            (ticker, latest["d"]),
+            (ticker, day),
         ).fetchall()
-    return [dict(r) for r in rows]
+    return day, [dict(r) for r in rows]
+
+
+def get_intraday(ticker: str) -> list[dict]:
+    """Return the most recent trading day's minute bars, chronological."""
+    _, rows = get_intraday_dated(ticker)
+    return rows
+
+
+def close_before(ticker: str, date: str) -> float | None:
+    """주어진 날짜 직전 거래일의 종가(전일 종가). 분봉 전일비 계산용."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT close_price FROM prices
+            WHERE ticker = ? AND date < ?
+            ORDER BY date DESC LIMIT 1
+            """,
+            (ticker, date),
+        ).fetchone()
+    return row["close_price"] if row else None
 
 
 def get_fundamentals(ticker: str) -> dict | None:

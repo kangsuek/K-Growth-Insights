@@ -159,3 +159,30 @@ def test_etf_prices_range_filter():
     all_rows = client.get("/api/etfs/005930/prices",
                           params={"start_date": "2026-01-01", "end_date": "2026-12-31"}).json()
     assert len(all_rows) == 12  # 1년 전체
+
+
+def test_etf_intraday_falls_back_to_previous_day():
+    """당일 분봉이 없으면 직전 거래일 분봉을 rich 객체로 반환한다."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO prices (ticker, date, open_price, high_price,
+               low_price, close_price, volume, change_pct)
+               VALUES ('005930', '2026-07-21', 100, 100, 100, 100, 1000, 0)""",
+        )
+        for i, hhmm in enumerate(("09:00", "09:01", "15:30")):
+            conn.execute(
+                """INSERT INTO intraday_prices (ticker, datetime, open_price,
+                   high_price, low_price, price, volume)
+                   VALUES ('005930', ?, 110, 112, 108, ?, 500)""",
+                (f"2026-07-22T{hhmm}:00", 110 + i),
+            )
+    # auto_collect=False로 실제 네트워크 수집을 막고, 조회 계약만 검증한다.
+    body = client.get("/api/etfs/005930/intraday",
+                      params={"auto_collect": False}).json()
+    assert body["date"] == "2026-07-22"      # 직전 거래일로 폴백
+    assert body["count"] == 3
+    assert body["first_time"] == "09:00"
+    assert body["last_time"] == "15:30"
+    # 전일(07-21) 종가 100 대비 전일비 계산 확인
+    assert body["data"][0]["change_amount"] == 10.0
