@@ -17,3 +17,4 @@ logs/**/*.log
 
 # Claude Code 개인 설정(자동 커밋·푸시 훅 등)
 .claude/settings.local.json
+.claude/pause-autocommit
