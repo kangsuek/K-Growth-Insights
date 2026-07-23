@@ -309,6 +309,38 @@ def close_before(ticker: str, date: str) -> float | None:
     return row["close_price"] if row else None
 
 
+def latest_change_pct(codes: list[str]) -> dict[str, float]:
+    """여러 종목코드의 최근 등락률(%) 조회. {code: pct}.
+
+    발굴 스냅샷(stock_catalog.daily_change_pct)을 우선 쓰고, 없으면 최신
+    일별시세(prices.change_pct)로 보완한다. ETF 구성종목 전일대비 표시에 사용.
+    """
+    codes = [c for c in dict.fromkeys(codes) if c]  # 중복·빈값 제거, 순서 유지
+    if not codes:
+        return {}
+    ph = ",".join("?" * len(codes))
+    result: dict[str, float] = {}
+    with get_connection() as conn:
+        for r in conn.execute(
+            f"SELECT ticker, daily_change_pct FROM stock_catalog "
+            f"WHERE ticker IN ({ph}) AND daily_change_pct IS NOT NULL", codes
+        ):
+            result[r["ticker"]] = r["daily_change_pct"]
+        missing = [c for c in codes if c not in result]
+        if missing:
+            ph2 = ",".join("?" * len(missing))
+            # 각 종목의 가장 최근 거래일 등락률.
+            for r in conn.execute(
+                f"""SELECT p.ticker, p.change_pct FROM prices p
+                    JOIN (SELECT ticker, MAX(date) AS d FROM prices
+                          WHERE ticker IN ({ph2}) GROUP BY ticker) m
+                      ON p.ticker = m.ticker AND p.date = m.d""", missing
+            ):
+                if r["change_pct"] is not None:
+                    result[r["ticker"]] = r["change_pct"]
+    return result
+
+
 def get_fundamentals(ticker: str) -> dict | None:
     """종목 유형(STOCK/ETF)에 따라 펀더멘털을 조회해 통합 응답으로 반환.
 

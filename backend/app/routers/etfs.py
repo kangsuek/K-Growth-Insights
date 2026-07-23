@@ -298,15 +298,18 @@ def get_etf_fundamentals(ticker: str):
     if data is None:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
     # 구성종목 필드를 프론트 계약(stock_code/stock_name/daily_change_pct)으로 매핑.
+    # 전일대비는 모바일 구성종목 응답에 없어, 각 구성종목 코드로 등락률을 조회해 채운다.
+    # (해외자산·선물처럼 코드가 없는 구성종목은 조회 불가라 None으로 남는다.)
     holdings = data.get("holdings")
     if holdings:
+        changes = repository.latest_change_pct([h.get("item_code") for h in holdings])
         data["holdings"] = [
             {
                 "seq": h.get("seq"),
                 "stock_code": h.get("item_code"),
                 "stock_name": h.get("item_name"),
                 "weight": h.get("weight"),
-                "daily_change_pct": None,
+                "daily_change_pct": changes.get(h.get("item_code")),
             }
             for h in holdings
         ]

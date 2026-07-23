@@ -236,3 +236,26 @@ def test_fundamentals_endpoint_empty_payload_when_not_collected():
     body = r.json()
     assert body["type"] == "STOCK"
     assert body["stock"] is None  # 아직 수집 전 → 빈 카드
+
+
+def test_fundamentals_holdings_fill_daily_change_from_catalog():
+    """구성종목 전일대비는 코드로 stock_catalog 등락률을 조회해 채운다.
+    코드가 없는 구성종목(해외자산·선물)은 조회 불가라 None으로 남는다.
+    """
+    seed_stock("487240", "KODEX AI일렉트릭", "ETF")
+    with get_connection() as conn:
+        # 구성종목 2건: 코드 있는 것 + 코드 없는 것
+        conn.execute("INSERT INTO etf_holdings (ticker, seq, item_code, item_name, weight) "
+                     "VALUES ('487240', 1, '010120', 'LS ELECTRIC', 20.49)")
+        conn.execute("INSERT INTO etf_holdings (ticker, seq, item_code, item_name, weight) "
+                     "VALUES ('487240', 2, '', 'United States OIL ETF', NULL)")
+        # 발굴 스냅샷에 코드 있는 종목의 등락률
+        conn.execute("INSERT INTO stock_catalog (ticker, name, type, market, daily_change_pct) "
+                     "VALUES ('010120', 'LS ELECTRIC', 'STOCK', 'KOSPI', 9.13)")
+
+    holdings = client.get("/api/etfs/487240/fundamentals").json()["holdings"]
+    by_seq = {h["seq"]: h for h in holdings}
+    assert by_seq[1]["daily_change_pct"] == 9.13   # 코드로 등락률 채워짐
+    assert by_seq[1]["weight"] == 20.49
+    assert by_seq[2]["daily_change_pct"] is None    # 코드 없으면 채울 수 없음
+    assert by_seq[2]["weight"] is None

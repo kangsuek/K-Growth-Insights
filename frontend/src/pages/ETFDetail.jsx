@@ -492,7 +492,7 @@ export default function ETFDetail() {
                   </thead>
                   <tbody>
                     {fundamentalsData.holdings.map((h) => (
-                      <tr key={h.stock_code} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                      <tr key={h.stock_code || h.seq} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
                         <td className="py-1.5 text-gray-900 dark:text-gray-100">{h.stock_name}</td>
                         <td className="py-1.5 text-right text-gray-700 dark:text-gray-300">
                           {h.weight != null ? `${h.weight.toFixed(2)}%` : '-'}
