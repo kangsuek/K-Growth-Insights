@@ -151,13 +151,15 @@ def test_etf_prices_range_filter():
                    VALUES ('005930', ?, 100, 100, 100, 100, 1000, 0)""",
                 (f"2026-{m:02d}-15",),
             )
-    # 기간 필터: 3~6월 → 4건
+    # 기간 필터: 3~6월 → 4건 (auto_collect=False로 순수 필터만 검증)
     rows = client.get("/api/etfs/005930/prices",
-                      params={"start_date": "2026-03-01", "end_date": "2026-06-30"}).json()
+                      params={"start_date": "2026-03-01", "end_date": "2026-06-30",
+                              "auto_collect": False}).json()
     assert len(rows) == 4
     # 기본(days)은 60 제한이지만 range는 제한 없이 해당 구간 전체
     all_rows = client.get("/api/etfs/005930/prices",
-                          params={"start_date": "2026-01-01", "end_date": "2026-12-31"}).json()
+                          params={"start_date": "2026-01-01", "end_date": "2026-12-31",
+                                  "auto_collect": False}).json()
     assert len(all_rows) == 12  # 1년 전체
 
 
@@ -186,3 +188,68 @@ def test_etf_intraday_falls_back_to_previous_day():
     assert body["last_time"] == "15:30"
     # 전일(07-21) 종가 100 대비 전일비 계산 확인
     assert body["data"][0]["change_amount"] == 10.0
+
+
+def _seed_flow(ticker, dates):
+    with get_connection() as conn:
+        for d in dates:
+            conn.execute(
+                """INSERT INTO trading_flow (ticker, date, individual_net,
+                   institutional_net, foreign_net, foreign_hold_ratio)
+                   VALUES (?, ?, 0, 0, 0, 0)""", (ticker, d))
+
+
+@respx.mock
+def test_trading_flow_range_backfills_missing_history():
+    """기간 조회 시 보유분이 짧으면 과거 이력을 백필해 기간을 맞춘다."""
+    from app.routers import etfs
+    etfs._backfilled["flow"].clear()
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_flow("005930", ["2026-07-21", "2026-07-22"])  # 최근 2건만 보유
+    # trend API가 과거 창까지 반환(역페이지네이션 mock)
+    respx.get(f"{naver_client.MSTOCK_BASE}/005930/trend").mock(
+        return_value=httpx.Response(200, json=[
+            {"bizdate": bd, "individualPureBuyQuant": "0", "organPureBuyQuant": "0",
+             "foreignerPureBuyQuant": "0", "foreignerHoldRatio": "0"}
+            for bd in ("20260610", "20260701", "20260715", "20260722")
+        ])
+    )
+    body = client.get("/api/etfs/005930/trading-flow",
+                      params={"start_date": "2026-06-01", "end_date": "2026-07-31"}).json()
+    dates = [r["date"] for r in body]
+    assert "2026-06-10" in dates          # 백필된 과거 데이터 포함
+    assert dates == sorted(dates)          # 오래된→최신
+
+
+def test_trading_flow_range_no_autocollect_uses_db_only():
+    """auto_collect=False면 네트워크 백필 없이 보유분만 반환한다."""
+    from app.routers import etfs
+    etfs._backfilled["flow"].clear()
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_flow("005930", ["2026-07-21", "2026-07-22"])
+    body = client.get("/api/etfs/005930/trading-flow",
+                      params={"start_date": "2026-01-01", "end_date": "2026-07-31",
+                              "auto_collect": False}).json()
+    assert [r["date"] for r in body] == ["2026-07-21", "2026-07-22"]
+
+
+@respx.mock
+def test_prices_range_backfills_missing_history():
+    """기간 조회 시 보유 시세가 짧으면 과거 이력을 백필해 기간을 맞춘다."""
+    from app.routers import etfs
+    etfs._backfilled["prices"].clear()
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_prices("005930", [100, 101])  # 최근 2건만(날짜는 헬퍼가 최근 기준 부여)
+    # 일별시세 API가 과거까지 반환(mock)
+    respx.get(f"{naver_client.MSTOCK_BASE}/005930/price").mock(
+        return_value=httpx.Response(200, json=[
+            {"localTradedAt": d, "closePrice": "100", "openPrice": "100",
+             "highPrice": "100", "lowPrice": "100", "accumulatedTradingVolume": "1000",
+             "fluctuationsRatio": "0.5"}
+            for d in ("2026-03-02", "2026-05-01", "2026-07-01")
+        ])
+    )
+    body = client.get("/api/etfs/005930/prices",
+                      params={"start_date": "2026-02-01", "end_date": "2026-07-31"}).json()
+    dates = [r["date"] for r in body]
+    assert "2026-03-02" in dates  # 백필된 과거 시세 포함

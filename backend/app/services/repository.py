@@ -169,6 +169,15 @@ def get_stock(ticker: str) -> dict | None:
     return dict(row) if row else None
 
 
+def prices_earliest_date(ticker: str) -> str | None:
+    """종목 일별시세의 가장 이른 날짜(YYYY-MM-DD). 데이터 없으면 None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT MIN(date) AS d FROM prices WHERE ticker = ?", (ticker,)
+        ).fetchone()
+    return row["d"] if row and row["d"] else None
+
+
 def get_prices(ticker: str, days: int = 60) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
@@ -222,6 +231,15 @@ def get_trading_flow_range(ticker: str, start: str | None, end: str | None) -> l
             params,
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def trading_flow_earliest_date(ticker: str) -> str | None:
+    """종목 매매동향의 가장 이른 날짜(YYYY-MM-DD). 데이터 없으면 None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT MIN(date) AS d FROM trading_flow WHERE ticker = ?", (ticker,)
+        ).fetchone()
+    return row["d"] if row and row["d"] else None
 
 
 def get_trading_flow(ticker: str, days: int = 20) -> list[dict]:

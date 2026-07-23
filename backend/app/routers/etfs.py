@@ -218,13 +218,51 @@ def get_etf_prices(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     days: int = Query(60, ge=1, le=1000),
+    auto_collect: bool = Query(True),
 ):
     # 기간(start/end)이 오면 그 범위, 아니면 최근 days일. 최신순(DESC)으로 반환.
     if start_date or end_date:
+        if auto_collect and start_date:
+            _ensure_coverage("prices", ticker, start_date,
+                             repository.prices_earliest_date(ticker),
+                             lambda n: collectors.collect_prices(ticker, days=n))
         rows = repository.get_prices_range(ticker, start_date, end_date)
     else:
         rows = repository.get_prices(ticker, days=days)  # 오래된→최신
     return [_price_out(p) for p in reversed(rows)]
+
+
+# 기간 조회 백필: 종목별로 이미 시도한 가장 이른 start_date를 기억해 중복 수집 방지.
+# (API가 더 과거를 안 주는 경우 매 요청마다 재수집하는 것을 막는다.) 종류별로 분리.
+_backfilled: dict[str, dict[str, str]] = {"prices": {}, "flow": {}}
+_backfill_lock = threading.Lock()
+
+
+def _ensure_coverage(kind: str, ticker: str, start_date: str,
+                     earliest: str | None, collect) -> None:
+    """보유 데이터가 start_date를 못 덮으면 그만큼 과거 이력을 백필 수집한다.
+
+    시세·매매동향 모두 한 번의 수집으로는 최근 구간만 채워져, 기간을 길게 잡으면
+    차트가 짧게 나온다(두 차트는 정렬되어야 함). 부족분을 collect(days)로 채운다.
+    """
+    from datetime import date
+
+    if earliest and earliest <= start_date:
+        return  # 이미 커버됨
+    with _backfill_lock:
+        tried = _backfilled[kind].get(ticker)
+        if tried and tried <= start_date:
+            return  # 이 기간까지 이미 백필 시도함(더 과거 데이터 없음)
+        _backfilled[kind][ticker] = start_date
+    try:
+        d0 = date.fromisoformat(start_date)
+    except ValueError:
+        return
+    days_needed = (date.today() - d0).days + 5  # 경계 여유
+    try:
+        collect(days_needed)
+    except Exception as exc:  # noqa: BLE001 - 실패해도 보유분으로 응답
+        logger.warning("%s 백필 실패(%s): %s", kind, ticker, exc)
 
 
 @router.get("/{ticker}/trading-flow")
@@ -233,8 +271,13 @@ def get_etf_trading_flow(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     days: int = Query(20, ge=1, le=1000),
+    auto_collect: bool = Query(True),
 ):
     if start_date or end_date:
+        if auto_collect and start_date:
+            _ensure_coverage("flow", ticker, start_date,
+                             repository.trading_flow_earliest_date(ticker),
+                             lambda n: collectors.collect_trading_flow(ticker, days=n))
         return repository.get_trading_flow_range(ticker, start_date, end_date)
     return repository.get_trading_flow(ticker, days=days)
 
