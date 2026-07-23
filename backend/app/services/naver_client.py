@@ -409,48 +409,94 @@ def fetch_etf_holdings(code: str) -> list[dict]:
     return rows
 
 
+# 장중 순위 변동으로 페이지 경계 종목이 중복/누락될 때, totalCount에 도달할 때까지
+# 전체 페이지를 다시 훑는 보충 조회 최대 횟수.
+_CATALOG_REFETCH_MAX = 4
+
+
 def fetch_market_catalog(market: str, limit: int | None = None) -> list[dict]:
     """시장 전체 종목 카탈로그: stocks/marketValue/{market} 페이지네이션 수집.
 
-    limit=None이면 해당 시장의 **전체 종목**을 끝까지 수집한다(마지막 부분 페이지에서
-    종료). limit이 주어지면 그 개수까지만 수집한다.
+    limit=None이면 해당 시장의 **전체 종목**을 수집한다. 응답의 `totalCount`(네이버
+    기준 종목 수)를 목표로 삼고, 장중 시총 순위 변동으로 페이지 경계 종목이
+    누락되면 목표에 도달할 때까지 전체 페이지를 보충 재조회한다. ticker 기준으로
+    중복을 제거하므로 수집 건수가 매번 흔들리지 않는다.
+    limit이 주어지면 그 개수까지만 수집한다(발굴 상위 N, 보충 없음).
     각 행: {ticker, name, type('STOCK'|'ETF'), exchange('KOSPI'|'KOSDAQ')}
     """
     if market not in MARKETS:
         raise ValueError(f"지원하지 않는 시장: {market}")
 
-    rows: list[dict] = []
     url = f"{MSTOCKS_BASE}/marketValue/{market}"
+
+    def _parse(it: dict) -> dict | None:
+        code = it.get("itemCode")
+        if not code:
+            return None
+        # marketValue 응답에는 현재가·등락률·거래량·시총이 이미 들어 있어 그대로 캡처한다
+        # (종목목록수집만으로 스크리닝 스냅샷 확보 → 종목별 재조회 불필요).
+        return {
+            "ticker": code,
+            "name": it.get("stockName"),
+            "type": "ETF" if it.get("stockEndType") == "etf" else "STOCK",
+            "exchange": market,
+            "close_price": _to_float(it.get("closePriceRaw")),
+            "daily_change_pct": _to_float(it.get("fluctuationsRatio")),
+            "volume": _to_int(it.get("accumulatedTradingVolumeRaw")),
+            "market_value": _to_int(it.get("marketValueRaw")),
+        }
+
+    by_ticker: dict[str, dict] = {}  # ticker 기준 중복 제거
+    total_count = 0
     try:
         with _client() as client:
-            page = 1
-            while True:
+            def _fetch_page(page: int) -> tuple[list[dict], int]:
                 resp = client.get(url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
                 resp.raise_for_status()
-                items = resp.json().get("stocks") or []
-                if not items:
-                    break
-                for it in items:
-                    code = it.get("itemCode")
-                    if not code:
-                        continue
-                    rows.append(
-                        {
-                            "ticker": code,
-                            "name": it.get("stockName"),
-                            "type": "ETF" if it.get("stockEndType") == "etf" else "STOCK",
-                            "exchange": market,
-                        }
+                body = resp.json()
+                return (body.get("stocks") or []), int(body.get("totalCount") or 0)
+
+            def _pass() -> None:
+                """전체(또는 limit까지) 페이지를 한 번 훑어 by_ticker에 병합한다."""
+                nonlocal total_count
+                page = 1
+                while True:
+                    items, tc = _fetch_page(page)
+                    total_count = tc or total_count
+                    if not items:
+                        break
+                    for it in items:
+                        row = _parse(it)
+                        if row:
+                            by_ticker[row["ticker"]] = row
+                    # limit 도달 또는 마지막(부분) 페이지면 종료.
+                    if limit is not None and len(by_ticker) >= limit:
+                        break
+                    if len(items) < MAX_PAGE_SIZE:
+                        break
+                    page += 1
+
+            _pass()
+
+            # 전체 수집(limit=None)만: 장중 순위 변동으로 totalCount에 못 미치면
+            # 새 종목이 더 잡히지 않을 때까지 전체 페이지를 보충 재조회한다.
+            if limit is None:
+                for _ in range(_CATALOG_REFETCH_MAX):
+                    if not total_count or len(by_ticker) >= total_count:
+                        break
+                    before = len(by_ticker)
+                    _pass()
+                    if len(by_ticker) == before:  # 더 이상 새 종목 없음 → 수렴
+                        break
+                if total_count and len(by_ticker) < total_count:
+                    logger.warning(
+                        "fetch_market_catalog(%s): 네이버 %d건 중 %d건만 수집(순위 변동 누락)",
+                        market, total_count, len(by_ticker),
                     )
-                # limit 도달 또는 마지막(부분) 페이지면 종료.
-                if limit is not None and len(rows) >= limit:
-                    break
-                if len(items) < MAX_PAGE_SIZE:
-                    break
-                page += 1
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_market_catalog(%s) failed: %s", market, exc)
 
+    rows = list(by_ticker.values())
     return rows[:limit] if limit is not None else rows
 
 

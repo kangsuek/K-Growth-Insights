@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
+from datetime import date
 
 from app import config
 from app.database import get_connection
@@ -34,46 +34,112 @@ def get_progress() -> dict:
 
 
 # --- 지표 수집 ---------------------------------------------------------------
+#
+# 수급(외국인/기관)·수익률은 종목마다 개별 조회가 필요해 비싸다. 참조(ETFWeeklyReport)와
+# 동일하게 **시총 상위 + 전체 ETF만** 딥수집하고, 나머지 종목은 종목목록수집이 캡처한
+# 현재가·등락률·거래량 스냅샷만 사용한다. 현재가/등락률/거래량은 종목목록수집 단계에서
+# 이미 채워지므로 여기서는 수익률·수급을 채운다.
+KOSPI_TOP_N_SUPPLY = 200
+KOSDAQ_TOP_N_SUPPLY = 300
+_MAX_METRIC_PAGES = 8   # YTD 딥페이징 상한(약 2년치 안전장치)
 
-def _metrics_for(ticker: str) -> dict | None:
-    """카탈로그 종목의 스크리닝 지표 계산(시세·매매동향 기반). 시세 없으면 None."""
-    prices = naver_client.fetch_daily_prices(ticker, pages=3)  # 최신순
+
+def _pages_for_ytd() -> int:
+    """올해 첫 거래일까지 닿는 데 필요한 일별시세 페이지 수(경과일 기반 추정)."""
+    doy = date.today().timetuple().tm_yday
+    trading_days = int(doy * 5 / 7)          # 경과 거래일 ≈ 경과일 × 5/7
+    pages = trading_days // naver_client.MAX_PAGE_SIZE + 2  # 1페이지 여유
+    return max(1, min(pages, _MAX_METRIC_PAGES))
+
+
+def _metrics_for(ticker: str, cached_ytd_base: dict | None = None) -> dict | None:
+    """카탈로그 종목의 수익률·수급 지표 계산(시세·매매동향 기반). 시세 없으면 None.
+
+    cached_ytd_base가 올해 것이면 1월까지 딥페이징하지 않고 캐시 기준가로 YTD를 계산한다.
+    """
+    year = date.today().year
+    year_start = f"{year}-01-01"
+    use_cache = bool(
+        cached_ytd_base and cached_ytd_base.get("price")
+        and str(cached_ytd_base.get("date", "")).startswith(str(year))
+    )
+    pages = 1 if use_cache else _pages_for_ytd()
+    prices = naver_client.fetch_daily_prices(ticker, pages=pages)  # 최신순
     if not prices or not prices[0].get("close_price"):
         return None
     n = len(prices)
+    cur = prices[0]["close_price"]
 
     def _ret(idx):
-        cur, base = prices[0].get("close_price"), prices[idx].get("close_price")
-        return (cur - base) / base * 100 if cur and base else None
+        base = prices[idx].get("close_price")
+        return (cur - base) / base * 100 if base else None
 
     weekly = _ret(min(4, n - 1)) if n >= 5 else None
     monthly = _ret(min(19, n - 1)) if n >= 20 else None
-    year_start = date(date.today().year, 1, 1).isoformat()
-    ytd_rows = [p for p in prices if (p.get("date") or "") >= year_start]
-    ytd = None
-    if len(ytd_rows) >= 2 and ytd_rows[0].get("close_price") and ytd_rows[-1].get("close_price"):
-        ytd = (ytd_rows[0]["close_price"] - ytd_rows[-1]["close_price"]) / ytd_rows[-1]["close_price"] * 100
+
+    # YTD: 캐시가 유효하면 캐시 기준가, 아니면 올해 가장 오래된 거래일을 기준가로 잡고 캐시.
+    if use_cache:
+        base_price, base_date = cached_ytd_base["price"], cached_ytd_base["date"]
+    else:
+        ytd_rows = [p for p in prices if (p.get("date") or "") >= year_start]
+        if ytd_rows and ytd_rows[-1].get("close_price"):
+            base_price, base_date = ytd_rows[-1]["close_price"], ytd_rows[-1]["date"]
+        else:
+            base_price = base_date = None
+    ytd = (cur - base_price) / base_price * 100 if base_price else None
 
     flow = naver_client.fetch_trading_flow(ticker)  # 최신순
     foreign_net = flow[0].get("foreign_net") if flow else None
     inst_net = flow[0].get("institutional_net") if flow else None
 
     return {
-        "close_price": prices[0].get("close_price"),
+        "close_price": cur,
         "daily_change_pct": prices[0].get("change_pct"),
         "volume": prices[0].get("volume"),
         "weekly_return": weekly,
         "monthly_return": monthly,
         "ytd_return": ytd,
+        "ytd_base_date": base_date,
+        "ytd_base_price": base_price,
         "foreign_net": foreign_net,
         "institutional_net": inst_net,
     }
 
 
-def _collect_one(ticker: str) -> int:
+def _supply_targets(conn) -> list[str]:
+    """딥수집 대상 티커: 전체 ETF + KOSPI 시총 상위 N + KOSDAQ 시총 상위 N."""
+    tickers: list[str] = [
+        r["ticker"] for r in conn.execute(
+            "SELECT ticker FROM stock_catalog WHERE is_active=1 AND type='ETF'"
+        )
+    ]
+    for market, top_n in (("KOSPI", KOSPI_TOP_N_SUPPLY), ("KOSDAQ", KOSDAQ_TOP_N_SUPPLY)):
+        tickers += [
+            r["ticker"] for r in conn.execute(
+                """SELECT ticker FROM stock_catalog
+                   WHERE is_active=1 AND market=? AND type!='ETF'
+                   ORDER BY (market_value IS NULL), market_value DESC LIMIT ?""",
+                (market, top_n),
+            )
+        ]
+    return tickers
+
+
+def _load_ytd_base_cache(conn) -> dict[str, dict]:
+    """저장된 올해 YTD 기준가 로드 → 딥페이징 생략용."""
+    cache: dict[str, dict] = {}
+    for r in conn.execute(
+        "SELECT ticker, ytd_base_date, ytd_base_price FROM stock_catalog "
+        "WHERE ytd_base_price IS NOT NULL AND ytd_base_date IS NOT NULL"
+    ):
+        cache[r["ticker"]] = {"date": r["ytd_base_date"], "price": r["ytd_base_price"]}
+    return cache
+
+
+def _collect_one(ticker: str, cached_ytd_base: dict | None = None) -> int:
     if _cancel.is_set():
         return 0
-    metrics = _metrics_for(ticker)
+    metrics = _metrics_for(ticker, cached_ytd_base)
     with _lock:
         _progress["completed"] += 1
     if not metrics:
@@ -83,12 +149,13 @@ def _collect_one(ticker: str) -> int:
             """
             UPDATE stock_catalog SET
                 close_price=?, daily_change_pct=?, volume=?, weekly_return=?,
-                monthly_return=?, ytd_return=?, foreign_net=?, institutional_net=?,
-                catalog_updated_at=datetime('now')
+                monthly_return=?, ytd_return=?, ytd_base_date=?, ytd_base_price=?,
+                foreign_net=?, institutional_net=?, catalog_updated_at=datetime('now')
             WHERE ticker=?
             """,
             (metrics["close_price"], metrics["daily_change_pct"], metrics["volume"],
              metrics["weekly_return"], metrics["monthly_return"], metrics["ytd_return"],
+             metrics["ytd_base_date"], metrics["ytd_base_price"],
              metrics["foreign_net"], metrics["institutional_net"], ticker),
         )
     with _lock:
@@ -97,21 +164,24 @@ def _collect_one(ticker: str) -> int:
 
 
 def collect_catalog_data() -> dict:
-    """활성 카탈로그 종목의 스크리닝 지표를 병렬 수집(동기)."""
+    """발굴 딥수집: 시총 상위 + 전체 ETF의 수익률·수급 지표를 병렬 수집(동기).
+
+    현재가·등락률·거래량은 종목목록수집이 이미 채웠으므로 여기서는 대상만 보강한다.
+    """
     _cancel.clear()
     with get_connection() as conn:
-        tickers = [r["ticker"] for r in
-                   conn.execute("SELECT ticker FROM stock_catalog WHERE is_active=1")]
+        tickers = _supply_targets(conn)
+        ytd_cache = _load_ytd_base_cache(conn)
     with _lock:
         _progress.update(status="in_progress", total=len(tickers), completed=0, updated=0)
     workers = max(1, min(config.COLLECT_CONCURRENCY, len(tickers) or 1))
     try:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(_collect_one, tickers))
+            list(pool.map(lambda t: _collect_one(t, ytd_cache.get(t)), tickers))
         status = "cancelled" if _cancel.is_set() else "completed"
         with _lock:
             _progress["status"] = status
-        logger.info("[scanner] 카탈로그 지표 수집 %s: %d/%d 갱신",
+        logger.info("[scanner] 발굴 지표 수집 %s: %d/%d 갱신",
                     status, _progress["updated"], len(tickers))
     except Exception as exc:  # noqa: BLE001
         logger.error("[scanner] 수집 실패: %s", exc, exc_info=True)
@@ -139,7 +209,7 @@ def _row_to_item(row, registered: set) -> dict:
         "close_price": d.get("close_price"), "daily_change_pct": d.get("daily_change_pct"),
         "volume": d.get("volume"), "weekly_return": d.get("weekly_return"),
         "monthly_return": d.get("monthly_return"), "ytd_return": d.get("ytd_return"),
-        "ytd_base_date": None,
+        "ytd_base_date": d.get("ytd_base_date"),
         "foreign_net": d.get("foreign_net"), "institutional_net": d.get("institutional_net"),
         "catalog_updated_at": d.get("catalog_updated_at"),
         "is_registered": d["ticker"] in registered,

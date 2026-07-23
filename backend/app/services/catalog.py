@@ -35,20 +35,30 @@ def get_progress() -> dict:
 def _upsert_row(conn, row: dict) -> None:
     """카탈로그 종목 1건 upsert(stock_catalog).
 
-    원본과 동일하게 발굴 필터용 market 값은 ETF는 'ETF', 주식은 시장(KOSPI/KOSDAQ)으로 둔다.
+    발굴 필터용 market 값은 ETF는 'ETF', 주식은 시장(KOSPI/KOSDAQ)으로 둔다.
+    marketValue 응답에 들어 있는 현재가·등락률·거래량·시총 스냅샷도 함께 저장한다.
+    (수익률·수급은 별도 지표수집 단계에서 채운다.)
     """
     market = "ETF" if row["type"] == "ETF" else row.get("exchange")
     conn.execute(
         """
-        INSERT INTO stock_catalog (ticker, name, type, market, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
+        INSERT INTO stock_catalog
+            (ticker, name, type, market, market_value,
+             close_price, daily_change_pct, volume, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(ticker) DO UPDATE SET
             name=excluded.name,
             type=excluded.type,
             market=excluded.market,
+            market_value=excluded.market_value,
+            close_price=excluded.close_price,
+            daily_change_pct=excluded.daily_change_pct,
+            volume=excluded.volume,
             updated_at=excluded.updated_at
         """,
-        (row["ticker"], row["name"] or row["ticker"], row["type"], market),
+        (row["ticker"], row["name"] or row["ticker"], row["type"], market,
+         row.get("market_value"), row.get("close_price"),
+         row.get("daily_change_pct"), row.get("volume")),
     )
 
 
@@ -74,6 +84,7 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
     """
     per_market: dict[str, int] = {}
     etf_count = 0
+    seen: set[str] = set()  # 이번 수집에서 반환된 ticker(잔존 행 정리에 사용)
     with _lock:
         _progress.update(status="in_progress", step_index=0, items_collected=0,
                          message="종목 목록 수집 시작...")
@@ -85,6 +96,7 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
                 rows = naver_client.fetch_market_catalog(mkt, limit=limit)
                 for row in rows:
                     _upsert_row(conn, row)
+                    seen.add(row["ticker"])
                     if row["type"] == "ETF":
                         etf_count += 1
                 per_market[mkt] = len(rows)
@@ -94,12 +106,18 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
             with _lock:
                 _progress.update(step_index=2, message="ETF 분류 중...")
                 _progress.update(step_index=3, message="저장 중...")
+            # 미수집 잔존 행 정리: 이번 수집에 없는(상폐·순위 이탈 등) 종목 삭제.
+            # 전체 수집(limit=None)일 때만 안전하다 — 부분 수집에선 정상 종목까지 지워질 수 있음.
+            removed = _prune_stale(conn, seen) if limit is None else 0
     except Exception:
         with _lock:
             _progress.update(status="error", message="수집 실패")
         raise
 
-    total = sum(per_market.values())
+    # total_collected는 실제 저장 건수(=종목목록건수)와 일치해야 하므로 ticker 기준
+    # 중복을 제거한 수를 쓴다. KOSPI·KOSDAQ 응답에 동시에 나오는 종목이 있어
+    # sum(per_market)은 실제보다 크게 잡힌다.
+    total = len(seen)
     with _lock:
         _progress.update(status="completed", step_index=4, items_collected=total,
                          message="수집 완료")
@@ -109,7 +127,29 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
         "etf_count": etf_count,
         "total_collected": total,
         "saved_count": total,
+        "removed_count": removed,
     }
+
+
+def _prune_stale(conn, seen: set[str]) -> int:
+    """이번 수집에서 반환되지 않은 잔존 카탈로그 행을 삭제. 삭제 건수 반환.
+
+    seen이 비어 있으면(수집 실패로 오인) 전체 삭제를 막기 위해 아무것도 지우지 않는다.
+    ticker 수가 많아 SQLite 변수 한도(999)를 넘으므로 임시 테이블로 대조한다.
+    """
+    if not seen:
+        return 0
+    conn.execute("CREATE TEMP TABLE IF NOT EXISTS _seen_tickers (ticker TEXT PRIMARY KEY)")
+    conn.execute("DELETE FROM _seen_tickers")
+    conn.executemany("INSERT OR IGNORE INTO _seen_tickers (ticker) VALUES (?)",
+                     [(t,) for t in seen])
+    cur = conn.execute(
+        "DELETE FROM stock_catalog WHERE ticker NOT IN (SELECT ticker FROM _seen_tickers)"
+    )
+    conn.execute("DROP TABLE _seen_tickers")
+    if cur.rowcount:
+        logger.info("Catalog pruned %d stale rows", cur.rowcount)
+    return cur.rowcount
 
 
 def clear_catalog() -> int:

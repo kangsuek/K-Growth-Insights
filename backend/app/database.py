@@ -112,12 +112,15 @@ CREATE TABLE IF NOT EXISTS stock_catalog (
     market             TEXT,      -- KOSPI | KOSDAQ
     sector             TEXT,      -- 섹터/테마(발굴 그룹핑)
     is_active          INTEGER DEFAULT 1,
+    market_value       INTEGER,   -- 시가총액(상위 N 선별용, 종목목록수집 시 스냅샷)
     close_price        REAL,      -- 최신 종가(스크리닝용 스냅샷)
     daily_change_pct   REAL,
     volume             INTEGER,
     weekly_return      REAL,      -- 주간 수익률
     monthly_return     REAL,      -- 월간 수익률
     ytd_return         REAL,      -- 연초대비 수익률
+    ytd_base_date      TEXT,      -- YTD 기준일(올해 첫 거래일) — 딥페이징 캐시
+    ytd_base_price     REAL,      -- YTD 기준가
     foreign_net        INTEGER,   -- 최근 외국인 순매수
     institutional_net  INTEGER,   -- 최근 기관 순매수
     catalog_updated_at TEXT,      -- 지표 갱신 시각
@@ -206,12 +209,15 @@ _STOCKS_ADDED_COLUMNS = {
 _CATALOG_ADDED_COLUMNS = {
     "sector": "TEXT",
     "is_active": "INTEGER DEFAULT 1",
+    "market_value": "INTEGER",
     "close_price": "REAL",
     "daily_change_pct": "REAL",
     "volume": "INTEGER",
     "weekly_return": "REAL",
     "monthly_return": "REAL",
     "ytd_return": "REAL",
+    "ytd_base_date": "TEXT",
+    "ytd_base_price": "REAL",
     "foreign_net": "INTEGER",
     "institutional_net": "INTEGER",
     "catalog_updated_at": "TEXT",

@@ -22,6 +22,18 @@ def _page(codes):
     }
 
 
+def _page_with_price(rows):
+    """가격 스냅샷 필드까지 포함한 marketValue 응답."""
+    return {
+        "stocks": [
+            {"itemCode": c, "stockName": n, "stockEndType": t,
+             "closePriceRaw": cp, "fluctuationsRatio": fr,
+             "accumulatedTradingVolumeRaw": vol, "marketValueRaw": mv}
+            for c, n, t, cp, fr, vol, mv in rows
+        ]
+    }
+
+
 @respx.mock
 def test_sync_catalog_populates_catalog_not_watchlist():
     # 워치리스트(stocks)에 관심종목 1개 등록
@@ -87,6 +99,87 @@ def test_sync_catalog_detailed_returns_frontend_counts():
     assert r["etf_count"] == 1
     assert r["total_collected"] == 3
     assert r["saved_count"] == 3
+
+
+@respx.mock
+def test_sync_catalog_detailed_captures_price_snapshot():
+    # 종목목록수집만으로 현재가·등락률·거래량·시총 스냅샷이 채워져야 한다(재조회 불필요).
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page_with_price([
+            ("005930", "삼성전자", "stock", "265500", "1.92", "8707229", "1552186970424000")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    catalog.sync_catalog_detailed(limit=None)
+    with get_connection() as conn:
+        row = dict(conn.execute(
+            "SELECT close_price, daily_change_pct, volume, market_value "
+            "FROM stock_catalog WHERE ticker='005930'").fetchone())
+    assert row["close_price"] == 265500
+    assert row["daily_change_pct"] == 1.92
+    assert row["volume"] == 8707229
+    assert row["market_value"] == 1552186970424000
+
+
+@respx.mock
+def test_sync_catalog_detailed_total_dedups_across_markets():
+    # KOSPI·KOSDAQ 양쪽에 동일 ticker가 나오면 total_collected는 중복을 제거해야
+    # 실제 저장 건수(종목목록건수)와 일치한다.
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page([
+            ("005930", "삼성전자", "stock"), ("069500", "KODEX 200", "etf")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([
+            ("196170", "알테오젠", "stock"), ("069500", "KODEX 200", "etf")]))  # 069500 중복
+    )
+    result = catalog.sync_catalog_detailed(limit=None)
+    # 원행 4건이지만 고유 ticker 3건
+    assert result["total_collected"] == 3
+    assert result["saved_count"] == 3
+    with get_connection() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM stock_catalog").fetchone()[0]
+    assert n == result["total_collected"]  # 알림 == 종목목록건수
+
+
+@respx.mock
+def test_sync_catalog_detailed_prunes_stale_rows():
+    # 전체 수집(limit=None)은 이번에 반환되지 않은 잔존 행을 삭제해야 한다.
+    with get_connection() as conn:
+        conn.execute("INSERT INTO stock_catalog (ticker, name, type, market) "
+                     "VALUES ('999999','상장폐지종목','STOCK','KOSPI')")
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page([("005930", "삼성전자", "stock")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    result = catalog.sync_catalog_detailed(limit=None)
+    assert result["removed_count"] == 1
+    assert result["total_collected"] == 2
+    with get_connection() as conn:
+        tickers = {r["ticker"] for r in conn.execute("SELECT ticker FROM stock_catalog")}
+    assert tickers == {"005930", "196170"}  # 잔존 종목 삭제됨
+
+
+@respx.mock
+def test_sync_catalog_detailed_partial_does_not_prune():
+    # 부분 수집(limit 지정)은 다른 종목을 지우면 안 된다.
+    with get_connection() as conn:
+        conn.execute("INSERT INTO stock_catalog (ticker, name, type, market) "
+                     "VALUES ('999999','기존종목','STOCK','KOSPI')")
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page([("005930", "삼성전자", "stock")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    result = catalog.sync_catalog_detailed(limit=50)
+    assert result["removed_count"] == 0
+    with get_connection() as conn:
+        tickers = {r["ticker"] for r in conn.execute("SELECT ticker FROM stock_catalog")}
+    assert "999999" in tickers  # 기존 종목 유지
 
 
 @respx.mock

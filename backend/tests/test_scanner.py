@@ -78,3 +78,26 @@ def test_recommendations_presets():
 def test_collect_progress_idle_default():
     body = client.get("/api/scanner/collect-progress").json()
     assert "status" in body
+
+
+def test_supply_targets_selects_top_n_and_all_etf(monkeypatch):
+    # 딥수집 대상: 전체 ETF + KOSPI 시총 상위 N + KOSDAQ 시총 상위 N
+    monkeypatch.setattr(scanner, "KOSPI_TOP_N_SUPPLY", 2)
+    monkeypatch.setattr(scanner, "KOSDAQ_TOP_N_SUPPLY", 1)
+    with get_connection() as conn:
+        def ins(ticker, ty, mkt, mv):
+            conn.execute(
+                "INSERT INTO stock_catalog (ticker, name, type, market, is_active, market_value) "
+                "VALUES (?, ?, ?, ?, 1, ?)", (ticker, ticker, ty, mkt, mv))
+        # ETF 2개(시총 무관 전부 포함)
+        ins("069500", "ETF", "ETF", 10); ins("487240", "ETF", "ETF", 5)
+        # KOSPI 3개 → 상위 2개(시총 300, 200)만
+        ins("005930", "STOCK", "KOSPI", 300); ins("000660", "STOCK", "KOSPI", 200)
+        ins("111111", "STOCK", "KOSPI", 100)
+        # KOSDAQ 2개 → 상위 1개(시총 90)만
+        ins("196170", "STOCK", "KOSDAQ", 90); ins("222222", "STOCK", "KOSDAQ", 10)
+    with get_connection() as conn:
+        targets = set(scanner._supply_targets(conn))
+    assert targets == {"069500", "487240", "005930", "000660", "196170"}
+    assert "111111" not in targets  # KOSPI 상위 N 밖
+    assert "222222" not in targets  # KOSDAQ 상위 N 밖

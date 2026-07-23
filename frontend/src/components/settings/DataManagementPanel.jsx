@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '../../contexts/ToastContext'
-import { dataApi, settingsApi, getHealthCheck } from '../../services/api'
+import { dataApi, settingsApi, scannerApi, getHealthCheck } from '../../services/api'
 
 /**
  * 진행률 바 컴포넌트
@@ -236,6 +236,13 @@ export default function DataManagementPanel() {
 
       // 캐시 무효화
       queryClient.invalidateQueries({ queryKey: ['data-stats'] })
+
+      // 이어서 발굴 지표(수익률·수급) 딥수집을 백그라운드로 자동 시작한다.
+      // 현재가·등락률·거래량은 이미 위에서 저장됐고, 여기서 시총 상위+ETF의
+      // 주간/월간/YTD·외국인/기관 순매수를 채운다. 진행률은 종목 발굴 화면에서 확인.
+      scannerApi.collectData()
+        .then(() => toast.info('발굴 지표(수익률·수급) 수집을 백그라운드로 시작했습니다. 종목 발굴 화면에서 진행률을 볼 수 있어요.', 5000))
+        .catch(() => { /* 이미 진행 중이거나 일시 오류 — 발굴 화면에서 수동 수집 가능 */ })
     },
     onError: (error) => {
       setTickerCatalogProgress(null)
