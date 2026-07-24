@@ -1,53 +1,13 @@
-"""Pydantic response models."""
+"""Pydantic response models.
+
+현재 라우터는 대부분 dict를 그대로 반환하므로, 실제로 참조되는 모델만 남긴다.
+(응답 모델을 새로 만들 때는 그 라우트에서 실제로 쓰이는지 확인할 것.)
+"""
 from __future__ import annotations
 
 from typing import Optional
 
 from pydantic import BaseModel
-
-
-class Stock(BaseModel):
-    ticker: str
-    name: str
-    type: str = "STOCK"
-    theme: Optional[str] = None
-
-
-class StockSummary(BaseModel):
-    ticker: str
-    name: str
-    type: str = "STOCK"
-    theme: Optional[str] = None
-    close_price: Optional[float] = None
-    change_pct: Optional[float] = None
-    date: Optional[str] = None
-
-
-class PricePoint(BaseModel):
-    date: str
-    open_price: Optional[float] = None
-    high_price: Optional[float] = None
-    low_price: Optional[float] = None
-    close_price: Optional[float] = None
-    volume: Optional[int] = None
-    change_pct: Optional[float] = None
-
-
-class TradingFlowPoint(BaseModel):
-    date: str
-    individual_net: Optional[int] = None
-    institutional_net: Optional[int] = None
-    foreign_net: Optional[int] = None
-    foreign_hold_ratio: Optional[float] = None
-
-
-class IntradayPoint(BaseModel):
-    datetime: str
-    open_price: Optional[float] = None
-    high_price: Optional[float] = None
-    low_price: Optional[float] = None
-    price: Optional[float] = None
-    volume: Optional[int] = None
 
 
 class CollectResult(BaseModel):
@@ -60,57 +20,3 @@ class CollectResult(BaseModel):
     news: int = 0  # 수집한 뉴스 건수
     ok: bool = True
     error: Optional[str] = None
-
-
-class News(BaseModel):
-    title: str
-    link: str
-    description: Optional[str] = None
-    pub_date: Optional[str] = None
-
-
-
-
-class StockFundamentals(BaseModel):
-    per: Optional[float] = None
-    pbr: Optional[float] = None
-    eps: Optional[float] = None
-    bps: Optional[float] = None
-    est_per: Optional[float] = None
-    est_eps: Optional[float] = None
-    dividend_yield: Optional[float] = None
-    dividend: Optional[float] = None
-    foreign_rate: Optional[float] = None
-    high_52w: Optional[float] = None
-    low_52w: Optional[float] = None
-    market_value: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
-class EtfFundamentals(BaseModel):
-    issuer_name: Optional[str] = None
-    market_value: Optional[str] = None
-    nav: Optional[float] = None
-    total_nav: Optional[str] = None
-    deviation_rate: Optional[float] = None
-    total_fee: Optional[float] = None
-    dividend_yield: Optional[float] = None
-    return_1m: Optional[float] = None
-    return_3m: Optional[float] = None
-    return_1y: Optional[float] = None
-    updated_at: Optional[str] = None
-
-
-class EtfHolding(BaseModel):
-    seq: int
-    item_code: Optional[str] = None
-    item_name: Optional[str] = None
-    weight: Optional[float] = None
-
-
-class FundamentalsResponse(BaseModel):
-    ticker: str
-    type: str  # STOCK | ETF
-    stock: Optional[StockFundamentals] = None
-    etf: Optional[EtfFundamentals] = None
-    holdings: list[EtfHolding] = []

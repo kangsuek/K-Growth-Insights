@@ -51,17 +51,23 @@ just collect    # 종목 카탈로그 동기화 + 전체 데이터 수집(네이
 
 ## API 엔드포인트
 
+시세·매매동향은 **항상 최신순(DESC)**, 분봉·지수 차트는 **시간순(ASC)** 으로 반환합니다.
+
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| GET | `/api/stocks` | 추적 종목 목록 |
-| GET | `/api/stocks/{ticker}` | 종목 상세 |
-| GET | `/api/stocks/{ticker}/prices?days=60` | 일별 시세 |
-| GET | `/api/stocks/{ticker}/trading-flow?days=20` | 투자자별 매매동향 |
-| GET | `/api/stocks/{ticker}/intraday` | 최근 세션 분봉 |
+| GET | `/api/etfs/` | 추적 종목 목록 |
+| GET | `/api/etfs/{ticker}` | 종목 상세 |
+| GET | `/api/etfs/{ticker}/prices?days=60` | 일별 시세 (최신순) |
+| GET | `/api/etfs/{ticker}/trading-flow?days=20` | 투자자별 매매동향 (최신순) |
+| GET | `/api/etfs/{ticker}/intraday` | 최근 세션 분봉 (시간순) |
+| GET | `/api/etfs/{ticker}/fundamentals` | 펀더멘털(주식 PER/PBR, ETF NAV·구성종목) |
+| GET | `/api/news/{ticker}` | 종목 뉴스 |
 | POST | `/api/data/sync-stocks` | 카탈로그 동기화(이름/유형 갱신) |
 | POST | `/api/data/collect/{ticker}` | 단일 종목 수집 |
 | POST | `/api/data/collect-all` | 전체 수집 |
 | GET | `/api/data/stats` | 수집 통계 |
+
+전체 목록은 서버 기동 후 http://localhost:8000/docs 에서 확인할 수 있습니다.
 
 ## 범위 (MVP)
 

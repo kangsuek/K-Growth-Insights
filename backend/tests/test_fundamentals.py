@@ -225,13 +225,13 @@ def test_get_fundamentals_unknown_ticker_returns_none():
 
 
 def test_fundamentals_endpoint_404_for_unknown():
-    r = client.get("/api/stocks/999999/fundamentals")
+    r = client.get("/api/etfs/999999/fundamentals")
     assert r.status_code == 404
 
 
 def test_fundamentals_endpoint_empty_payload_when_not_collected():
     seed_stock("005930", "삼성전자", "STOCK")
-    r = client.get("/api/stocks/005930/fundamentals")
+    r = client.get("/api/etfs/005930/fundamentals")
     assert r.status_code == 200
     body = r.json()
     assert body["type"] == "STOCK"

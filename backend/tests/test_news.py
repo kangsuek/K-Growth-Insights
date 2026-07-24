@@ -104,16 +104,11 @@ def test_get_news_orders_by_pub_date_desc(enable_search):
     assert rows[0]["link"] == "https://n.news.naver.com/b"
 
 
-def test_news_endpoint_404_for_unknown():
-    r = client.get("/api/stocks/999999/news")
-    assert r.status_code == 404
-
-
 def test_news_endpoint_empty_list_when_none_collected():
     seed_stock("005930", "삼성전자", "STOCK")
-    r = client.get("/api/stocks/005930/news")
+    r = client.get("/api/news/005930")
     assert r.status_code == 200
-    assert r.json() == []
+    assert r.json()["news"] == []
 
 
 # --- 이식 프론트 계약: /api/news/{ticker} ---
