@@ -214,7 +214,31 @@ export const handlers = [
     return HttpResponse.json(mockNewsData)
   }),
 
-  // GET /api/data/scheduler-status - 스케줄러 상태
+  // GET /api/settings/stocks - 종목 목록(설정 화면)
+  http.get(`${BASE_URL}/settings/stocks`, () => {
+    return HttpResponse.json([
+      { ticker: '487240', name: '삼성 KODEX AI전력핵심설비 ETF', type: 'ETF', theme: 'AI/전력', purchase_price: null, quantity: null },
+      { ticker: '042660', name: '한화오션', type: 'STOCK', theme: '조선/방산', purchase_price: null, quantity: null },
+    ])
+  }),
+
+  // GET /api/settings/api-keys - 네이버 검색 API 키 상태
+  http.get(`${BASE_URL}/settings/api-keys`, () => {
+    return HttpResponse.json({
+      keys: { NAVER_CLIENT_ID: '', NAVER_CLIENT_SECRET: '', PERPLEXITY_API_KEY: '' },
+      configured: { naver: false },
+    })
+  }),
+
+  // GET /api/data/stats - 데이터 통계
+  http.get(`${BASE_URL}/data/stats`, () => {
+    return HttpResponse.json({
+      stocks: 2, etfs: 2, stock_catalog: 0, prices: 0, trading_flow: 0,
+      intraday_prices: 0, news: 0, last_collection: null, database_size_mb: 0,
+    })
+  }),
+
+    // GET /api/data/scheduler-status - 스케줄러 상태
   http.get(`${BASE_URL}/data/scheduler-status`, () => {
     return HttpResponse.json({
       scheduler: {

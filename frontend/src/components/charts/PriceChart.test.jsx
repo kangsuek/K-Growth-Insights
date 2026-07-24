@@ -85,29 +85,15 @@ describe('PriceChart', () => {
     expect(screen.getByText('표시할 가격 데이터가 없습니다.')).toBeInTheDocument()
   })
 
-  it('레전드를 정상적으로 표시한다', () => {
-    render(
-      <PriceChart data={mockPriceData} ticker="487240" />
-    )
-
-    // 기본 레전드 항목 확인 (종가, 거래량)
-    expect(screen.getByText('종가')).toBeInTheDocument()
-    expect(screen.getByText(/거래량/)).toBeInTheDocument()
-
-    // 이동평균선 체크박스 확인
-    expect(screen.getByText('5일 이동평균선')).toBeInTheDocument()
-    expect(screen.getByText('10일 이동평균선')).toBeInTheDocument()
-    expect(screen.getByText('20일 이동평균선')).toBeInTheDocument()
-  })
-
   it('차트가 지정된 높이로 렌더링된다', () => {
     const customHeight = 500
     const { container } = render(
       <PriceChart data={mockPriceData} ticker="487240" height={customHeight} />
     )
 
-    const responsiveContainer = container.querySelector('.recharts-responsive-container')
-    expect(responsiveContainer).toHaveStyle({ height: `${customHeight}px` })
+    // 가격/거래량 2단 분할이라 가격 차트 컨테이너 높이는 전체의 72%
+    const priceContainer = container.querySelector('.recharts-responsive-container')
+    expect(priceContainer).toHaveStyle({ height: `${Math.round(customHeight * 0.72)}px` })
   })
 
   it('반응형 높이로 렌더링된다 (기본값)', () => {

@@ -16,10 +16,10 @@ describe('Header', () => {
   it('데스크톱 네비게이션 링크를 표시한다', () => {
     renderWithProviders(<Header />)
 
-    // Dashboard, Comparison, GitHub 링크가 있어야 함
-    const dashboardLinks = screen.getAllByText('Dashboard')
-    const comparisonLinks = screen.getAllByText('Comparison')
-    const githubLinks = screen.getAllByText('GitHub')
+    // 대시보드·비교는 텍스트 링크, GitHub는 아이콘 전용(aria-label)
+    const dashboardLinks = screen.getAllByText('대시보드')
+    const comparisonLinks = screen.getAllByText('비교')
+    const githubLinks = screen.getAllByRole('link', { name: /GitHub/i })
 
     // 데스크톱과 모바일 각각 하나씩 있어야 하므로 총 2개 이상
     expect(dashboardLinks.length).toBeGreaterThanOrEqual(1)
@@ -30,7 +30,7 @@ describe('Header', () => {
   it('/ 경로에서 Dashboard 링크가 활성화된다', () => {
     renderWithProviders(<Header />, { initialEntries: ['/'] })
 
-    const dashboardLinks = screen.getAllByText('Dashboard')
+    const dashboardLinks = screen.getAllByText('대시보드')
     // 데스크톱 네비게이션 링크 확인 (첫 번째)
     expect(dashboardLinks[0].className).toContain('bg-primary-500')
     expect(dashboardLinks[0].className).toContain('text-white')
@@ -39,7 +39,7 @@ describe('Header', () => {
   it('/compare 경로에서 Comparison 링크가 활성화된다', () => {
     renderWithProviders(<Header />, { initialEntries: ['/compare'] })
 
-    const comparisonLinks = screen.getAllByText('Comparison')
+    const comparisonLinks = screen.getAllByText('비교')
     // 데스크톱 네비게이션 링크 확인 (첫 번째)
     expect(comparisonLinks[0].className).toContain('bg-primary-500')
     expect(comparisonLinks[0].className).toContain('text-white')
@@ -89,8 +89,8 @@ describe('Header', () => {
     const menuButton = screen.getByRole('button', { name: /메뉴 열기/i })
     await user.click(menuButton)
 
-    // 모바일 메뉴의 Dashboard 링크 클릭 (모바일 메뉴는 나중에 렌더링되므로 마지막 요소)
-    const dashboardLinks = screen.getAllByText('Dashboard')
+    // 모바일 메뉴의 대시보드 링크 클릭 (모바일 메뉴는 나중에 렌더링되므로 마지막 요소)
+    const dashboardLinks = screen.getAllByText('대시보드')
     const mobileDashboardLink = dashboardLinks[dashboardLinks.length - 1]
     await user.click(mobileDashboardLink)
 

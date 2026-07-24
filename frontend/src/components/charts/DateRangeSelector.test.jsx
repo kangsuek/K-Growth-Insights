@@ -304,10 +304,9 @@ describe('DateRangeSelector', () => {
     const mockCallback = vi.fn();
     const { container } = render(<DateRangeSelector onDateRangeChange={mockCallback} />);
 
-    // 그리드 레이아웃 확인
-    const buttonGrid = container.querySelector('.grid');
-    expect(buttonGrid).toHaveClass('grid-cols-2');
-    expect(buttonGrid).toHaveClass('md:grid-cols-4');
+    // 버튼들은 flex-wrap으로 반응형 배치된다
+    const buttonRow = container.querySelector('.flex.flex-wrap');
+    expect(buttonRow).toBeInTheDocument();
   });
 
   it('프리셋 버튼의 활성/비활성 스타일이 올바르게 적용된다', async () => {

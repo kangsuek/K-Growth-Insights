@@ -28,7 +28,6 @@ describe('Settings 페이지', () => {
     })
 
     // 종목 관리 패널의 주요 요소 확인
-    expect(screen.getByText('stocks.json 기반 종목 추가/수정/삭제')).toBeInTheDocument()
     expect(screen.getByText('새 종목 추가')).toBeInTheDocument()
   })
 

@@ -101,12 +101,15 @@ describe('chartUtils', () => {
     })
 
     it('프로덕션 환경에서는 성능 측정을 하지 않는다', () => {
-      process.env.NODE_ENV = 'production'
+      // 구현이 import.meta.env.PROD를 보므로 vi.stubEnv로 스텁한다.
+      vi.stubEnv('PROD', true)
 
       const fn = () => 'test'
-      measureChartPerformance('Test Label', fn)
+      const result = measureChartPerformance('Test Label', fn)
 
+      expect(result).toBe('test')
       expect(consoleLogSpy).not.toHaveBeenCalled()
+      vi.unstubAllEnvs()
     })
 
     it('500ms 이상 걸리면 경고를 출력한다', () => {

@@ -26,6 +26,7 @@ describe('SettingsContext', () => {
           showVolume: true,
           showTradingFlow: true,
         },
+        cardOrder: [],
       })
     })
 

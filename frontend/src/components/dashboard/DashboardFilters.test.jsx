@@ -29,7 +29,8 @@ describe('DashboardFilters', () => {
     render(<DashboardFilters {...defaultProps} sortBy="type" sortDirection="asc" />)
 
     const typeButton = screen.getByText('타입').closest('button')
-    expect(typeButton).toContainHTML('svg')
+    // 활성 정렬 버튼은 방향을 ▲(오름차순)/▼(내림차순)로 표시
+    expect(typeButton).toHaveTextContent('▲')
   })
 
   it('정렬 버튼 클릭 시 onSortChange를 호출한다', async () => {

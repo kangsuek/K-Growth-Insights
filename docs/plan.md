@@ -266,3 +266,4 @@ def test_fetch_daily_prices_parses_naver():
 - [x] 테스트 환경 API baseURL 주입 — MSW 핸들러(:8000)와 상대경로 baseURL 불일치로 23건이 네트워크 오류로 실패하던 문제
 - [x] 미사용 코드 제거 — `utils/returns.js`, `InfoTooltip`, `ChartSkeleton`, `repository.{get_intraday,list_stocks_summary}`, `jobs.is_running`, `scanner._supply_targets`
 - [x] 없는 기능 검증 테스트 정리 — 뉴스 관련도(%)·ETF 수수료(expense_ratio) 케이스 삭제, 종목정보·티커검증의 죽은 단언(0.45%·테마 필수) 제거. 백엔드가 채우지 않거나 제거된 기능 대상
+- [x] 프론트 테스트 전체 현행화 — 낡은 단언(영문 네비→한글, 카드→트리맵, SVG 화살표→▲▼, 그리드→flex-wrap, expense_ratio 등)과 목 계약(/settings/stocks·api-keys·batch-summary, 시세 DESC) 갱신. 27건 실패 → 0 (328 passed)

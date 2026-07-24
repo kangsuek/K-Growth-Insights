@@ -23,17 +23,8 @@ const mockETF = {
   listing_date: '2020-12-14',
 }
 
+// 시세는 최신순(DESC) 계약이라 최신 날짜(01-02)가 배열 앞에 온다
 const mockPrices = [
-  {
-    id: 1,
-    date: '2024-01-01',
-    open_price: 10000,
-    high_price: 10500,
-    low_price: 9800,
-    close_price: 10200,
-    volume: 1000000,
-    daily_change_pct: 2.5,
-  },
   {
     id: 2,
     date: '2024-01-02',
@@ -43,6 +34,16 @@ const mockPrices = [
     close_price: 10500,
     volume: 1200000,
     daily_change_pct: 2.94,
+  },
+  {
+    id: 1,
+    date: '2024-01-01',
+    open_price: 10000,
+    high_price: 10500,
+    low_price: 9800,
+    close_price: 10200,
+    volume: 1000000,
+    daily_change_pct: 2.5,
   },
 ]
 
