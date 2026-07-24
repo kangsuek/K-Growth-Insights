@@ -258,26 +258,6 @@ const IntradayChart = memo(function IntradayChart({
   const maxVolume = Math.max(...volumes) || 0
   const volumeDomain = [0, Math.ceil(maxVolume * 1.2)]
 
-  // 상승률(%) 축: 전일 종가 기준이므로 가격 도메인을 그대로 % 로 환산한다.
-  // (전일 종가를 모르면 기준이 없어 표시하지 않는다)
-  const percentDomain = previousClose
-    ? priceDomain.map((p) => ((p - previousClose) / previousClose) * 100)
-    : null
-
-  // 0%(전일 종가)를 반드시 포함하는 눈금. 가격 축에서 파생된 값을 그대로 쓰면
-  // -6.3% 같은 어중간한 눈금이 나와 읽기 어렵다.
-  const percentStep = percentDomain
-    ? [0.5, 1, 2, 5, 10].find((s) => (percentDomain[1] - percentDomain[0]) / s <= 8) || 20
-    : 0
-  const percentTicks = percentDomain
-    ? Array.from(
-        { length: Math.floor(percentDomain[1] / percentStep) - Math.ceil(percentDomain[0] / percentStep) + 1 },
-        (_, i) => (Math.ceil(percentDomain[0] / percentStep) + i) * percentStep,
-      )
-    : undefined
-  const formatPercent = (value) =>
-    `${value > 0 ? '+' : ''}${value.toFixed(percentStep < 1 ? 1 : 0)}%`
-
   // X축 틱 포맷팅 (시간만 표시)
   const formatXAxis = (tickItem) => {
     return tickItem
@@ -325,19 +305,6 @@ const IntradayChart = memo(function IntradayChart({
               axisLine={false}
               domain={volumeDomain}
               width={0}
-            />
-          )}
-          {/* 상승률(%) 축 — 전일 종가 대비. 가격 축과 같은 눈금을 %로 읽는다. */}
-          {percentDomain && (
-            <YAxis
-              yAxisId="percent"
-              orientation="right"
-              tickFormatter={formatPercent}
-              tick={{ fontSize: 11 }}
-              stroke={COLORS.CHART_AXIS}
-              domain={percentDomain}
-              ticks={percentTicks}
-              width={55}
             />
           )}
           <Tooltip
