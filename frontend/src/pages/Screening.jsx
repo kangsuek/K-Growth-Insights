@@ -7,6 +7,7 @@ import ScreeningTable from '../components/screening/ScreeningTable'
 import ScreeningHeatmap from '../components/screening/ScreeningHeatmap'
 import ThemeExplorer from '../components/screening/ThemeExplorer'
 import LoadingIndicator from '../components/common/LoadingIndicator'
+import StepProgressBar from '../components/common/StepProgressBar'
 import { useToast } from '../contexts/ToastContext'
 import { CACHE_STALE_TIME_FAST } from '../constants'
 
@@ -294,19 +295,9 @@ export default function Screening() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                {progress.message || '데이터 수집 중...'}
-              </p>
-              {progress.percent != null && (
-                <div className="mt-1.5 w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${progress.percent}%` }}
-                  />
-                </div>
-              )}
-            </div>
+            <p className="flex-1 min-w-0 text-sm font-medium text-blue-800 dark:text-blue-200">
+              발굴 지표 수집 중
+            </p>
             {progress.percent != null && (
               <span className="text-sm font-semibold text-blue-600 dark:text-blue-300 flex-shrink-0 tabular-nums">
                 {progress.percent}%
@@ -320,6 +311,17 @@ export default function Screening() {
               중지
             </button>
           </div>
+
+          {/* 설정 화면의 '종목 목록 수집'과 동일한 단계별 진행률 바 */}
+          <StepProgressBar
+            stepIndex={progress.step_index ?? 0}
+            totalSteps={progress.total_steps ?? 3}
+            stepLabels={['ETF', '코스피', '코스닥']}
+            percent={progress.percent}
+            message={progress.message || '데이터 수집 중...'}
+            itemsCollected={progress.items_collected || 0}
+            itemsLabel="갱신"
+          />
         </div>
       )}
 

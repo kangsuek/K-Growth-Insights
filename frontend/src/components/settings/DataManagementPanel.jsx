@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '../../contexts/ToastContext'
 import { dataApi, settingsApi, scannerApi, getHealthCheck } from '../../services/api'
+import StepProgressBar from '../common/StepProgressBar'
 
 /**
  * 진행률 바 컴포넌트
@@ -23,55 +24,6 @@ function ProgressBar({ current, total, message, colorClass = 'bg-primary-500' })
         </span>
         <span className="text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
           {percentage}%
-        </span>
-      </div>
-    </div>
-  )
-}
-
-/**
- * 단계별 진행률 바 컴포넌트 (종목 목록 수집용)
- */
-function StepProgressBar({ stepIndex, totalSteps, message, itemsCollected }) {
-  const stepLabels = ['코스피', '코스닥', 'ETF', '저장']
-  const percentage = totalSteps > 0 ? Math.round((stepIndex / totalSteps) * 100) : 0
-
-  return (
-    <div className="mt-3 space-y-2">
-      {/* 단계 표시 */}
-      <div className="flex items-center gap-1">
-        {stepLabels.map((label, idx) => (
-          <div key={label} className="flex items-center">
-            <div
-              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                idx < stepIndex
-                  ? 'bg-blue-500 text-white'
-                  : idx === stepIndex
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 ring-1 ring-blue-400'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-              }`}
-            >
-              {label}
-            </div>
-            {idx < stepLabels.length - 1 && (
-              <div className={`w-3 h-0.5 mx-0.5 ${idx < stepIndex ? 'bg-blue-400' : 'bg-gray-300 dark:bg-gray-600'}`} />
-            )}
-          </div>
-        ))}
-      </div>
-      {/* 프로그레스 바 */}
-      <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden">
-        <div
-          className="h-3 rounded-full transition-all duration-500 bg-blue-500"
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-600 dark:text-gray-300 truncate mr-2">
-          {message}
-        </span>
-        <span className="text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
-          {itemsCollected > 0 ? `${itemsCollected.toLocaleString('ko-KR')}개 수집` : ''}
         </span>
       </div>
     </div>

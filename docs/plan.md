@@ -254,3 +254,4 @@ def test_fetch_daily_prices_parses_naver():
 - [x] collectors 파싱 테스트(respx 모킹) 확대 — 시세·매매동향·분봉·펀더멘털·뉴스·인사이트·스케줄러·잡 (61건)
 - [x] 분봉 새로고침 스피너, 로딩/에러 UX(ChartState·spinner)
 - [x] collect-all 백그라운드(`services/jobs.py`, 데몬 스레드) + 진행률 폴링(GET /collect-status)
+- [x] 종목 발굴 '데이터 수집' 진행률 바 — 설정 '종목 목록 수집'과 동일 형식(`components/common/StepProgressBar`로 공용화), 백엔드 scanner 진행률에 단계(ETF→코스피→코스닥)·percent·message 추가

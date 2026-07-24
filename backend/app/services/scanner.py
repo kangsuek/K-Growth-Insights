@@ -19,7 +19,18 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _cancel = threading.Event()
-_progress: dict = {"status": "idle", "total": 0, "completed": 0, "updated": 0}
+# 발굴 지표 수집 진행상태(백그라운드 수집 중, 동시 폴링이 읽는다).
+# 단계: 0=ETF, 1=코스피, 2=코스닥 (프론트 StepProgressBar와 동일)
+_progress: dict = {
+    "status": "idle",       # idle | in_progress | completed | cancelled | error
+    "total": 0,
+    "completed": 0,
+    "updated": 0,
+    "step_index": 0,
+    "total_steps": 3,
+    "step_label": "",
+    "message": "",
+}
 
 # 검색 정렬 허용 컬럼(인젝션 방지).
 _SORT_COLUMNS = {
@@ -29,8 +40,14 @@ _SORT_COLUMNS = {
 
 
 def get_progress() -> dict:
+    """진행 상태 + 프론트 진행률 바가 쓰는 파생 필드(percent·items_collected)."""
     with _lock:
-        return dict(_progress)
+        snapshot = dict(_progress)
+    total = snapshot.get("total") or 0
+    done = snapshot.get("completed") or 0
+    snapshot["percent"] = min(100, int(done / total * 100)) if total else 0
+    snapshot["items_collected"] = snapshot.get("updated", 0)
+    return snapshot
 
 
 # --- 지표 수집 ---------------------------------------------------------------
@@ -106,23 +123,36 @@ def _metrics_for(ticker: str, cached_ytd_base: dict | None = None) -> dict | Non
     }
 
 
-def _supply_targets(conn) -> list[str]:
-    """딥수집 대상 티커: 전체 ETF + KOSPI 시총 상위 N + KOSDAQ 시총 상위 N."""
-    tickers: list[str] = [
-        r["ticker"] for r in conn.execute(
-            "SELECT ticker FROM stock_catalog WHERE is_active=1 AND type='ETF'"
-        )
+def _supply_target_groups(conn) -> list[tuple[str, list[str]]]:
+    """딥수집 대상을 단계별로 반환: 전체 ETF → KOSPI 시총 상위 N → KOSDAQ 시총 상위 N.
+
+    (단계 라벨, 티커 목록) 순서가 곧 진행률 바의 단계 순서다.
+    """
+    groups: list[tuple[str, list[str]]] = [
+        ("ETF", [
+            r["ticker"] for r in conn.execute(
+                "SELECT ticker FROM stock_catalog WHERE is_active=1 AND type='ETF'"
+            )
+        ])
     ]
-    for market, top_n in (("KOSPI", KOSPI_TOP_N_SUPPLY), ("KOSDAQ", KOSDAQ_TOP_N_SUPPLY)):
-        tickers += [
+    for market, label, top_n in (
+        ("KOSPI", "코스피", KOSPI_TOP_N_SUPPLY),
+        ("KOSDAQ", "코스닥", KOSDAQ_TOP_N_SUPPLY),
+    ):
+        groups.append((label, [
             r["ticker"] for r in conn.execute(
                 """SELECT ticker FROM stock_catalog
                    WHERE is_active=1 AND market=? AND type!='ETF'
                    ORDER BY (market_value IS NULL), market_value DESC LIMIT ?""",
                 (market, top_n),
             )
-        ]
-    return tickers
+        ]))
+    return groups
+
+
+def _supply_targets(conn) -> list[str]:
+    """딥수집 대상 티커(단계 구분 없이 평탄화)."""
+    return [ticker for _, tickers in _supply_target_groups(conn) for ticker in tickers]
 
 
 def _load_ytd_base_cache(conn) -> dict[str, dict]:
@@ -142,6 +172,10 @@ def _collect_one(ticker: str, cached_ytd_base: dict | None = None) -> int:
     metrics = _metrics_for(ticker, cached_ytd_base)
     with _lock:
         _progress["completed"] += 1
+        _progress["message"] = (
+            f"{_progress['step_label']} 지표 수집 중... "
+            f"({_progress['completed']:,}/{_progress['total']:,})"
+        )
     if not metrics:
         return 0
     with get_connection() as conn:
@@ -170,23 +204,40 @@ def collect_catalog_data() -> dict:
     """
     _cancel.clear()
     with get_connection() as conn:
-        tickers = _supply_targets(conn)
+        groups = _supply_target_groups(conn)
         ytd_cache = _load_ytd_base_cache(conn)
+    total = sum(len(tickers) for _, tickers in groups)
     with _lock:
-        _progress.update(status="in_progress", total=len(tickers), completed=0, updated=0)
-    workers = max(1, min(config.COLLECT_CONCURRENCY, len(tickers) or 1))
+        _progress.update(status="in_progress", total=total, completed=0, updated=0,
+                         step_index=0, total_steps=len(groups),
+                         step_label=groups[0][0], message="수집 시작 중...")
     try:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(lambda t: _collect_one(t, ytd_cache.get(t)), tickers))
+        # 단계(ETF→코스피→코스닥)별로 순차 실행해 진행률 바의 현재 단계를 표시한다.
+        for idx, (label, tickers) in enumerate(groups):
+            if _cancel.is_set():
+                break
+            with _lock:
+                _progress.update(step_index=idx, step_label=label,
+                                 message=f"{label} 지표 수집 중...")
+            if not tickers:
+                continue
+            workers = max(1, min(config.COLLECT_CONCURRENCY, len(tickers)))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                list(pool.map(lambda t: _collect_one(t, ytd_cache.get(t)), tickers))
         status = "cancelled" if _cancel.is_set() else "completed"
         with _lock:
-            _progress["status"] = status
-        logger.info("[scanner] 발굴 지표 수집 %s: %d/%d 갱신",
-                    status, _progress["updated"], len(tickers))
+            updated = _progress["updated"]
+            _progress.update(
+                status=status,
+                step_index=len(groups) if status == "completed" else _progress["step_index"],
+                message=(f"발굴 지표 수집 완료 ({updated:,}개 갱신)"
+                         if status == "completed" else "수집이 중지되었습니다"),
+            )
+        logger.info("[scanner] 발굴 지표 수집 %s: %d/%d 갱신", status, updated, total)
     except Exception as exc:  # noqa: BLE001
         logger.error("[scanner] 수집 실패: %s", exc, exc_info=True)
         with _lock:
-            _progress["status"] = "error"
+            _progress.update(status="error", message="수집 중 오류가 발생했습니다")
     return get_progress()
 
 
