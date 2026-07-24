@@ -1,0 +1,7 @@
+# 런타임 의존성 (데스크톱 앱 부트스트랩용). pyproject.toml과 동기 유지.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx>=0.27
+pydantic>=2.6
+python-dotenv>=1.0
+apscheduler>=3.10

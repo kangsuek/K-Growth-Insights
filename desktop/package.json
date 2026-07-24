@@ -1,0 +1,19 @@
+{
+  "name": "kgrowth-insights-desktop",
+  "version": "1.0.0",
+  "description": "K-Growth Insights - 한국 고성장 섹터 ETF·주식 분석 데스크톱 앱",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "generate-icons": "node scripts/generate-icons.js",
+    "build": "electron-builder",
+    "build:dir": "electron-builder --dir"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "sharp": "^0.33.0"
+  }
+}
