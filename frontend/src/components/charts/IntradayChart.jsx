@@ -8,7 +8,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   Cell,
   ReferenceLine,
@@ -268,10 +267,22 @@ const IntradayChart = memo(function IntradayChart({
     : null
   const gradientId = `intraday-price-${ticker}`
 
-  // X축 틱 포맷팅 (시간만 표시)
-  const formatXAxis = (tickItem) => {
-    return tickItem
+  // 공유 툴팁 설정(가격·거래량 패널에 동일 적용).
+  const tooltipProps = {
+    content: <CustomTooltip />,
+    cursor: { stroke: COLORS.CHART_CURSOR, strokeWidth: 1, strokeDasharray: '5 5' },
+    isAnimationActive: false,
+    wrapperStyle: { outline: 'none' },
+    contentStyle: { backgroundColor: 'transparent', border: 'none', padding: 0, boxShadow: 'none' },
   }
+
+  // 가격 / 거래량 패널 높이 분배(HTS처럼 하단에 거래량 별도 패널). 두 패널의 Y축
+  // 폭(60)과 좌우 여백을 맞춰 플롯 영역을 세로로 정렬한다.
+  const AXIS_WIDTH = 60
+  const priceH = showVolume ? Math.round(height * 0.72) : height
+  const volumeH = Math.round(height * 0.28)
+  const pricePanelMargin = { top: 10, right: 15, left: 0, bottom: 0 }
+  const volumePanelMargin = { top: 4, right: 15, left: 0, bottom: 20 }
 
   return (
     <div
@@ -280,11 +291,9 @@ const IntradayChart = memo(function IntradayChart({
       role="img"
       aria-label={`${ticker} 분봉 차트`}
     >
-      <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart
-          data={chartData}
-          margin={{ top: 10, right: 15, left: 15, bottom: 20 }}
-        >
+      {/* ── 가격 패널 ── */}
+      <ResponsiveContainer width="100%" height={priceH}>
+        <ComposedChart data={chartData} margin={pricePanelMargin}>
           {/* 전일 종가 기준 상·하단을 빨강/파랑으로 나누는 세로 그라디언트 */}
           {splitOffset != null && (
             <defs>
@@ -295,71 +304,19 @@ const IntradayChart = memo(function IntradayChart({
             </defs>
           )}
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} />
-          <XAxis
-            dataKey="time"
-            tickFormatter={formatXAxis}
-            tick={{ fontSize: 11 }}
-            stroke={COLORS.CHART_AXIS}
-            interval={0}
-            ticks={xAxisTicks}
-            angle={-45}
-            textAnchor="end"
-            height={50}
-          />
+          <XAxis dataKey="time" hide />
           <YAxis
-            yAxisId="left"
             orientation="left"
             tickFormatter={formatPrice}
             tick={{ fontSize: 11 }}
             stroke={COLORS.CHART_AXIS}
             domain={priceDomain}
-            width={70}
+            width={AXIS_WIDTH}
           />
-          {showVolume && (
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              tickFormatter={formatVolume}
-              tick={false}
-              axisLine={false}
-              domain={volumeDomain}
-              width={0}
-            />
-          )}
-          <Tooltip
-            content={<CustomTooltip />}
-            cursor={{ stroke: COLORS.CHART_CURSOR, strokeWidth: 1, strokeDasharray: '5 5' }}
-            isAnimationActive={false}
-            wrapperStyle={{ outline: 'none' }}
-            contentStyle={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              boxShadow: 'none'
-            }}
-          />
-          <Legend
-            wrapperStyle={{ paddingTop: '10px' }}
-            iconType="line"
-          />
-
-          {/* 거래량 Bar */}
-          {showVolume && (
-            <Bar
-              yAxisId="right"
-              dataKey="volume"
-              opacity={0.7}
-              name="거래량"
-            >
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.volumeColor} />
-              ))}
-            </Bar>
-          )}
+          <Tooltip {...tooltipProps} />
 
           {/* 가격 Line — 전일 종가 위=빨강/아래=파랑 (기준가 모르면 단색) */}
           <Line
-            yAxisId="left"
             type="monotone"
             dataKey="price"
             stroke={splitOffset != null ? `url(#${gradientId})` : COLORS.CHART_PRIMARY}
@@ -367,12 +324,12 @@ const IntradayChart = memo(function IntradayChart({
             dot={false}
             name="체결가"
             activeDot={{ r: 3 }}
+            isAnimationActive={false}
           />
 
           {/* 전일 종가 기준선 */}
           {previousClose && (
             <ReferenceLine
-              yAxisId="left"
               y={previousClose}
               stroke="#9ca3af"
               strokeDasharray="5 5"
@@ -390,7 +347,6 @@ const IntradayChart = memo(function IntradayChart({
           {visiblePivotLevels.map((level) => (
             <ReferenceLine
               key={level.key}
-              yAxisId="left"
               y={level.value}
               stroke={level.color}
               strokeDasharray={level.dash}
@@ -403,9 +359,53 @@ const IntradayChart = memo(function IntradayChart({
               }}
             />
           ))}
-
         </ComposedChart>
       </ResponsiveContainer>
+
+      {/* ── 거래량 패널 ── */}
+      {showVolume && (
+        <ResponsiveContainer width="100%" height={volumeH}>
+          <ComposedChart data={chartData} margin={volumePanelMargin}>
+            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} vertical={false} />
+            <XAxis
+              dataKey="time"
+              tick={{ fontSize: 11 }}
+              stroke={COLORS.CHART_AXIS}
+              interval={0}
+              ticks={xAxisTicks}
+              angle={-45}
+              textAnchor="end"
+              height={40}
+            />
+            <YAxis
+              orientation="left"
+              tickFormatter={formatVolume}
+              tick={{ fontSize: 10 }}
+              stroke={COLORS.CHART_AXIS}
+              domain={volumeDomain}
+              width={AXIS_WIDTH}
+            />
+            <Tooltip {...tooltipProps} />
+            <Bar dataKey="volume" opacity={0.7} name="거래량" isAnimationActive={false}>
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.volumeColor} />
+              ))}
+            </Bar>
+          </ComposedChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* ── 범례 ── */}
+      <div className="flex justify-center gap-6 pt-1 text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-4 h-0.5" style={{ background: COLORS.CHART_PRIMARY }}></span>
+          <span className="text-gray-600 dark:text-gray-400">체결가</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-gray-400 opacity-70"></span>
+          <span className="text-gray-600 dark:text-gray-400">거래량</span>
+        </div>
+      </div>
     </div>
   )
 })
