@@ -49,19 +49,6 @@ class TestLastMarketClose:
         assert scanner._last_market_close(_kst(2026, 7, 18, 12, 0)) == _kst(2026, 7, 17, 15, 40)
 
 
-class TestParseDbTimestamp:
-    def test_parses_sqlite_utc_string(self):
-        assert scanner._parse_db_timestamp("2026-07-20 07:10:00") == datetime(
-            2026, 7, 20, 7, 10, tzinfo=ZoneInfo("UTC")
-        )
-
-    def test_none_returns_none(self):
-        assert scanner._parse_db_timestamp(None) is None
-
-    def test_invalid_returns_none(self):
-        assert scanner._parse_db_timestamp("not-a-date") is None
-
-
 class TestCheckFreshness:
     def test_no_history_is_stale(self):
         result = scanner.check_freshness(now=_kst(2026, 7, 20, 17, 0))
@@ -72,7 +59,7 @@ class TestCheckFreshness:
         _seed_updated_at("2026-07-20 07:10:00")
         result = scanner.check_freshness(now=_kst(2026, 7, 20, 17, 0))
         assert result["fresh"] is True
-        assert result["last_updated"] == "2026-07-20T16:10:00"  # KST로 환산해 반환
+        assert result["last_updated"] == "2026-07-20T16:10:00+09:00"  # KST로 환산해 반환
 
     def test_after_close_with_stale_data_is_stale(self):
         # now: 월 17:00, 수집: 일 18:55 KST(월 마감 이전) → stale
@@ -94,13 +81,13 @@ class TestCollectDataEndpoint:
     """POST /api/scanner/collect-data 의 force / fresh-skip 동작."""
 
     def test_fresh_skips_without_starting_collection(self):
-        with patch.object(scanner, "check_freshness",
-                          return_value={"fresh": True, "last_updated": "2026-07-20T16:10:00"}), \
+        fresh = {"fresh": True, "last_updated": "2026-07-20T16:10:00+09:00"}
+        with patch.object(scanner, "check_freshness", return_value=fresh), \
              patch.object(scanner, "collect_catalog_data") as collect:
             body = client.post("/api/scanner/collect-data").json()
         assert body["status"] == "fresh"
         assert body["skipped"] is True
-        assert body["last_updated"] == "2026-07-20T16:10:00"
+        assert body["last_updated"] == "2026-07-20T16:10:00+09:00"
         collect.assert_not_called()
 
     def test_force_bypasses_freshness(self):

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from app import timeutil
 from app.database import get_connection
 
 # 사용자 지정 정렬(sort_order) 우선, 없으면 종목명. 대시보드·목록 공통 순서.
@@ -341,6 +342,16 @@ def latest_change_pct(codes: list[str]) -> dict[str, float]:
     return result
 
 
+def _with_kst_updated_at(row) -> dict | None:
+    """펀더멘털 행의 updated_at(UTC)을 표시용 KST ISO로 바꿔 반환."""
+    if row is None:
+        return None
+    data = dict(row)
+    if "updated_at" in data:
+        data["updated_at"] = timeutil.to_kst_iso(data["updated_at"])
+    return data
+
+
 def get_fundamentals(ticker: str) -> dict | None:
     """종목 유형(STOCK/ETF)에 따라 펀더멘털을 조회해 통합 응답으로 반환.
 
@@ -372,7 +383,7 @@ def get_fundamentals(ticker: str) -> dict | None:
             return {
                 "ticker": ticker,
                 "type": "ETF",
-                "etf": dict(row) if row else None,
+                "etf": _with_kst_updated_at(row),
                 "holdings": [dict(h) for h in holdings],
             }
 
@@ -388,7 +399,7 @@ def get_fundamentals(ticker: str) -> dict | None:
         return {
             "ticker": ticker,
             "type": "STOCK",
-            "stock": dict(row) if row else None,
+            "stock": _with_kst_updated_at(row),
         }
 
 
@@ -421,7 +432,7 @@ def reset_collected_data() -> dict:
 
 
 def last_collection_time() -> str | None:
-    """가장 최근 수집 시각. updated_at을 가진 테이블들의 최대값. 없으면 None."""
+    """가장 최근 수집 시각(KST ISO). updated_at을 가진 테이블들의 최대값. 없으면 None."""
     with get_connection() as conn:
         row = conn.execute(
             """
@@ -433,7 +444,7 @@ def last_collection_time() -> str | None:
             )
             """
         ).fetchone()
-    return row["t"] if row else None
+    return timeutil.to_kst_iso(row["t"]) if row else None
 
 
 def data_stats() -> dict:

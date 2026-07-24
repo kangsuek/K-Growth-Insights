@@ -9,12 +9,12 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, time as dtime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from datetime import date, datetime, time as dtime, timedelta
 
-from app import config
+from app import config, timeutil
 from app.database import get_connection
 from app.services import naver_client
+from app.timeutil import KST
 
 logger = logging.getLogger(__name__)
 
@@ -252,26 +252,8 @@ def cancel_collect() -> None:
 # fresh를 돌려준다(프론트가 "이미 최신입니다 → 다시 수집?"을 확인). force=true면
 # 이 가드를 건너뛴다.
 
-KST = ZoneInfo("Asia/Seoul")
 MARKET_OPEN = dtime(9, 0)
 MARKET_CLOSE = dtime(15, 40)   # 종가 확정 시각(scheduler와 동일)
-
-
-def _parse_db_timestamp(value) -> datetime | None:
-    """catalog_updated_at을 aware datetime으로 변환.
-
-    SQLite `datetime('now')`로 저장돼 UTC 기준 naive 문자열이므로 UTC를 붙인다.
-    """
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        parsed = value
-    else:
-        try:
-            parsed = datetime.fromisoformat(str(value).replace(" ", "T").split(".")[0])
-        except ValueError:
-            return None
-    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
 
 
 def _last_market_close(now: datetime) -> datetime:
@@ -297,7 +279,7 @@ def check_freshness(now: datetime | None = None) -> dict:
             "SELECT MAX(catalog_updated_at) AS last FROM stock_catalog "
             "WHERE catalog_updated_at IS NOT NULL"
         ).fetchone()
-    last = _parse_db_timestamp(row["last"] if row else None)
+    last = timeutil.parse_db_timestamp(row["last"] if row else None)
     if last is None:
         return {"fresh": False, "last_updated": None}
 
@@ -307,11 +289,7 @@ def check_freshness(now: datetime | None = None) -> dict:
     else:
         fresh = last >= _last_market_close(now)
 
-    # 프론트가 로컬 시각으로 표시하므로 KST 기준 naive ISO로 돌려준다.
-    return {
-        "fresh": fresh,
-        "last_updated": last.astimezone(KST).replace(tzinfo=None).isoformat(),
-    }
+    return {"fresh": fresh, "last_updated": timeutil.to_kst_iso(last)}
 
 
 # --- 검색 / 테마 / 추천 -------------------------------------------------------
@@ -331,7 +309,7 @@ def _row_to_item(row, registered: set) -> dict:
         "monthly_return": d.get("monthly_return"), "ytd_return": d.get("ytd_return"),
         "ytd_base_date": d.get("ytd_base_date"),
         "foreign_net": d.get("foreign_net"), "institutional_net": d.get("institutional_net"),
-        "catalog_updated_at": d.get("catalog_updated_at"),
+        "catalog_updated_at": timeutil.to_kst_iso(d.get("catalog_updated_at")),
         "is_registered": d["ticker"] in registered,
     }
 

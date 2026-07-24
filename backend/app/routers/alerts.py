@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from app import timeutil
 from app.database import get_connection
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
@@ -38,7 +39,12 @@ class AlertTriggerRequest(BaseModel):
 
 
 def _rule(row) -> dict:
-    return dict(row)
+    """알림 규칙 행. 시각 컬럼은 표시용 KST ISO로 변환해 내보낸다."""
+    data = dict(row)
+    for col in ("created_at", "last_triggered_at"):
+        if col in data:
+            data[col] = timeutil.to_kst_iso(data[col])
+    return data
 
 
 @router.post("/trigger")
@@ -65,7 +71,10 @@ def get_history(ticker: str, limit: int = Query(50, ge=1, le=200)):
             "FROM alert_history WHERE ticker=? ORDER BY triggered_at DESC LIMIT ?",
             (ticker, limit),
         ).fetchall()
-    return [dict(r) for r in rows]
+    return [
+        {**dict(r), "triggered_at": timeutil.to_kst_iso(r["triggered_at"])}
+        for r in rows
+    ]
 
 
 @router.post("/")

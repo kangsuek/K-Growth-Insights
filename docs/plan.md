@@ -255,3 +255,5 @@ def test_fetch_daily_prices_parses_naver():
 - [x] 분봉 새로고침 스피너, 로딩/에러 UX(ChartState·spinner)
 - [x] collect-all 백그라운드(`services/jobs.py`, 데몬 스레드) + 진행률 폴링(GET /collect-status)
 - [x] 종목 발굴 '데이터 수집' 진행률 바 — 설정 '종목 목록 수집'과 동일 형식(`components/common/StepProgressBar`로 공용화), 백엔드 scanner 진행률에 단계(ETF→코스피→코스닥)·percent·message 추가
+- [x] 발굴 수집 freshness 가드 + `force` 파라미터(원본 `catalog_data_collector.check_freshness` 이식) — 최신이면 `{status:'fresh'}`로 스킵
+- [x] 시각 표시 KST 일괄 정리 — DB는 UTC(`datetime('now')`) 유지, API 경계에서 `app/timeutil.to_kst_iso()`로 `+09:00` ISO 변환(마지막 수집·카탈로그 갱신·펀더멘털·알림)
