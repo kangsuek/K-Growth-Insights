@@ -57,11 +57,13 @@ def _intraday_response(
     """
     actual_date, rows = repository.get_intraday_dated(ticker, target_date)
 
-    # 전일 종가 대비 변동(전일비)을 계산해 막대 색상·툴팁에 쓰이게 한다.
+    # 전일 종가 대비 변동(전일비·상승률)을 계산해 막대 색상·툴팁·% 축에 쓰이게 한다.
     prev_close = repository.close_before(ticker, actual_date) if actual_date else None
     for r in rows:
         if prev_close is not None and r.get("price") is not None:
             r["change_amount"] = round(r["price"] - prev_close, 2)
+            if prev_close:
+                r["change_pct"] = round((r["price"] - prev_close) / prev_close * 100, 2)
 
     bg_started = False
     if auto_collect and (not rows or force_refresh):
