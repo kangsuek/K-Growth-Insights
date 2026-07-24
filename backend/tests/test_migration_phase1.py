@@ -233,6 +233,43 @@ def test_trading_flow_range_no_autocollect_uses_db_only():
     assert [r["date"] for r in body] == ["2026-07-22", "2026-07-21"]
 
 
+def test_trading_flow_days_and_range_share_same_order():
+    """days 조회와 기간 조회가 같은 정렬(최신순)로 나와야 한다.
+
+    두 분기의 정렬이 달라, 최신순을 가정하는 인사이트가 기간 조회 결과에서
+    가장 오래된 구간을 '최근'으로 읽어 반대 결론을 내던 회귀를 막는다.
+    """
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_flow("005930", ["2026-07-20", "2026-07-21", "2026-07-22"])
+    by_days = client.get("/api/etfs/005930/trading-flow",
+                         params={"days": 3, "auto_collect": False}).json()
+    by_range = client.get("/api/etfs/005930/trading-flow",
+                          params={"start_date": "2026-07-01", "end_date": "2026-07-31",
+                                  "auto_collect": False}).json()
+    expected = ["2026-07-22", "2026-07-21", "2026-07-20"]
+    assert [r["date"] for r in by_days] == expected
+    assert [r["date"] for r in by_range] == expected
+
+
+def test_prices_days_and_range_share_same_order():
+    """시세도 days/기간 조회가 모두 최신순이어야 한다(매매동향과 같은 계약)."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    with get_connection() as conn:
+        for d in ("2026-07-20", "2026-07-21", "2026-07-22"):
+            conn.execute(
+                """INSERT INTO prices (ticker, date, open_price, high_price,
+                   low_price, close_price, volume)
+                   VALUES (?, ?, 100, 100, 100, 100, 1)""", ("005930", d))
+    by_days = client.get("/api/etfs/005930/prices",
+                         params={"days": 3, "auto_collect": False}).json()
+    by_range = client.get("/api/etfs/005930/prices",
+                          params={"start_date": "2026-07-01", "end_date": "2026-07-31",
+                                  "auto_collect": False}).json()
+    expected = ["2026-07-22", "2026-07-21", "2026-07-20"]
+    assert [r["date"] for r in by_days] == expected
+    assert [r["date"] for r in by_range] == expected
+
+
 @respx.mock
 def test_prices_range_backfills_missing_history():
     """기간 조회 시 보유 시세가 짧으면 과거 이력을 백필해 기간을 맞춘다."""

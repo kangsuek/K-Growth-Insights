@@ -284,8 +284,9 @@ def get_etf_trading_flow(
                              repository.trading_flow_earliest_date(ticker),
                              lambda n: collectors.collect_trading_flow(ticker, days=n))
         rows = repository.get_trading_flow_range(ticker, start_date, end_date)  # 오래된→최신
-        return list(reversed(rows))
-    return repository.get_trading_flow(ticker, days=days)  # 이미 최신순
+    else:
+        rows = repository.get_trading_flow(ticker, days=days)  # 오래된→최신
+    return list(reversed(rows))
 
 
 @router.get("/{ticker}/intraday")
