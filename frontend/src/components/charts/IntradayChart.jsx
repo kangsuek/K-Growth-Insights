@@ -256,13 +256,15 @@ const IntradayChart = memo(function IntradayChart({
     )
   }
 
-  // Y축 도메인 계산 (캔들 고·저가 + 피봇 레벨 포함)
+  // Y축 도메인 계산 — 캔들 고·저가와 전일 종가 기준으로만 잡는다.
+  // 피봇값(S2/R2 등)을 도메인에 포함하면 축이 그만큼 늘어나 캔들이 눌려 작게
+  // 보이므로 제외한다. 피봇선은 아래에서 그리되, 이 도메인 밖(멀리 있는 지지/저항)은
+  // 자연히 잘려 안 보인다(장중엔 가격 근처 지지/저항만 의미 있음).
   const highs = chartData.map((d) => d.high_price).filter((p) => p != null)
   const lows = chartData.map((d) => d.low_price).filter((p) => p != null)
   const allPriceValues = [
     ...highs,
     ...lows,
-    ...visiblePivotLevels.map(l => l.value),
     ...(previousClose != null ? [previousClose] : []),
   ]
   const minPrice = Math.min(...allPriceValues)
