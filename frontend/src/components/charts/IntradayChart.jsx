@@ -389,22 +389,25 @@ const IntradayChart = memo(function IntradayChart({
             />
           )}
 
-          {/* 피봇 레벨 수평선 */}
-          {visiblePivotLevels.map((level) => (
-            <ReferenceLine
-              key={level.key}
-              y={level.value}
-              stroke={level.color}
-              strokeDasharray={level.dash}
-              strokeWidth={level.width}
-              label={{
-                value: `${level.label} ${formatPrice(level.value)}`,
-                position: 'insideTopLeft',
-                fill: level.color,
-                fontSize: 9,
-              }}
-            />
-          ))}
+          {/* 피봇 레벨 수평선 — 캔들 도메인 안(가격 근처)에 있는 것만 표시.
+              멀리 있는 지지/저항은 그리지 않아 캔들이 눌리지 않게 한다. */}
+          {visiblePivotLevels
+            .filter((level) => level.value >= priceDomain[0] && level.value <= priceDomain[1])
+            .map((level) => (
+              <ReferenceLine
+                key={level.key}
+                y={level.value}
+                stroke={level.color}
+                strokeDasharray={level.dash}
+                strokeWidth={level.width}
+                label={{
+                  value: `${level.label} ${formatPrice(level.value)}`,
+                  position: 'insideTopLeft',
+                  fill: level.color,
+                  fontSize: 9,
+                }}
+              />
+            ))}
         </ComposedChart>
       </ResponsiveContainer>
 
