@@ -258,6 +258,16 @@ const IntradayChart = memo(function IntradayChart({
   const maxVolume = Math.max(...volumes) || 0
   const volumeDomain = [0, Math.ceil(maxVolume * 1.2)]
 
+  // 체결가 라인 색을 전일 종가 기준으로 분할한다(HTS 방식: 위=빨강, 아래=파랑).
+  // 그라디언트는 라인 path의 bbox(=실제 가격 min~max)를 0~1로 쓰므로, 전일 종가가
+  // 그 안에서 차지하는 위치를 분할 offset으로 계산한다. 라인이 전부 위/아래면 단색.
+  const lineMin = prices.length ? Math.min(...prices) : 0
+  const lineMax = prices.length ? Math.max(...prices) : 0
+  const splitOffset = previousClose != null && lineMax > lineMin
+    ? Math.min(1, Math.max(0, (lineMax - previousClose) / (lineMax - lineMin)))
+    : null
+  const gradientId = `intraday-price-${ticker}`
+
   // X축 틱 포맷팅 (시간만 표시)
   const formatXAxis = (tickItem) => {
     return tickItem
@@ -275,6 +285,15 @@ const IntradayChart = memo(function IntradayChart({
           data={chartData}
           margin={{ top: 10, right: 15, left: 15, bottom: 20 }}
         >
+          {/* 전일 종가 기준 상·하단을 빨강/파랑으로 나누는 세로 그라디언트 */}
+          {splitOffset != null && (
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset={splitOffset} stopColor={COLORS.PRICE_UP} />
+                <stop offset={splitOffset} stopColor={COLORS.PRICE_DOWN} />
+              </linearGradient>
+            </defs>
+          )}
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} />
           <XAxis
             dataKey="time"
@@ -338,12 +357,12 @@ const IntradayChart = memo(function IntradayChart({
             </Bar>
           )}
 
-          {/* 가격 Line */}
+          {/* 가격 Line — 전일 종가 위=빨강/아래=파랑 (기준가 모르면 단색) */}
           <Line
             yAxisId="left"
             type="monotone"
             dataKey="price"
-            stroke={COLORS.CHART_PRIMARY}
+            stroke={splitOffset != null ? `url(#${gradientId})` : COLORS.CHART_PRIMARY}
             strokeWidth={1.5}
             dot={false}
             name="체결가"
