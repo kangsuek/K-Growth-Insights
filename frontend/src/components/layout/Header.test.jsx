@@ -105,7 +105,7 @@ describe('Header', () => {
     githubLinks.forEach(link => {
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-      expect(link).toHaveAttribute('href', 'https://github.com/kangsuek/ETFWeeklyReport')
+      expect(link).toHaveAttribute('href', 'https://github.com/kangsuek/K-Growth-Insights')
     })
   })
 

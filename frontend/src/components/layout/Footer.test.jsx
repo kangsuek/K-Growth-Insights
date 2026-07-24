@@ -77,7 +77,7 @@ describe('Footer', () => {
     expect(githubLinks.length).toBeGreaterThan(0)
 
     githubLinks.forEach(link => {
-      expect(link).toHaveAttribute('href', 'https://github.com/kangsuek/ETFWeeklyReport')
+      expect(link).toHaveAttribute('href', 'https://github.com/kangsuek/K-Growth-Insights')
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     })
