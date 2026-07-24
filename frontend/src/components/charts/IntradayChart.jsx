@@ -117,8 +117,12 @@ const IntradayChart = memo(function IntradayChart({
     })
 
     return sortedData.map((item) => {
-      // 상승/하락 색상 결정
-      const isRising = item.change_amount > 0
+      // 거래량 막대 색: 각 분봉의 시가 대비 종가로 판정한다(일별 가격 차트와 동일).
+      // 전일 종가 대비로 칠하면 추세일에 모든 막대가 한 색이라 분봉별 방향이 안 보인다.
+      // 시가 정보가 없으면 전일비로 폴백한다.
+      const isRising = item.open_price != null
+        ? item.price >= item.open_price
+        : item.change_amount > 0
       const volumeColor = isRising ? COLORS.VOLUME_UP : COLORS.VOLUME_DOWN
 
       // datetime에서 시간만 추출 (HH:MM 형식)
@@ -348,7 +352,7 @@ const IntradayChart = memo(function IntradayChart({
             <Bar
               yAxisId="right"
               dataKey="volume"
-              opacity={0.3}
+              opacity={0.7}
               name="거래량"
             >
               {chartData.map((entry, index) => (
@@ -415,6 +419,7 @@ IntradayChart.propTypes = {
     PropTypes.shape({
       datetime: PropTypes.string.isRequired,
       price: PropTypes.number.isRequired,
+      open_price: PropTypes.number,
       change_amount: PropTypes.number,
       change_pct: PropTypes.number,
       volume: PropTypes.number,
