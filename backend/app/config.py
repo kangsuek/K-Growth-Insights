@@ -44,3 +44,6 @@ COLLECT_INTERVAL_MINUTES = int(os.getenv("COLLECT_INTERVAL_MINUTES", "10"))
 # 전체 수집 병렬도(종목 단위 동시 수집 스레드 수). 수집 시간 단축용.
 # 과도하면 네이버 API 제한에 걸릴 수 있어 기본 5로 제한.
 COLLECT_CONCURRENCY = int(os.getenv("COLLECT_CONCURRENCY", "5"))
+
+# 발굴(스캐너) 지표 재수집 가드: 장중에는 이 시간 이내 수집분을 최신으로 본다.
+SCANNER_COLLECT_TTL_HOURS = int(os.getenv("SCANNER_COLLECT_TTL_HOURS", "6"))

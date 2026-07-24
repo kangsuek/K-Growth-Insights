@@ -9,7 +9,8 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, datetime, time as dtime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app import config
 from app.database import get_connection
@@ -243,6 +244,74 @@ def collect_catalog_data() -> dict:
 
 def cancel_collect() -> None:
     _cancel.set()
+
+
+# --- 수집 freshness 가드 -----------------------------------------------------
+#
+# 딥수집은 종목마다 개별 조회라 비싸므로, 이미 최신이면 수집하지 않고 프론트에
+# fresh를 돌려준다(프론트가 "이미 최신입니다 → 다시 수집?"을 확인). force=true면
+# 이 가드를 건너뛴다.
+
+KST = ZoneInfo("Asia/Seoul")
+MARKET_OPEN = dtime(9, 0)
+MARKET_CLOSE = dtime(15, 40)   # 종가 확정 시각(scheduler와 동일)
+
+
+def _parse_db_timestamp(value) -> datetime | None:
+    """catalog_updated_at을 aware datetime으로 변환.
+
+    SQLite `datetime('now')`로 저장돼 UTC 기준 naive 문자열이므로 UTC를 붙인다.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value).replace(" ", "T").split(".")[0])
+        except ValueError:
+            return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+
+
+def _last_market_close(now: datetime) -> datetime:
+    """가장 최근 장 마감(확정) 시각. 평일 15:40 이후면 오늘, 아니면 직전 거래일 15:40."""
+    if now.weekday() < 5 and now.time() >= MARKET_CLOSE:
+        return datetime.combine(now.date(), MARKET_CLOSE, tzinfo=KST)
+    day = now.date() - timedelta(days=1)
+    while day.weekday() >= 5:  # 토(5)/일(6) 건너뜀
+        day -= timedelta(days=1)
+    return datetime.combine(day, MARKET_CLOSE, tzinfo=KST)
+
+
+def check_freshness(now: datetime | None = None) -> dict:
+    """발굴 지표 데이터의 최신 여부 판정. {"fresh": bool, "last_updated": ISO|None}
+
+    - 장외: 최근 장 마감 확정분(catalog_updated_at >= 직전 마감)을 확보했으면 fresh.
+    - 장중(평일 09:00~15:40): 가격이 계속 움직이므로 TTL(SCANNER_COLLECT_TTL_HOURS)
+      이내 수집분만 fresh로 본다.
+    - 수집 이력 없음(NULL): stale.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT MAX(catalog_updated_at) AS last FROM stock_catalog "
+            "WHERE catalog_updated_at IS NOT NULL"
+        ).fetchone()
+    last = _parse_db_timestamp(row["last"] if row else None)
+    if last is None:
+        return {"fresh": False, "last_updated": None}
+
+    now = (now or datetime.now(KST)).astimezone(KST)
+    if now.weekday() < 5 and MARKET_OPEN <= now.time() <= MARKET_CLOSE:
+        fresh = (now - last) < timedelta(hours=config.SCANNER_COLLECT_TTL_HOURS)
+    else:
+        fresh = last >= _last_market_close(now)
+
+    # 프론트가 로컬 시각으로 표시하므로 KST 기준 naive ISO로 돌려준다.
+    return {
+        "fresh": fresh,
+        "last_updated": last.astimezone(KST).replace(tzinfo=None).isoformat(),
+    }
 
 
 # --- 검색 / 테마 / 추천 -------------------------------------------------------

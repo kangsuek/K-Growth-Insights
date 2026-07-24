@@ -56,10 +56,26 @@ def get_collect_progress():
 
 
 @router.post("/collect-data")
-def collect_data(background_tasks: BackgroundTasks):
-    """카탈로그 지표 수집을 백그라운드로 시작. 진행률은 /collect-progress 폴링."""
+def collect_data(
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False, description="freshness 가드를 무시하고 강제 재수집"),
+):
+    """카탈로그 지표 수집을 백그라운드로 시작. 진행률은 /collect-progress 폴링.
+
+    force=false이고 이미 최신이면 수집하지 않고 fresh를 반환한다. 프론트는 진행률
+    배너 대신 "이미 최신입니다" 안내로 재수집 여부를 확인한다.
+    """
     if scanner.get_progress().get("status") == "in_progress":
         return {"message": "이미 데이터 수집이 진행 중입니다", "status": "already_running"}
+    if not force:
+        freshness = scanner.check_freshness()
+        if freshness["fresh"]:
+            return {
+                "message": "이미 최신 데이터입니다",
+                "status": "fresh",
+                "skipped": True,
+                "last_updated": freshness["last_updated"],
+            }
     background_tasks.add_task(scanner.collect_catalog_data)
     return {"message": "카탈로그 데이터 수집이 시작되었습니다", "status": "started"}
 
