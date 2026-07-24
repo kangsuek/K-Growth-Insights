@@ -265,23 +265,6 @@ export const settingsApi = {
 }
 
 // Alert (목표가/알림) API 서비스
-export const alertApi = {
-  // 종목별 알림 규칙 조회
-  getRules: (ticker, activeOnly = true) =>
-    api.get(`/alerts/${ticker}`, { params: { active_only: activeOnly }, timeout: FAST_API_TIMEOUT }),
-
-  // 알림 규칙 생성
-  createRule: (data) => api.post('/alerts/', data, { timeout: NORMAL_API_TIMEOUT }),
-
-  // 알림 규칙 수정
-  updateRule: (ruleId, data) => api.put(`/alerts/${ruleId}`, data, { timeout: NORMAL_API_TIMEOUT }),
-
-  // 알림 규칙 삭제
-  deleteRule: (ruleId) => api.delete(`/alerts/${ruleId}`, { timeout: NORMAL_API_TIMEOUT }),
-
-  // 알림 트리거 기록 (프론트에서 감지 후 백엔드에 기록)
-  recordTrigger: (data) => api.post('/alerts/trigger', data, { timeout: FAST_API_TIMEOUT }),
-}
 
 // Simulation API 서비스
 export const simulationApi = {

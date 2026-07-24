@@ -101,7 +101,6 @@ const IntradayChart = memo(function IntradayChart({
   showVolume = true,
   previousClose = null,
   pivotLevels = null,
-  priceTargets = [],
 }) {
   // 컨테이너 너비 측정
   const { containerRef, width: containerWidth } = useContainerWidth()
@@ -186,19 +185,12 @@ const IntradayChart = memo(function IntradayChart({
     })
   }, [pivotLevels, chartData])
 
-  // 활성 목표가 라인 필터 (절대 가격 타입만: buy/sell)
-  const activePriceTargets = useMemo(() => {
-    if (!priceTargets || priceTargets.length === 0) return []
-    return priceTargets.filter(t => t.is_active && (t.alert_type === 'buy' || t.alert_type === 'sell'))
-  }, [priceTargets])
-
-  // Y축 도메인 계산 (가격 + 피봇 레벨 + 목표가 포함)
+  // Y축 도메인 계산 (가격 + 피봇 레벨 포함)
   const prices = chartData.map((d) => d.price).filter((p) => p != null)
   const allPriceValues = [
     ...prices,
     ...visiblePivotLevels.map(l => l.value),
     ...(previousClose != null ? [previousClose] : []),
-    ...activePriceTargets.map(t => t.target_price),
   ]
   const minPrice = Math.min(...allPriceValues)
   const maxPrice = Math.max(...allPriceValues)
@@ -412,30 +404,6 @@ const IntradayChart = memo(function IntradayChart({
             />
           ))}
 
-          {/* 목표가 수평선 */}
-          {activePriceTargets.map((target) => {
-            const isBuy = target.alert_type === 'buy'
-            const color = isBuy ? '#ef4444' : '#3b82f6'
-            const label = isBuy ? '매수' : '매도'
-            const memoText = target.memo ? ` (${target.memo})` : ''
-            return (
-              <ReferenceLine
-                key={`target-${target.id}`}
-                yAxisId="left"
-                y={target.target_price}
-                stroke={color}
-                strokeDasharray="8 4"
-                strokeWidth={1.5}
-                label={{
-                  value: `${label} ${formatPrice(target.target_price)}${memoText}`,
-                  position: isBuy ? 'insideBottomRight' : 'insideTopRight',
-                  fill: color,
-                  fontSize: 10,
-                  fontWeight: 600,
-                }}
-              />
-            )
-          })}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -467,15 +435,6 @@ IntradayChart.propTypes = {
     s2: PropTypes.number,
     s3: PropTypes.number,
   }),
-  priceTargets: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.number.isRequired,
-      alert_type: PropTypes.string.isRequired,
-      target_price: PropTypes.number.isRequired,
-      is_active: PropTypes.number,
-      memo: PropTypes.string,
-    })
-  ),
 }
 
 export default IntradayChart
