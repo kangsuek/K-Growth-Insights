@@ -669,7 +669,6 @@ export default function ETFDetail() {
         showMACD={showMACD}
         onToggleRSI={() => setShowRSI(v => !v)}
         onToggleMACD={() => setShowMACD(v => !v)}
-        supportResistanceData={supportResistanceData}
         showTechnicalSection={true}
       />
       </ErrorBoundary>

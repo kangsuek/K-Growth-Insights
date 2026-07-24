@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import PropTypes from 'prop-types'
 import PriceChart from '../charts/PriceChart'
 import TradingFlowChart from '../charts/TradingFlowChart'
@@ -7,13 +7,6 @@ import MACDChart from '../charts/MACDChart'
 import LoadingIndicator from '../common/LoadingIndicator'
 import ErrorFallback from '../common/ErrorFallback'
 
-/**
- * 가격을 포맷팅 (천 단위 콤마)
- */
-function fmtPrice(val) {
-  if (val == null || isNaN(val)) return '-'
-  return Math.round(val).toLocaleString('ko-KR')
-}
 
 /**
  * RSI 값에 따른 해석 텍스트와 색상을 반환
@@ -229,201 +222,6 @@ TechnicalIndicatorsSection.propTypes = {
   onToggleMACD: PropTypes.func,
 }
 
-/**
- * 지지선/저항선 카드 섹션
- */
-function SupportResistanceSection({ data }) {
-  const [showDetail, setShowDetail] = useState(false)
-
-  if (!data) return null
-
-  const { currentPrice, supports, resistances, recentLevels, recentDays } = data
-
-  // 가장 가까운 지지선/저항선 (각 최대 3개)
-  const nearSupports = supports.slice(0, 3)
-  const nearResistances = resistances.slice(0, 3)
-
-  // 현재가 대비 거리 퍼센트
-  const distPercent = (price) => {
-    const diff = ((price - currentPrice) / currentPrice) * 100
-    return diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`
-  }
-
-  // 가까운 지지/저항 강도 바 계산 (시각적 표현)
-  const maxDist = Math.max(
-    ...nearResistances.map(r => Math.abs(r.price - currentPrice)),
-    ...nearSupports.map(s => Math.abs(s.price - currentPrice)),
-    1
-  )
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-all duration-300 ease-in-out hover:shadow-xl">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">지지선 / 저항선</h3>
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          현재가 <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtPrice(currentPrice)}</span>원
-        </span>
-      </div>
-
-      {/* 저항선 (위에서 아래로: 먼 저항 → 가까운 저항) */}
-      <div className="space-y-0">
-        {/* 저항선 영역 */}
-        <div className="mb-1">
-          <p className="text-xs font-medium text-red-500 mb-1.5 flex items-center gap-1">
-            <span>▲</span> 저항선 (상방 압력)
-          </p>
-          {nearResistances.length > 0 ? (
-            <div className="space-y-1.5">
-              {[...nearResistances].reverse().map((r, idx) => {
-                const dist = Math.abs(r.price - currentPrice) / maxDist
-                return (
-                  <div key={`r-${idx}`} className="flex items-center gap-2">
-                    <div className="w-28 sm:w-36 text-right">
-                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">{r.label}</span>
-                    </div>
-                    <div className="flex-1 h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden relative">
-                      <div
-                        className="h-full bg-red-200 dark:bg-red-900/40 rounded"
-                        style={{ width: `${Math.max(dist * 100, 8)}%` }}
-                      />
-                      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-red-600 dark:text-red-400">
-                        {fmtPrice(r.price)}원 ({distPercent(r.price)})
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-1">근접 저항선 없음</p>
-          )}
-        </div>
-
-        {/* 현재가 라인 */}
-        <div className="flex items-center gap-2 my-2.5">
-          <div className="w-28 sm:w-36 text-right">
-            <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">현재가</span>
-          </div>
-          <div className="flex-1 h-7 bg-indigo-50 dark:bg-indigo-900/30 rounded border-2 border-indigo-400 dark:border-indigo-500 relative">
-            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-indigo-700 dark:text-indigo-300">
-              {fmtPrice(currentPrice)}원
-            </span>
-          </div>
-        </div>
-
-        {/* 지지선 영역 */}
-        <div className="mt-1">
-          <p className="text-xs font-medium text-blue-500 mb-1.5 flex items-center gap-1">
-            <span>▼</span> 지지선 (하방 지지)
-          </p>
-          {nearSupports.length > 0 ? (
-            <div className="space-y-1.5">
-              {nearSupports.map((s, idx) => {
-                const dist = Math.abs(s.price - currentPrice) / maxDist
-                return (
-                  <div key={`s-${idx}`} className="flex items-center gap-2">
-                    <div className="w-28 sm:w-36 text-right">
-                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">{s.label}</span>
-                    </div>
-                    <div className="flex-1 h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden relative">
-                      <div
-                        className="h-full bg-blue-200 dark:bg-blue-900/40 rounded"
-                        style={{ width: `${Math.max(dist * 100, 8)}%` }}
-                      />
-                      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-blue-600 dark:text-blue-400">
-                        {fmtPrice(s.price)}원 ({distPercent(s.price)})
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-1">근접 지지선 없음</p>
-          )}
-        </div>
-      </div>
-
-      {/* 최근 고점/저점 정보 */}
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="bg-red-50 dark:bg-red-900/10 rounded-md px-3 py-2 text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400">최근 {recentDays}일 최고가</p>
-          <p className="text-sm font-semibold text-red-600 dark:text-red-400">{fmtPrice(recentLevels.highestHigh)}원</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">{recentLevels.highestDate}</p>
-        </div>
-        <div className="bg-blue-50 dark:bg-blue-900/10 rounded-md px-3 py-2 text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400">최근 {recentDays}일 최저가</p>
-          <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">{fmtPrice(recentLevels.lowestLow)}원</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">{recentLevels.lowestDate}</p>
-        </div>
-      </div>
-
-      {/* 상세 보기 토글 */}
-      <button
-        onClick={() => setShowDetail(v => !v)}
-        className="mt-3 w-full text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
-      >
-        {showDetail ? '간략히 보기 ▲' : '전체 레벨 보기 ▼'}
-      </button>
-
-      {showDetail && (
-        <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* 전체 저항선 */}
-            <div>
-              <p className="text-xs font-medium text-red-500 mb-1">저항선 전체</p>
-              <div className="space-y-1">
-                {resistances.map((r, idx) => (
-                  <div key={`rd-${idx}`} className="flex justify-between text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">{r.label}</span>
-                    <span className="text-red-500 font-medium">{fmtPrice(r.price)}원 <span className="text-gray-400">({distPercent(r.price)})</span></span>
-                  </div>
-                ))}
-                {resistances.length === 0 && <p className="text-xs text-gray-400">없음</p>}
-              </div>
-            </div>
-
-            {/* 전체 지지선 */}
-            <div>
-              <p className="text-xs font-medium text-blue-500 mb-1">지지선 전체</p>
-              <div className="space-y-1">
-                {supports.map((s, idx) => (
-                  <div key={`sd-${idx}`} className="flex justify-between text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">{s.label}</span>
-                    <span className="text-blue-500 font-medium">{fmtPrice(s.price)}원 <span className="text-gray-400">({distPercent(s.price)})</span></span>
-                  </div>
-                ))}
-                {supports.length === 0 && <p className="text-xs text-gray-400">없음</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* 읽는 법 */}
-          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-md p-3 space-y-1">
-            <p className="font-medium text-gray-600 dark:text-gray-300 mb-1">지지선/저항선 읽는 법</p>
-            <p><span className="text-red-500 font-medium">저항선</span> = 가격 상승 시 매도 압력이 강해지는 가격대. 돌파 시 추가 상승 기대</p>
-            <p><span className="text-blue-500 font-medium">지지선</span> = 가격 하락 시 매수세가 유입되는 가격대. 이탈 시 추가 하락 우려</p>
-            <p><span className="text-purple-500 font-medium">피봇 포인트</span> = 전일 고가/저가/종가 기반 당일 핵심 가격대 (단기 트레이딩 참고)</p>
-            <p><span className="text-green-600 dark:text-green-400 font-medium">이동평균선</span> = 일정 기간 평균가로, 추세의 방향과 지지/저항 역할을 동시 수행</p>
-          </div>
-        </div>
-      )}
-
-    </div>
-  )
-}
-
-SupportResistanceSection.propTypes = {
-  data: PropTypes.shape({
-    currentPrice: PropTypes.number,
-    pivot: PropTypes.object,
-    movingAverages: PropTypes.array,
-    recentLevels: PropTypes.object,
-    recentDays: PropTypes.number,
-    supports: PropTypes.array,
-    resistances: PropTypes.array,
-  }),
-}
 
 /**
  * ETFCharts 컴포넌트
@@ -455,7 +253,6 @@ export default function ETFCharts({
   showMACD,
   onToggleRSI,
   onToggleMACD,
-  supportResistanceData,
   showTechnicalSection = true,
 }) {
   return (
@@ -520,20 +317,16 @@ export default function ETFCharts({
         </div>
       )}
 
-      {/* 기술지표 + 지지선/저항선 (고급 분석 모드에서만 표시) */}
+      {/* 기술지표 (고급 분석 모드에서만 표시) */}
       {showTechnicalSection && (
-        <>
-          <TechnicalIndicatorsSection
-            rsiData={rsiData}
-            macdData={macdData}
-            showRSI={showRSI}
-            showMACD={showMACD}
-            onToggleRSI={onToggleRSI}
-            onToggleMACD={onToggleMACD}
-          />
-
-          <SupportResistanceSection data={supportResistanceData} />
-        </>
+        <TechnicalIndicatorsSection
+          rsiData={rsiData}
+          macdData={macdData}
+          showRSI={showRSI}
+          showMACD={showMACD}
+          onToggleRSI={onToggleRSI}
+          onToggleMACD={onToggleMACD}
+        />
       )}
     </div>
   )
@@ -565,6 +358,5 @@ ETFCharts.propTypes = {
   showMACD: PropTypes.bool,
   onToggleRSI: PropTypes.func,
   onToggleMACD: PropTypes.func,
-  supportResistanceData: PropTypes.object,
   showTechnicalSection: PropTypes.bool,
 }
