@@ -253,9 +253,16 @@ const IntradayChart = memo(function IntradayChart({
   ]
 
   // Y축 도메인 계산 (거래량)
+  // 개장 첫 봉 등 거래량 급증이 축 최대치를 지배하면 나머지 막대가 눌려 안 보인다.
+  // 95백분위를 상한으로 써서 일반 막대가 충분한 높이를 갖게 하고, 이를 넘는 급증
+  // 봉은 패널 상단에서 잘리게 둔다(HTS·일반 차트 관례).
   const volumes = chartData.map((d) => d.volume).filter((v) => v != null)
   const maxVolume = Math.max(...volumes) || 0
-  const volumeDomain = [0, Math.ceil(maxVolume * 1.2)]
+  const sortedVolumes = [...volumes].sort((a, b) => a - b)
+  const p95Volume = sortedVolumes.length
+    ? sortedVolumes[Math.min(sortedVolumes.length - 1, Math.floor(sortedVolumes.length * 0.95))]
+    : 0
+  const volumeDomain = [0, Math.ceil((p95Volume || maxVolume) * 1.1) || 1]
 
   // 체결가 라인 색을 전일 종가 기준으로 분할한다(HTS 방식: 위=빨강, 아래=파랑).
   // 그라디언트는 라인 path의 bbox(=실제 가격 min~max)를 0~1로 쓰므로, 전일 종가가
@@ -383,6 +390,9 @@ const IntradayChart = memo(function IntradayChart({
               tick={{ fontSize: 10 }}
               stroke={COLORS.CHART_AXIS}
               domain={volumeDomain}
+              // 기본값이면 축이 데이터 최대에 맞춰 확장돼 상한(p95)이 무시된다.
+              // overflow를 허용해 상한을 강제하고, 급증 봉은 상단에서 잘리게 둔다.
+              allowDataOverflow
               width={AXIS_WIDTH}
             />
             <Tooltip {...tooltipProps} />
