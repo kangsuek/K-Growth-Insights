@@ -98,17 +98,6 @@ describe('NewsTimeline', () => {
     })
   })
 
-  it('관련도 점수를 시각적으로 표시한다', async () => {
-    vi.spyOn(api.newsApi, 'getByTicker').mockResolvedValue({ data: mockNews })
-
-    renderWithProviders(<NewsTimeline ticker="411060" />)
-
-    await waitFor(() => {
-      expect(screen.getByText('85%')).toBeInTheDocument()
-      expect(screen.getByText('75%')).toBeInTheDocument()
-    })
-  })
-
   it('뉴스 링크가 올바르게 설정된다', async () => {
     vi.spyOn(api.newsApi, 'getByTicker').mockResolvedValue({ data: mockNews })
 

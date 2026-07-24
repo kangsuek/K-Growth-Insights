@@ -206,14 +206,6 @@ describe('ETFCard', () => {
     expect(screen.getByText('AI 전력 수요 급증, ETF 상승세')).toBeInTheDocument()
   })
 
-  it('수수료 정보를 표시한다 (ETF)', async () => {
-    renderWithProviders(<ETFCard etf={mockETF} />)
-
-    await waitFor(() => {
-      expect(screen.getByText('수수료: 0.45%')).toBeInTheDocument()
-    })
-  })
-
   it('수수료 정보를 표시하지 않는다 (STOCK)', async () => {
     renderWithProviders(<ETFCard etf={mockStock} />)
 

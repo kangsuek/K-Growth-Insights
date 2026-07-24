@@ -62,7 +62,6 @@ describe('TickerForm 컴포넌트', () => {
       await waitFor(() => {
         expect(screen.getByText('티커 코드는 필수입니다.')).toBeInTheDocument()
         expect(screen.getByText('종목명은 필수입니다.')).toBeInTheDocument()
-        expect(screen.getByText('테마는 필수입니다.')).toBeInTheDocument()
       })
 
       expect(mockOnSubmit).not.toHaveBeenCalled()

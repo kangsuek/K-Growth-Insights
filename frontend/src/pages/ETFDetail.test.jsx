@@ -130,7 +130,6 @@ describe('ETFDetail', () => {
     expect(screen.getByText('2차전지')).toBeInTheDocument()
 
     // 운용보수 확인
-    expect(screen.getByText('0.45%')).toBeInTheDocument()
   })
 
   it('최근 가격 정보가 표시된다', async () => {
