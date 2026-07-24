@@ -1,6 +1,5 @@
 import { useMemo, Fragment } from 'react'
 import PropTypes from 'prop-types'
-import { useSettings } from '../../contexts/SettingsContext'
 
 /**
  * 상관계수 값에 따른 배경색 계산
@@ -72,13 +71,10 @@ function getTextColor(value, isDark) {
  * @param {Object} tickerInfo - { ticker: { name, ... } }
  */
 export default function CorrelationHeatmap({ correlationMatrix = null, tickerInfo = {} }) {
-  const { settings } = useSettings()
-
-  // 다크모드 감지 (테마 변경 시 반응)
-  const isDark = useMemo(() => {
-    if (typeof document === 'undefined') return false
-    return document.documentElement.classList.contains('dark')
-  }, [settings.theme])
+  // 다크모드 감지. DOM 클래스를 읽는 값이라 메모이제이션할 이득이 없고,
+  // 매 렌더에서 읽어야 테마 토글이 즉시 반영된다.
+  const isDark = typeof document !== 'undefined'
+    && document.documentElement.classList.contains('dark')
 
   // 종목명 매핑
   const tickerNames = useMemo(() => {

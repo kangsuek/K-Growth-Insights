@@ -260,3 +260,8 @@ def test_fetch_daily_prices_parses_naver():
 - [x] 분봉 차트 상승률(%) 표시 — 응답에 `change_pct` 추가, 툴팁 전일비 옆 % 병기 + 우측 상승률 축(0%=전일 종가)
 - [x] 알림 설정 기능 전체 제거 — 상세 알림 패널·감지 훅·헤더 벨/알림 페이지·`/api/alerts` 라우터·`alert_rules`/`alert_history` 스키마
 - [x] 미사용 정리 — 프론트가 호출하지 않던 `/api/stocks/*` 라우터와 그 라우터만 쓰던 응답 모델, 미사용 컴포넌트 `StatsSummary` 제거(테스트는 `/api/etfs`·`/api/news`로 이전)
+- [x] ESLint 설정 추가(`.eslintrc.cjs`) — 플러그인만 있고 설정이 없어 `npm run lint`가 항상 실패하던 상태 해소. 현재 오류·경고 0
+- [x] 훅 규칙 위반 3건 수정(IntradayChart·TradingFlowChart) — 조기 반환 뒤 useMemo 호출로 데이터 도착 시 훅 개수가 바뀌어 크래시할 수 있었음
+- [x] 분봉 X축 틱 간격 0 방어 — 막대 6개 이하 세션에서 무한 루프
+- [x] 테스트 환경 API baseURL 주입 — MSW 핸들러(:8000)와 상대경로 baseURL 불일치로 23건이 네트워크 오류로 실패하던 문제
+- [x] 미사용 코드 제거 — `utils/returns.js`, `InfoTooltip`, `ChartSkeleton`, `repository.{get_intraday,list_stocks_summary}`, `jobs.is_running`, `scanner._supply_targets`

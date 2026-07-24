@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import PriceChart from './PriceChart'
 
@@ -86,7 +86,7 @@ describe('PriceChart', () => {
   })
 
   it('레전드를 정상적으로 표시한다', () => {
-    const { container } = render(
+    render(
       <PriceChart data={mockPriceData} ticker="487240" />
     )
 

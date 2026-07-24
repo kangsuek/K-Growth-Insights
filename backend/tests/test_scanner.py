@@ -97,7 +97,9 @@ def test_supply_targets_selects_top_n_and_all_etf(monkeypatch):
         # KOSDAQ 2개 → 상위 1개(시총 90)만
         ins("196170", "STOCK", "KOSDAQ", 90); ins("222222", "STOCK", "KOSDAQ", 10)
     with get_connection() as conn:
-        targets = set(scanner._supply_targets(conn))
+        groups = scanner._supply_target_groups(conn)
+        targets = {t for _, tickers in groups for t in tickers}
     assert targets == {"069500", "487240", "005930", "000660", "196170"}
     assert "111111" not in targets  # KOSPI 상위 N 밖
     assert "222222" not in targets  # KOSDAQ 상위 N 밖
+    assert [label for label, _ in groups] == ["ETF", "코스피", "코스닥"]  # 진행률 단계 순서

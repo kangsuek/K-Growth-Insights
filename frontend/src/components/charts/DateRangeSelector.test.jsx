@@ -32,7 +32,7 @@ describe('DateRangeSelector', () => {
   it('7일 버튼 클릭 시 올바른 날짜 범위를 계산한다', async () => {
     const user = userEvent.setup();
     const mockCallback = vi.fn();
-    const { rerender } = render(<DateRangeSelector onDateRangeChange={mockCallback} defaultRange="1m" />);
+    render(<DateRangeSelector onDateRangeChange={mockCallback} defaultRange="1m" />);
 
     // 초기 렌더링 후 콜백 초기화
     mockCallback.mockClear();

@@ -42,8 +42,6 @@ export default function MarketIndexModal({ index, onClose }) {
 
   const isPositive = index.change >= 0
   const lineColor = isPositive ? '#ef4444' : '#3b82f6'
-  const areaColor = isPositive ? '#fecaca' : '#bfdbfe'
-  const darkAreaColor = isPositive ? '#7f1d1d' : '#1e3a5f'
 
   const { data, isLoading } = useQuery({
     queryKey: ['market-index-chart', index.code, period],

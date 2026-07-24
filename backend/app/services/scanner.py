@@ -151,11 +151,6 @@ def _supply_target_groups(conn) -> list[tuple[str, list[str]]]:
     return groups
 
 
-def _supply_targets(conn) -> list[str]:
-    """딥수집 대상 티커(단계 구분 없이 평탄화)."""
-    return [ticker for _, tickers in _supply_target_groups(conn) for ticker in tickers]
-
-
 def _load_ytd_base_cache(conn) -> dict[str, dict]:
     """저장된 올해 YTD 기준가 로드 → 딥페이징 생략용."""
     cache: dict[str, dict] = {}

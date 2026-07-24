@@ -156,7 +156,6 @@ const ETFCard = memo(function ETFCard({ etf, summary }) {
           {/* 캔들스틱 */}
           {candles.map((candle, i) => {
             const bodyTop = Math.min(candle.open, candle.close)
-            const bodyBottom = Math.max(candle.open, candle.close)
             const bodyHeight = Math.abs(candle.close - candle.open) || 0.5
             const color = candle.isUp ? COLORS.PRICE_UP : COLORS.CHART_PRIMARY
 

@@ -1,4 +1,4 @@
-import { useMemo, memo, useState } from 'react'
+import { useMemo, memo } from 'react'
 import PropTypes from 'prop-types'
 import {
   ComposedChart,
@@ -103,7 +103,7 @@ const IntradayChart = memo(function IntradayChart({
   pivotLevels = null,
 }) {
   // 컨테이너 너비 측정
-  const { containerRef, width: containerWidth } = useContainerWidth()
+  const { containerRef } = useContainerWidth()
 
   // 데이터 전처리 및 메모이제이션
   const chartData = useMemo(() => {
@@ -131,28 +131,6 @@ const IntradayChart = memo(function IntradayChart({
       }
     })
   }, [data])
-
-  // 데이터 없음 상태 처리
-  if (!chartData || chartData.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg transition-colors"
-        style={{ height: `${height}px` }}
-        role="img"
-        aria-label="분봉 차트 - 데이터 없음"
-      >
-        <div className="text-center">
-          <svg className="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          <p className="text-gray-500 dark:text-gray-400">분봉 데이터가 없습니다.</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            장중이 아니거나 휴장일입니다.
-          </p>
-        </div>
-      </div>
-    )
-  }
 
   // 표시할 피봇 레벨 결정
   const visiblePivotLevels = useMemo(() => {
@@ -184,6 +162,67 @@ const IntradayChart = memo(function IntradayChart({
       return true
     })
   }, [pivotLevels, chartData])
+
+  // X축 틱 간격 계산 (약 6-8개 틱)
+  const tickInterval = Math.max(1, Math.floor(chartData.length / 7))
+
+  // X축 틱 배열 생성 (첫 번째와 마지막 시간 포함, 중복 제거)
+  const xAxisTicks = useMemo(() => {
+    if (!chartData || chartData.length === 0) return []
+    
+    const firstTime = chartData[0]?.time
+    const lastTime = chartData[chartData.length - 1]?.time
+    
+    if (!firstTime || !lastTime) return []
+    
+    // 중복 방지를 위해 Set 사용
+    const ticksSet = new Set()
+    const ticks = []
+    
+    // 첫 번째 시간 추가
+    if (firstTime) {
+      ticksSet.add(firstTime)
+      ticks.push(firstTime)
+    }
+    
+    // 중간 틱 추가 (간격에 따라, 마지막 제외)
+    for (let i = tickInterval; i < chartData.length - 1; i += tickInterval) {
+      const time = chartData[i].time
+      if (time && !ticksSet.has(time)) {
+        ticksSet.add(time)
+        ticks.push(time)
+      }
+    }
+    
+    // 마지막 시간 추가 (중복이 아닌 경우에만)
+    if (lastTime && !ticksSet.has(lastTime)) {
+      ticks.push(lastTime)
+    }
+    
+    return ticks
+  }, [chartData, tickInterval])
+
+  // 데이터 없음 상태 처리
+  if (!chartData || chartData.length === 0) {
+    return (
+      <div
+        className="flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg transition-colors"
+        style={{ height: `${height}px` }}
+        role="img"
+        aria-label="분봉 차트 - 데이터 없음"
+      >
+        <div className="text-center">
+          <svg className="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <p className="text-gray-500 dark:text-gray-400">분봉 데이터가 없습니다.</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            장중이 아니거나 휴장일입니다.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   // Y축 도메인 계산 (가격 + 피봇 레벨 포함)
   const prices = chartData.map((d) => d.price).filter((p) => p != null)
@@ -229,45 +268,6 @@ const IntradayChart = memo(function IntradayChart({
   const formatXAxis = (tickItem) => {
     return tickItem
   }
-
-  // X축 틱 간격 계산 (약 6-8개 틱)
-  const tickInterval = Math.floor(chartData.length / 7)
-
-  // X축 틱 배열 생성 (첫 번째와 마지막 시간 포함, 중복 제거)
-  const xAxisTicks = useMemo(() => {
-    if (!chartData || chartData.length === 0) return []
-    
-    const firstTime = chartData[0]?.time
-    const lastTime = chartData[chartData.length - 1]?.time
-    
-    if (!firstTime || !lastTime) return []
-    
-    // 중복 방지를 위해 Set 사용
-    const ticksSet = new Set()
-    const ticks = []
-    
-    // 첫 번째 시간 추가
-    if (firstTime) {
-      ticksSet.add(firstTime)
-      ticks.push(firstTime)
-    }
-    
-    // 중간 틱 추가 (간격에 따라, 마지막 제외)
-    for (let i = tickInterval; i < chartData.length - 1; i += tickInterval) {
-      const time = chartData[i].time
-      if (time && !ticksSet.has(time)) {
-        ticksSet.add(time)
-        ticks.push(time)
-      }
-    }
-    
-    // 마지막 시간 추가 (중복이 아닌 경우에만)
-    if (lastTime && !ticksSet.has(lastTime)) {
-      ticks.push(lastTime)
-    }
-    
-    return ticks
-  }, [chartData, tickInterval])
 
   return (
     <div

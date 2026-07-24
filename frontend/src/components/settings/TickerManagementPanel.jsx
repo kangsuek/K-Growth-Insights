@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { etfApi, settingsApi } from '../../services/api'
+import { settingsApi } from '../../services/api'
 import { formatPrice, formatNumber } from '../../utils/format'
 import TickerForm from './TickerForm'
 import TickerDeleteConfirm from './TickerDeleteConfirm'

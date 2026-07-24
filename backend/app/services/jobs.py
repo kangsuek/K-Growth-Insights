@@ -40,11 +40,6 @@ def snapshot() -> dict:
         return dict(_state)
 
 
-def is_running() -> bool:
-    with _lock:
-        return _state["status"] == "running"
-
-
 def _collect_one(stock: dict, days: int | None) -> CollectResult:
     """종목 하나를 수집하고 진행 상태를 스레드 안전하게 갱신."""
     ticker = stock["ticker"]

@@ -142,20 +142,6 @@ const TradingFlowChart = memo(function TradingFlowChart({ data = [], ticker, hei
   // 데이터 전처리 및 메모이제이션
   const chartData = useMemo(() => formatTradingFlowData(data), [data])
 
-  // 데이터 없음 상태 처리
-  if (!chartData || chartData.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg transition-colors"
-        style={{ height: `${finalHeight}px` }}
-        role="img"
-        aria-label="투자자별 매매 동향 차트 - 데이터 없음"
-      >
-        <p className="text-gray-500 dark:text-gray-400">표시할 매매 동향 데이터가 없습니다.</p>
-      </div>
-    )
-  }
-
   // Y축 도메인 계산
   const allValues = chartData.flatMap((d) => [
     d.individual_net,
@@ -218,6 +204,20 @@ const TradingFlowChart = memo(function TradingFlowChart({ data = [], ticker, hei
     }
   }, [is7Days, containerWidth, dataCount])
   
+  // 데이터 없음 상태 처리
+  if (!chartData || chartData.length === 0) {
+    return (
+      <div
+        className="flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg transition-colors"
+        style={{ height: `${finalHeight}px` }}
+        role="img"
+        aria-label="투자자별 매매 동향 차트 - 데이터 없음"
+      >
+        <p className="text-gray-500 dark:text-gray-400">표시할 매매 동향 데이터가 없습니다.</p>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={(node) => {

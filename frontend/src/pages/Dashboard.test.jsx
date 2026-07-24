@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../test/utils'
 import { server } from '../test/mocks/server'
@@ -117,7 +117,7 @@ describe('Dashboard', () => {
     renderWithProviders(<Dashboard />)
 
     await waitFor(() => {
-      const errorText = screen.queryByText((content, element) => {
+      const errorText = screen.queryByText((content) => {
         return content.includes('데이터를 불러올 수 없습니다')
       })
       expect(errorText).toBeInTheDocument()
@@ -244,7 +244,7 @@ describe('Dashboard', () => {
     })
 
     // ETFCard들의 순서 확인 (기본값: 타입순)
-    const cards = container.querySelectorAll('[class*="bg-white"][class*="rounded-xl"]')
+    container.querySelectorAll('[class*="bg-white"][class*="rounded-xl"]')
 
     // 첫 번째와 두 번째 카드가 STOCK이어야 함
     await waitFor(() => {

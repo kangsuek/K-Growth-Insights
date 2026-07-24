@@ -9,7 +9,7 @@ import { formatPrice } from '../../utils/format'
 export default function AllocationPieChart({ data }) {
   if (!data || data.length === 0) return null
 
-  const renderCustomLabel = ({ name, percent }) => {
+  const renderCustomLabel = ({ percent }) => {
     if (percent < 5) return null
     return `${percent.toFixed(1)}%`
   }

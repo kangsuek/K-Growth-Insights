@@ -141,26 +141,6 @@ def search_catalog(query: str, stock_type: str | None = None, limit: int = 20) -
              "market": r["market"], "sector": None} for r in rows]
 
 
-def list_stocks_summary() -> list[dict]:
-    """종목 목록 + 각 종목의 최신 종가·등락률을 한 번의 쿼리로 조회.
-
-    대시보드가 종목마다 개별 가격 요청(N+1)을 하지 않도록 한다.
-    """
-    with get_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT s.ticker, s.name, s.type, s.theme,
-                   p.close_price, p.change_pct, p.date
-            FROM stocks s
-            LEFT JOIN prices p
-              ON p.ticker = s.ticker
-             AND p.date = (SELECT MAX(date) FROM prices WHERE ticker = s.ticker)
-            ORDER BY s.type, s.name
-            """
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-
 def get_stock(ticker: str) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
@@ -288,12 +268,6 @@ def get_intraday_dated(
             (ticker, day),
         ).fetchall()
     return day, [dict(r) for r in rows]
-
-
-def get_intraday(ticker: str) -> list[dict]:
-    """Return the most recent trading day's minute bars, chronological."""
-    _, rows = get_intraday_dated(ticker)
-    return rows
 
 
 def close_before(ticker: str, date: str) -> float | None:

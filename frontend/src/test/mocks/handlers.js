@@ -190,15 +190,13 @@ export const handlers = [
   }),
 
   // GET /api/etfs/:ticker/prices - 가격 데이터
-  http.get(`${BASE_URL}/etfs/:ticker/prices`, ({ params }) => {
-    const { ticker } = params
+  http.get(`${BASE_URL}/etfs/:ticker/prices`, () => {
     // 특정 종목에 대한 가격 데이터 반환
     return HttpResponse.json(mockPricesData)
   }),
 
   // GET /api/etfs/:ticker/trading-flow - 매매 동향
-  http.get(`${BASE_URL}/etfs/:ticker/trading-flow`, ({ params }) => {
-    const { ticker } = params
+  http.get(`${BASE_URL}/etfs/:ticker/trading-flow`, () => {
     // 특정 종목에 대한 매매 동향 데이터 반환
     return HttpResponse.json(mockTradingFlowData)
   }),

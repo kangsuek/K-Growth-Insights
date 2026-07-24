@@ -65,7 +65,7 @@ describe('ErrorBoundary', () => {
     const user = userEvent.setup()
     let shouldThrow = true
 
-    const { rerender } = render(
+    render(
       <ErrorBoundary>
         <ThrowError shouldThrow={shouldThrow} />
       </ErrorBoundary>

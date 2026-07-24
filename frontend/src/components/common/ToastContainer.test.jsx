@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { ToastProvider } from '../../contexts/ToastContext'
+import { render } from '@testing-library/react'
 import ToastContainer from './ToastContainer'
-import Toast from './Toast'
 
 // Mock Toast 컴포넌트
 vi.mock('./Toast', () => ({

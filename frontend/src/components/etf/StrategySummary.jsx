@@ -23,7 +23,7 @@ const getStrategyColor = (strategyType) => {
  * @param {boolean} isLoading - 로딩 상태
  * @param {Error} error - 에러 객체
  */
-export default function StrategySummary({ ticker, period = '1m', insights, isLoading, error }) {
+export default function StrategySummary({ insights, isLoading, error }) {
 
   if (isLoading) {
     return (

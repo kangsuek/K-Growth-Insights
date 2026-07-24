@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { etfApi, newsApi, settingsApi } from '../services/api'
 import { useSettings } from '../contexts/SettingsContext'
@@ -42,7 +42,6 @@ export default function ETFDetail() {
   const { ticker } = useParams()
   const navigate = useNavigate()
   const { settings } = useSettings()
-  const queryClient = useQueryClient()
 
   // 종목관리에 등록된 종목 목록 (구성종목 클릭 시 등록 여부 판단에 사용)
   const { data: registeredStocks } = useQuery({

@@ -47,7 +47,7 @@ TopicTag.propTypes = {
  * @param {Error} error - 에러 객체
  */
 const NewsTimeline = ({ ticker, newsData, isLoading, error }) => {
-  const [limit, setLimit] = useState(10)
+  const [limit] = useState(10)
   // 일자별 접힘 상태 관리 (기본: 첫 번째 날짜만 펼침)
   const [expandedDates, setExpandedDates] = useState({})
 

@@ -2,7 +2,6 @@ import { useState, useEffect, memo } from 'react';
 import PropTypes from 'prop-types';
 import { subDays, subMonths, subYears, startOfYear, format } from 'date-fns';
 import { validateDateRange } from '../../utils/validation';
-import { MAX_DATE_RANGE_DAYS } from '../../constants';
 
 /**
  * DateRangeSelector - 차트 데이터 기간 선택 컴포넌트

@@ -1,5 +1,4 @@
 import PropTypes from 'prop-types'
-import { format } from 'date-fns'
 
 /**
  * ETFHeader 컴포넌트

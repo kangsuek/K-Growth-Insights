@@ -184,7 +184,7 @@ export default function Dashboard() {
       
       return { previousETFs }
     },
-    onSuccess: (data, variables) => {
+    onSuccess: () => {
       // 백엔드와 프론트엔드 캐시 모두 무효화
       queryClient.invalidateQueries({ queryKey: ['etfs'] })
       queryClient.invalidateQueries({ queryKey: ['settings-stocks'] })
@@ -232,7 +232,7 @@ export default function Dashboard() {
       let compareValue = 0
 
       switch (sortBy) {
-        case 'type':
+        case 'type': {
           // STOCK이 ETF보다 먼저 오도록 (STOCK = 0, ETF = 1)
           const typeOrder = { 'STOCK': 0, 'ETF': 1 }
           compareValue = typeOrder[a.type] - typeOrder[b.type]
@@ -241,12 +241,13 @@ export default function Dashboard() {
             compareValue = a.name.localeCompare(b.name, 'ko-KR')
           }
           break
+        }
 
         case 'name':
           compareValue = a.name.localeCompare(b.name, 'ko-KR')
           break
 
-        case 'theme':
+        case 'theme': {
           const themeA = a.theme || ''
           const themeB = b.theme || ''
           compareValue = themeA.localeCompare(themeB, 'ko-KR')
@@ -255,6 +256,7 @@ export default function Dashboard() {
             compareValue = a.name.localeCompare(b.name, 'ko-KR')
           }
           break
+        }
 
         default:
           compareValue = 0

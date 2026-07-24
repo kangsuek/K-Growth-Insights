@@ -97,6 +97,9 @@ export default function DataManagementPanel() {
         collectAllPollingRef.current = null
       }
     }
+    // status가 바뀔 때만 폴링을 재설정한다. 진행률 객체 전체를 넣으면
+    // 폴링 결과마다 effect가 재실행돼 인터벌이 계속 초기화된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectAllProgress?.status])
 
   // 종목 목록 수집 진행률 polling
@@ -137,6 +140,7 @@ export default function DataManagementPanel() {
         tickerCatalogPollingRef.current = null
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tickerCatalogProgress?.status])
 
   // 전체 데이터 수집 Mutation

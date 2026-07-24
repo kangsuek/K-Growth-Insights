@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/utils'
 import { server } from '../../test/mocks/server'
