@@ -287,6 +287,18 @@ const IntradayChart = memo(function IntradayChart({
     : 0
   const volumeDomain = [0, Math.ceil((p95Volume || maxVolume) * 1.1) || 1]
 
+  // 피봇(지지/저항) 설명 목록. 차트 도메인 밖으로 잘려 선이 안 보여도 값은 여기서
+  // 확인할 수 있게 전 레벨을 표시한다. 색은 차트의 피봇 선 색과 맞춘다.
+  const pivotGuide = pivotLevels
+    ? [
+        { key: 'r2', label: 'R2', name: '2차 저항선', color: '#ef4444' },
+        { key: 'r1', label: 'R1', name: '1차 저항선', color: '#f87171' },
+        { key: 'pp', label: 'PP', name: '중심선(피봇)', color: '#8b5cf6' },
+        { key: 's1', label: 'S1', name: '1차 지지선', color: '#60a5fa' },
+        { key: 's2', label: 'S2', name: '2차 지지선', color: '#3b82f6' },
+      ].filter((p) => pivotLevels[p.key] != null)
+    : []
+
   // 캔들스틱 렌더러(일별 가격 차트와 동일 방식). 분마다 시·고·저·종가로 캔들을
   // 그린다. 종가>=시가면 양봉(빨강), 아니면 음봉(파랑). dataKey='high_price'라
   // props.y=고가 픽셀, y+barH=priceDomain[0] 픽셀이므로 이를 기준으로 환산한다.
@@ -463,6 +475,36 @@ const IntradayChart = memo(function IntradayChart({
           <span className="text-gray-600 dark:text-gray-400">거래량</span>
         </div>
       </div>
+
+      {/* ── 지지/저항(피봇) 설명 ── */}
+      {pivotGuide.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
+            지지선 / 저항선 (전일 고·저·종가로 계산한 피봇)
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+            {pivotGuide.map((p) => (
+              <div key={p.key} className="flex items-center gap-2 text-xs">
+                <span
+                  className="inline-flex items-center justify-center w-6 py-0.5 rounded text-[10px] font-bold text-white flex-shrink-0"
+                  style={{ background: p.color }}
+                >
+                  {p.label}
+                </span>
+                <span className="text-gray-600 dark:text-gray-400">{p.name}</span>
+                <span className="ml-auto font-medium text-gray-800 dark:text-gray-200 tabular-nums">
+                  {formatPrice(pivotLevels[p.key])}원
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
+            <span className="text-red-500 font-medium">저항선(R)</span>은 상승 시 매도 압력이 커지는 가격대,{' '}
+            <span className="text-blue-500 font-medium">지지선(S)</span>은 하락 시 매수세가 유입되는 가격대입니다.{' '}
+            <span className="text-purple-500 font-medium">중심선(PP)</span> 위는 강세, 아래는 약세로 봅니다.
+          </p>
+        </div>
+      )}
     </div>
   )
 })
