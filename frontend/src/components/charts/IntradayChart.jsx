@@ -2,7 +2,6 @@ import { useMemo, memo } from 'react'
 import PropTypes from 'prop-types'
 import {
   ComposedChart,
-  Line,
   Bar,
   XAxis,
   YAxis,
@@ -35,8 +34,27 @@ const CustomTooltip = ({ active, payload }) => {
         {time}
       </p>
       <div className="space-y-1 text-xs">
+        {/* 시·고·저·종가 (캔들) */}
+        {data.open_price != null && (
+          <div className="flex justify-between gap-4">
+            <span className="text-gray-600 dark:text-gray-400">시가:</span>
+            <span className="text-gray-900 dark:text-gray-100">{formatPrice(data.open_price)}</span>
+          </div>
+        )}
+        {data.high_price != null && (
+          <div className="flex justify-between gap-4">
+            <span className="text-gray-600 dark:text-gray-400">고가:</span>
+            <span className="text-red-600 dark:text-red-400">{formatPrice(data.high_price)}</span>
+          </div>
+        )}
+        {data.low_price != null && (
+          <div className="flex justify-between gap-4">
+            <span className="text-gray-600 dark:text-gray-400">저가:</span>
+            <span className="text-blue-600 dark:text-blue-400">{formatPrice(data.low_price)}</span>
+          </div>
+        )}
         <div className="flex justify-between gap-4">
-          <span className="text-gray-600 dark:text-gray-400">체결가:</span>
+          <span className="text-gray-600 dark:text-gray-400">종가:</span>
           <span className="font-bold text-black dark:text-gray-100">{formatPrice(data.price)}</span>
         </div>
         {data.change_amount !== null && data.change_amount !== undefined && (
@@ -238,10 +256,12 @@ const IntradayChart = memo(function IntradayChart({
     )
   }
 
-  // Y축 도메인 계산 (가격 + 피봇 레벨 포함)
-  const prices = chartData.map((d) => d.price).filter((p) => p != null)
+  // Y축 도메인 계산 (캔들 고·저가 + 피봇 레벨 포함)
+  const highs = chartData.map((d) => d.high_price).filter((p) => p != null)
+  const lows = chartData.map((d) => d.low_price).filter((p) => p != null)
   const allPriceValues = [
-    ...prices,
+    ...highs,
+    ...lows,
     ...visiblePivotLevels.map(l => l.value),
     ...(previousClose != null ? [previousClose] : []),
   ]
@@ -265,15 +285,38 @@ const IntradayChart = memo(function IntradayChart({
     : 0
   const volumeDomain = [0, Math.ceil((p95Volume || maxVolume) * 1.1) || 1]
 
-  // 체결가 라인 색을 전일 종가 기준으로 분할한다(HTS 방식: 위=빨강, 아래=파랑).
-  // 그라디언트는 라인 path의 bbox(=실제 가격 min~max)를 0~1로 쓰므로, 전일 종가가
-  // 그 안에서 차지하는 위치를 분할 offset으로 계산한다. 라인이 전부 위/아래면 단색.
-  const lineMin = prices.length ? Math.min(...prices) : 0
-  const lineMax = prices.length ? Math.max(...prices) : 0
-  const splitOffset = previousClose != null && lineMax > lineMin
-    ? Math.min(1, Math.max(0, (lineMax - previousClose) / (lineMax - lineMin)))
-    : null
-  const gradientId = `intraday-price-${ticker}`
+  // 캔들스틱 렌더러(일별 가격 차트와 동일 방식). 분마다 시·고·저·종가로 캔들을
+  // 그린다. 종가>=시가면 양봉(빨강), 아니면 음봉(파랑). dataKey='high_price'라
+  // props.y=고가 픽셀, y+barH=priceDomain[0] 픽셀이므로 이를 기준으로 환산한다.
+  const renderCandlestick = (props) => {
+    const { x, y, width, height: barH, payload } = props
+    if (!payload?.high_price || barH <= 0) return null
+    const { open_price, high_price, low_price, price } = payload
+    if (open_price == null || low_price == null || price == null) return null
+    const isRising = price >= open_price
+    const color = isRising ? COLORS.PRICE_UP : COLORS.PRICE_DOWN
+
+    const range = high_price - priceDomain[0]
+    if (range <= 0) return null
+    const toPixel = (p) => y + barH - ((p - priceDomain[0]) / range) * barH
+
+    const highPx = y
+    const lowPx = toPixel(low_price)
+    const openPx = toPixel(open_price)
+    const closePx = toPixel(price)
+    const bodyTop = Math.min(openPx, closePx)
+    const bodyH = Math.max(1, Math.abs(closePx - openPx))
+    const cx = x + width / 2
+    const bodyW = Math.max(2, width * 0.7)
+
+    return (
+      <g>
+        <line x1={cx} y1={highPx} x2={cx} y2={bodyTop} stroke={color} strokeWidth={1} />
+        <rect x={cx - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} stroke={color} strokeWidth={1} />
+        <line x1={cx} y1={bodyTop + bodyH} x2={cx} y2={lowPx} stroke={color} strokeWidth={1} />
+      </g>
+    )
+  }
 
   // 공유 툴팁 설정(가격·거래량 패널에 동일 적용).
   const tooltipProps = {
@@ -313,15 +356,6 @@ const IntradayChart = memo(function IntradayChart({
       {/* ── 가격 패널 ── */}
       <ResponsiveContainer width="100%" height={priceH}>
         <ComposedChart data={chartData} margin={pricePanelMargin}>
-          {/* 전일 종가 기준 상·하단을 빨강/파랑으로 나누는 세로 그라디언트 */}
-          {splitOffset != null && (
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset={splitOffset} stopColor={COLORS.PRICE_UP} />
-                <stop offset={splitOffset} stopColor={COLORS.PRICE_DOWN} />
-              </linearGradient>
-            </defs>
-          )}
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} />
           <XAxis dataKey="time" hide />
           <YAxis
@@ -334,17 +368,8 @@ const IntradayChart = memo(function IntradayChart({
           />
           <Tooltip {...tooltipProps} />
 
-          {/* 가격 Line — 전일 종가 위=빨강/아래=파랑 (기준가 모르면 단색) */}
-          <Line
-            type="monotone"
-            dataKey="price"
-            stroke={splitOffset != null ? `url(#${gradientId})` : COLORS.CHART_PRIMARY}
-            strokeWidth={1.5}
-            dot={false}
-            name="체결가"
-            activeDot={{ r: 3 }}
-            isAnimationActive={false}
-          />
+          {/* 분봉 캔들스틱 (분마다 시·고·저·종가, 양봉=빨강/음봉=파랑) */}
+          <Bar dataKey="high_price" shape={renderCandlestick} isAnimationActive={false} legendType="none" />
 
           {/* 전일 종가 기준선 */}
           {previousClose && (
@@ -419,10 +444,14 @@ const IntradayChart = memo(function IntradayChart({
       </div>
 
       {/* ── 범례 ── */}
-      <div className="flex justify-center gap-6 pt-1 text-xs">
+      <div className="flex justify-center gap-5 pt-1 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-0.5" style={{ background: COLORS.CHART_PRIMARY }}></span>
-          <span className="text-gray-600 dark:text-gray-400">체결가</span>
+          <span className="inline-block w-2.5 h-3 rounded-sm" style={{ background: COLORS.PRICE_UP }}></span>
+          <span className="text-gray-600 dark:text-gray-400">양봉(상승)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-3 rounded-sm" style={{ background: COLORS.PRICE_DOWN }}></span>
+          <span className="text-gray-600 dark:text-gray-400">음봉(하락)</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm bg-gray-400 opacity-70"></span>
@@ -439,6 +468,8 @@ IntradayChart.propTypes = {
       datetime: PropTypes.string.isRequired,
       price: PropTypes.number.isRequired,
       open_price: PropTypes.number,
+      high_price: PropTypes.number,
+      low_price: PropTypes.number,
       change_amount: PropTypes.number,
       change_pct: PropTypes.number,
       volume: PropTypes.number,
