@@ -44,24 +44,26 @@ api.interceptors.response.use(
   (error) => {
     // 에러 응답 처리
     if (error.response) {
-      // 서버 응답이 있는 경우
+      // 서버 응답이 있는 경우. 본문이 없거나(null) JSON이 아닐 수 있으므로
+      // detail 접근은 옵셔널 체이닝으로 방어한다(인터셉터 자체가 던지지 않게).
       const { status, data } = error.response
+      const detail = data?.detail
 
       switch (status) {
         case 400:
-          error.message = data.detail || ERROR_MESSAGES.BAD_REQUEST
+          error.message = detail || ERROR_MESSAGES.BAD_REQUEST
           break
         case 401:
-          error.message = data.detail || '인증이 필요합니다. API 키를 확인해주세요.'
+          error.message = detail || '인증이 필요합니다. API 키를 확인해주세요.'
           break
         case 404:
-          error.message = data.detail || ERROR_MESSAGES.NOT_FOUND
+          error.message = detail || ERROR_MESSAGES.NOT_FOUND
           break
         case 500:
-          error.message = data.detail || ERROR_MESSAGES.SERVER_ERROR
+          error.message = detail || ERROR_MESSAGES.SERVER_ERROR
           break
         default:
-          error.message = data.detail || ERROR_MESSAGES.SERVER_ERROR
+          error.message = detail || ERROR_MESSAGES.SERVER_ERROR
       }
     } else if (error.request) {
       // 요청은 보냈으나 응답이 없는 경우

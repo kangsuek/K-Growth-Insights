@@ -26,7 +26,15 @@ def collect_prices(ticker: str, pages: int = PRICE_PAGES, days: int | None = Non
     if days is not None:
         pages = max(1, math.ceil(days / _PRICE_PAGE_SIZE))
     rows = naver_client.fetch_daily_prices(ticker, pages=pages)
-    if not rows:
+    params = [
+        (
+            ticker, r["date"], r["open_price"], r["high_price"],
+            r["low_price"], r["close_price"], r["volume"], r["change_pct"],
+        )
+        for r in rows
+        if r.get("date")
+    ]
+    if not params:
         return 0
     with get_connection() as conn:
         conn.executemany(
@@ -43,22 +51,24 @@ def collect_prices(ticker: str, pages: int = PRICE_PAGES, days: int | None = Non
                 volume=excluded.volume,
                 change_pct=excluded.change_pct
             """,
-            [
-                (
-                    ticker, r["date"], r["open_price"], r["high_price"],
-                    r["low_price"], r["close_price"], r["volume"], r["change_pct"],
-                )
-                for r in rows
-                if r.get("date")
-            ],
+            params,
         )
-    return len(rows)
+    return len(params)
 
 
 def collect_trading_flow(ticker: str, pages: int = TRADING_FLOW_PAGES,
                          days: int | None = None) -> int:
     rows = naver_client.fetch_trading_flow(ticker, pages=pages, days=days)
-    if not rows:
+    params = [
+        (
+            ticker, r["date"], r["individual_net"],
+            r["institutional_net"], r["foreign_net"],
+            r["foreign_hold_ratio"],
+        )
+        for r in rows
+        if r.get("date")
+    ]
+    if not params:
         return 0
     with get_connection() as conn:
         conn.executemany(
@@ -73,22 +83,22 @@ def collect_trading_flow(ticker: str, pages: int = TRADING_FLOW_PAGES,
                 foreign_net=excluded.foreign_net,
                 foreign_hold_ratio=excluded.foreign_hold_ratio
             """,
-            [
-                (
-                    ticker, r["date"], r["individual_net"],
-                    r["institutional_net"], r["foreign_net"],
-                    r["foreign_hold_ratio"],
-                )
-                for r in rows
-                if r.get("date")
-            ],
+            params,
         )
-    return len(rows)
+    return len(params)
 
 
 def collect_intraday(ticker: str) -> int:
     rows = naver_client.fetch_intraday(ticker)
-    if not rows:
+    params = [
+        (
+            ticker, r["datetime"], r["open_price"], r["high_price"],
+            r["low_price"], r["price"], r["volume"],
+        )
+        for r in rows
+        if r.get("datetime")
+    ]
+    if not params:
         return 0
     with get_connection() as conn:
         conn.executemany(
@@ -104,16 +114,9 @@ def collect_intraday(ticker: str) -> int:
                 price=excluded.price,
                 volume=excluded.volume
             """,
-            [
-                (
-                    ticker, r["datetime"], r["open_price"], r["high_price"],
-                    r["low_price"], r["price"], r["volume"],
-                )
-                for r in rows
-                if r.get("datetime")
-            ],
+            params,
         )
-    return len(rows)
+    return len(params)
 
 
 def collect_stock_fundamentals(ticker: str) -> int:
@@ -180,7 +183,12 @@ def collect_etf_fundamentals(ticker: str) -> int:
 
 def collect_etf_holdings(ticker: str) -> int:
     rows = naver_client.fetch_etf_holdings(ticker)
-    if not rows:
+    params = [
+        (ticker, r["seq"], r["item_code"], r["item_name"], r["weight"])
+        for r in rows
+        if r.get("seq") is not None
+    ]
+    if not params:
         return 0
     with get_connection() as conn:
         # 구성종목은 순위·편입이 바뀌므로 전체 삭제 후 재삽입한다.
@@ -191,13 +199,9 @@ def collect_etf_holdings(ticker: str) -> int:
                 (ticker, seq, item_code, item_name, weight, updated_at)
             VALUES (?, ?, ?, ?, ?, datetime('now'))
             """,
-            [
-                (ticker, r["seq"], r["item_code"], r["item_name"], r["weight"])
-                for r in rows
-                if r.get("seq") is not None
-            ],
+            params,
         )
-    return len(rows)
+    return len(params)
 
 
 def collect_news(ticker: str) -> int:
@@ -211,7 +215,12 @@ def collect_news(ticker: str) -> int:
     if not stock:
         return 0
     rows = naver_client.fetch_news(stock["name"], display=config.NEWS_DISPLAY)
-    if not rows:
+    params = [
+        (ticker, r["title"], r["link"], r["description"], r["pub_date"])
+        for r in rows
+        if r.get("title") and r.get("link")
+    ]
+    if not params:
         return 0
     with get_connection() as conn:
         conn.executemany(
@@ -222,13 +231,9 @@ def collect_news(ticker: str) -> int:
                 title=excluded.title, description=excluded.description,
                 pub_date=excluded.pub_date, updated_at=excluded.updated_at
             """,
-            [
-                (ticker, r["title"], r["link"], r["description"], r["pub_date"])
-                for r in rows
-                if r.get("title") and r.get("link")
-            ],
+            params,
         )
-    return len(rows)
+    return len(params)
 
 
 def collect_stock(ticker: str, days: int | None = None) -> CollectResult:
