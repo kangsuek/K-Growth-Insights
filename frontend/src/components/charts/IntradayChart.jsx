@@ -116,13 +116,23 @@ const IntradayChart = memo(function IntradayChart({
       return timeA - timeB
     })
 
+    // 거래량 막대 색: 직전 분봉 대비 등락(틱 방향)으로 판정한다.
+    // 상승(빨강)/하락(파랑), 변동 없으면 직전 방향을 유지한다(HTS 관례).
+    // 첫 봉은 직전이 없어 자기 시가 대비 종가로 시드한다.
+    let prevPrice = null
+    let prevRising = sortedData.length > 0 && sortedData[0].open_price != null
+      ? sortedData[0].price >= sortedData[0].open_price
+      : true
+
     return sortedData.map((item) => {
-      // 거래량 막대 색: 각 분봉의 시가 대비 종가로 판정한다(일별 가격 차트와 동일).
-      // 전일 종가 대비로 칠하면 추세일에 모든 막대가 한 색이라 분봉별 방향이 안 보인다.
-      // 시가 정보가 없으면 전일비로 폴백한다.
-      const isRising = item.open_price != null
-        ? item.price >= item.open_price
-        : item.change_amount > 0
+      let isRising = prevRising
+      if (prevPrice != null && item.price != null) {
+        if (item.price > prevPrice) isRising = true
+        else if (item.price < prevPrice) isRising = false
+        // 같으면 직전 방향 유지
+      }
+      prevPrice = item.price
+      prevRising = isRising
       const volumeColor = isRising ? COLORS.VOLUME_UP : COLORS.VOLUME_DOWN
 
       // datetime에서 시간만 추출 (HH:MM 형식)
