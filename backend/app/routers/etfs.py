@@ -275,13 +275,17 @@ def get_etf_trading_flow(
     days: int = Query(20, ge=1, le=1000),
     auto_collect: bool = Query(True),
 ):
+    # 시세(/prices)와 동일하게 항상 최신순(DESC)으로 반환한다. 기간 조회만 오래된순으로
+    # 나가면 최신순을 가정하는 소비자(인사이트의 연속 매수/매도일 계산 등)가 배열 앞쪽,
+    # 즉 가장 오래된 구간을 "최근"으로 읽어 반대 결론을 낸다.
     if start_date or end_date:
         if auto_collect and start_date:
             _ensure_coverage("flow", ticker, start_date,
                              repository.trading_flow_earliest_date(ticker),
                              lambda n: collectors.collect_trading_flow(ticker, days=n))
-        return repository.get_trading_flow_range(ticker, start_date, end_date)
-    return repository.get_trading_flow(ticker, days=days)
+        rows = repository.get_trading_flow_range(ticker, start_date, end_date)  # 오래된→최신
+        return list(reversed(rows))
+    return repository.get_trading_flow(ticker, days=days)  # 이미 최신순
 
 
 @router.get("/{ticker}/intraday")

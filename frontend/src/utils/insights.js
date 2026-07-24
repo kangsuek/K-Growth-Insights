@@ -8,6 +8,17 @@
 import { calculateRSI, calculateMACD, generateRSIInsight, generateMACDInsight } from './technicalIndicators'
 
 /**
+ * 날짜 내림차순(최신순) 복사본 반환. date가 없으면 원본 순서를 유지한다.
+ * @param {Array} data - 날짜(date) 필드를 가진 배열
+ * @returns {Array} 최신순 배열
+ */
+function toLatestFirst(data) {
+  if (!Array.isArray(data) || data.length < 2) return data || []
+  if (!data[0]?.date) return data
+  return [...data].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+}
+
+/**
  * 연속 매수/매도일 계산
  * @param {Array} data - 매매동향 데이터 (최신순)
  * @param {string} field - 분석할 필드 (foreign_net, institutional_net, individual_net)
@@ -371,9 +382,15 @@ export function generateRiskInsights(pricesData, tradingFlowData) {
  * @returns {Object} { insights: 핵심포인트[], risks: 리스크[] }
  */
 export function generateAllInsights(pricesData, tradingFlowData) {
-  const priceInsights = generatePriceInsights(pricesData)
-  const tradingInsights = generateTradingInsights(tradingFlowData)
-  const riskInsights = generateRiskInsights(pricesData, tradingFlowData)
+  // 이 파일의 모든 계산은 배열 앞쪽이 최신이라고 가정한다. 순서가 뒤집힌 채로 들어오면
+  // 가장 오래된 구간을 "최근"으로 읽어 반대 결론이 나오므로(예: 최근 순매수인데 순매도
+  // 연속으로 표기) 여기서 최신순으로 정규화한다.
+  const prices = toLatestFirst(pricesData)
+  const flow = toLatestFirst(tradingFlowData)
+
+  const priceInsights = generatePriceInsights(prices)
+  const tradingInsights = generateTradingInsights(flow)
+  const riskInsights = generateRiskInsights(prices, flow)
 
   // 모든 인사이트 합치고 우선순위로 정렬
   const allInsights = [...priceInsights, ...tradingInsights]

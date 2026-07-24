@@ -218,7 +218,7 @@ def test_trading_flow_range_backfills_missing_history():
                       params={"start_date": "2026-06-01", "end_date": "2026-07-31"}).json()
     dates = [r["date"] for r in body]
     assert "2026-06-10" in dates          # 백필된 과거 데이터 포함
-    assert dates == sorted(dates)          # 오래된→최신
+    assert dates == sorted(dates, reverse=True)   # 최신→오래된(시세와 동일)
 
 
 def test_trading_flow_range_no_autocollect_uses_db_only():
@@ -230,7 +230,7 @@ def test_trading_flow_range_no_autocollect_uses_db_only():
     body = client.get("/api/etfs/005930/trading-flow",
                       params={"start_date": "2026-01-01", "end_date": "2026-07-31",
                               "auto_collect": False}).json()
-    assert [r["date"] for r in body] == ["2026-07-21", "2026-07-22"]
+    assert [r["date"] for r in body] == ["2026-07-22", "2026-07-21"]
 
 
 @respx.mock
