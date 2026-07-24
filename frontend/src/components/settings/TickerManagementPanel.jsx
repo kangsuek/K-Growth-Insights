@@ -261,18 +261,20 @@ export default function TickerManagementPanel({ prefillStock }) {
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {stocks && stocks.length > 0 ? (
               stocks.map((stock, index) => (
-                <tr 
-                  key={stock.ticker} 
-                  className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                    highlightedTicker === stock.ticker 
-                      ? 'animate-pulse ring-2 ring-primary-500 dark:ring-primary-400 bg-primary-50 dark:bg-primary-900/20' 
+                <tr
+                  key={stock.ticker}
+                  onClick={() => handleEditClick(stock)}
+                  className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                    highlightedTicker === stock.ticker
+                      ? 'animate-pulse ring-2 ring-primary-500 dark:ring-primary-400 bg-primary-50 dark:bg-primary-900/20'
                       : ''
                   }`}
+                  title="클릭하여 수정"
                 >
                   <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex flex-col gap-0.5">
                       <button
-                        onClick={() => handleMoveUp(index)}
+                        onClick={(e) => { e.stopPropagation(); handleMoveUp(index) }}
                         disabled={index === 0 || reorderMutation.isPending}
                         className="p-0.5 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                         title="위로 이동"
@@ -282,7 +284,7 @@ export default function TickerManagementPanel({ prefillStock }) {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleMoveDown(index)}
+                        onClick={(e) => { e.stopPropagation(); handleMoveDown(index) }}
                         disabled={index === stocks.length - 1 || reorderMutation.isPending}
                         className="p-0.5 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                         title="아래로 이동"
@@ -297,14 +299,7 @@ export default function TickerManagementPanel({ prefillStock }) {
                     {stock.ticker}
                   </td>
                   <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => handleEditClick(stock)}
-                      className="text-left text-primary-600 dark:text-primary-400 hover:underline"
-                      title="클릭하여 수정"
-                    >
-                      {stock.name}
-                    </button>
+                    {stock.name}
                   </td>
                   <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -327,7 +322,7 @@ export default function TickerManagementPanel({ prefillStock }) {
                   <td className="px-6 py-2 whitespace-nowrap text-left text-sm font-medium">
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => handleEditClick(stock)}
+                        onClick={(e) => { e.stopPropagation(); handleEditClick(stock) }}
                         className="p-1.5 text-primary-600 dark:text-primary-400 hover:text-primary-900 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
                         title="수정"
                         aria-label="수정"
@@ -337,7 +332,7 @@ export default function TickerManagementPanel({ prefillStock }) {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleDeleteClick(stock)}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteClick(stock) }}
                         className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                         title="삭제"
                         aria-label="삭제"
@@ -377,7 +372,7 @@ export default function TickerManagementPanel({ prefillStock }) {
                 {/* 순서 변경 버튼 */}
                 <div className="flex flex-col gap-0.5">
                   <button
-                    onClick={() => handleMoveUp(index)}
+                    onClick={(e) => { e.stopPropagation(); handleMoveUp(index) }}
                     disabled={index === 0 || reorderMutation.isPending}
                     className="p-0.5 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="위로 이동"
@@ -387,7 +382,7 @@ export default function TickerManagementPanel({ prefillStock }) {
                     </svg>
                   </button>
                   <button
-                    onClick={() => handleMoveDown(index)}
+                    onClick={(e) => { e.stopPropagation(); handleMoveDown(index) }}
                     disabled={index === stocks.length - 1 || reorderMutation.isPending}
                     className="p-0.5 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="아래로 이동"
@@ -398,17 +393,16 @@ export default function TickerManagementPanel({ prefillStock }) {
                   </button>
                 </div>
                 
-                {/* 종목 정보 */}
-                <div className="flex-1 min-w-0">
+                {/* 종목 정보 (탭하면 수정) */}
+                <div
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={() => handleEditClick(stock)}
+                  title="탭하여 수정"
+                >
                   <div className="flex items-center gap-2 mb-1">
-                    <button
-                      type="button"
-                      onClick={() => handleEditClick(stock)}
-                      className="text-base font-semibold text-primary-600 dark:text-primary-400 truncate text-left hover:underline"
-                      title="클릭하여 수정"
-                    >
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
                       {stock.name}
-                    </button>
+                    </h3>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
                       stock.type === 'ETF'
                         ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300'
