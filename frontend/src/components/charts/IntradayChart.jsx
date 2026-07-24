@@ -100,6 +100,7 @@ const IntradayChart = memo(function IntradayChart({
   showVolume = true,
   previousClose = null,
   pivotLevels = null,
+  fitToWidth = false,
 }) {
   // 컨테이너 너비 측정
   const { containerRef, width: containerWidth } = useContainerWidth()
@@ -293,9 +294,13 @@ const IntradayChart = memo(function IntradayChart({
 
   // 거래량 막대 폭을 10px로 고정한다. 봉 수 × (막대폭+간격)이 컨테이너보다 넓으면
   // 가로 스크롤한다(HTS처럼). Y축 폭만큼 여유를 더해 플롯 영역이 잘리지 않게 한다.
+  // fitToWidth면 고정폭·스크롤 없이 컨테이너 폭에 전체 세션을 맞춘다(한 화면 보기).
   const BAR_WIDTH = 10
   const chartPixelWidth = AXIS_WIDTH + chartData.length * (BAR_WIDTH + 1) + 20
-  const needScroll = chartPixelWidth > (containerWidth || 0)
+  const needScroll = !fitToWidth && chartPixelWidth > (containerWidth || 0)
+  const innerStyle = fitToWidth
+    ? { width: '100%' }
+    : { width: `${chartPixelWidth}px`, minWidth: '100%' }
 
   return (
     <div
@@ -304,7 +309,7 @@ const IntradayChart = memo(function IntradayChart({
       role="img"
       aria-label={`${ticker} 분봉 차트`}
     >
-      <div style={{ width: `${chartPixelWidth}px`, minWidth: '100%' }}>
+      <div style={innerStyle}>
       {/* ── 가격 패널 ── */}
       <ResponsiveContainer width="100%" height={priceH}>
         <ComposedChart data={chartData} margin={pricePanelMargin}>
@@ -403,7 +408,7 @@ const IntradayChart = memo(function IntradayChart({
               width={AXIS_WIDTH}
             />
             <Tooltip {...tooltipProps} />
-            <Bar dataKey="volume" opacity={0.7} name="거래량" barSize={BAR_WIDTH} isAnimationActive={false}>
+            <Bar dataKey="volume" opacity={0.7} name="거래량" barSize={fitToWidth ? undefined : BAR_WIDTH} isAnimationActive={false}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.volumeColor} />
               ))}
@@ -444,6 +449,7 @@ IntradayChart.propTypes = {
   ticker: PropTypes.string.isRequired,
   height: PropTypes.number,
   showVolume: PropTypes.bool,
+  fitToWidth: PropTypes.bool,
   previousClose: PropTypes.number,
   pivotLevels: PropTypes.shape({
     pp: PropTypes.number,

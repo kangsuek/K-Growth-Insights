@@ -211,6 +211,9 @@ export default function ETFDetail() {
   // 분봉 강제 새로고침 플래그 (useQuery queryFn 내부에서 참조)
   const forceRefreshRef = useRef(false)
 
+  // 분봉 보기 모드: false=막대 10px 고정+가로 스크롤, true=한 화면에 맞춤
+  const [intradayFit, setIntradayFit] = useState(false)
+
   // 분봉: 상세 페이지가 보인 뒤에만 요청 (초기 로딩 지연 방지)
   const {
     data: intradayData,
@@ -678,6 +681,28 @@ export default function ETFDetail() {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               오늘의 가격 흐름
             </h3>
+            {/* 한 화면 보기 토글: 켜면 전체 세션을 화면 폭에 맞춰(스크롤 없이) 표시 */}
+            <button
+              onClick={() => setIntradayFit((v) => !v)}
+              className={`p-1 rounded border transition-colors ${
+                intradayFit
+                  ? 'border-primary-500 text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+              title={intradayFit ? '스크롤 보기로 전환' : '한 화면에 보기'}
+              aria-label={intradayFit ? '스크롤 보기로 전환' : '한 화면에 보기'}
+              aria-pressed={intradayFit}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {intradayFit ? (
+                  // 스크롤 보기로 전환: 가로로 넓히는(펼치는) 화살표
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8l-4 4 4 4m6-8l4 4-4 4M3 12h18" />
+                ) : (
+                  // 한 화면에 보기: 가로로 모으는(맞추는) 화살표
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8l4 4-4 4m16-8l-4 4 4 4M9 12h6" />
+                )}
+              </svg>
+            </button>
             {intradayData?.date && (
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 {intradayData.date}
@@ -740,6 +765,7 @@ export default function ETFDetail() {
             showVolume={settings.display.showVolume}
             previousClose={previousClose}
             pivotLevels={supportResistanceData?.pivot}
+            fitToWidth={intradayFit}
           />
         )}
 
