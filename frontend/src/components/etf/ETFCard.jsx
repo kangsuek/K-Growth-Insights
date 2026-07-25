@@ -56,7 +56,9 @@ const ETFCard = memo(function ETFCard({ etf, summary }) {
     queryKey: ['news', etf.ticker],
     queryFn: async () => {
       const response = await newsApi.getByTicker(etf.ticker, { limit: 5 })
-      return response.data
+      // 뉴스 엔드포인트는 {news, analysis} 객체를 반환한다. 카드는 뉴스 배열만
+      // 사용하므로(배치 요약의 latest_news와 동일한 형태) 배열만 뽑아 반환한다.
+      return response.data?.news || []
     },
     retry: 1,
     staleTime: 300000, // 5분간 캐시

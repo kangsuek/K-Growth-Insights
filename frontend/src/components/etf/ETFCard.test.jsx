@@ -104,7 +104,7 @@ describe('ETFCard', () => {
         return HttpResponse.json(mockTradingFlowData)
       }),
       http.get('http://localhost:8000/api/news/487240', () => {
-        return HttpResponse.json(mockNewsData)
+        return HttpResponse.json({ news: mockNewsData, analysis: null })
       }),
       http.get('http://localhost:8000/api/etfs/042660/prices', () => {
         return HttpResponse.json(mockPricesData)
@@ -113,7 +113,7 @@ describe('ETFCard', () => {
         return HttpResponse.json(mockTradingFlowData)
       }),
       http.get('http://localhost:8000/api/news/042660', () => {
-        return HttpResponse.json(mockNewsData)
+        return HttpResponse.json({ news: mockNewsData, analysis: null })
       })
     )
   })
@@ -225,7 +225,7 @@ describe('ETFCard', () => {
         return new HttpResponse(null, { status: 500 })
       }),
       http.get('http://localhost:8000/api/news/487240', () => {
-        return HttpResponse.json([])
+        return HttpResponse.json({ news: [], analysis: null })
       })
     )
 

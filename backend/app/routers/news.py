@@ -21,12 +21,17 @@ def _source_from_url(url: str | None) -> str:
 
 
 @router.get("/{ticker}")
-def get_news(ticker: str, analyze: bool = Query(True)):
+def get_news(
+    ticker: str,
+    analyze: bool = Query(True),
+    limit: int = Query(50, ge=1, le=100),
+):
     """종목 뉴스 목록. {news: [...], analysis} 형태(원본과 동일).
 
     감성/태그 분석(analyze)은 현재 미지원이라 sentiment/tags는 비워 반환한다.
+    프론트가 limit(카드 5건 등)을 넘기면 그만큼만 반환한다.
     """
-    rows = repository.get_news(ticker, limit=50)
+    rows = repository.get_news(ticker, limit=limit)
     news = [
         {
             "date": (r.get("pub_date") or "")[:10] or None,

@@ -202,11 +202,12 @@ export const handlers = [
   }),
 
   // GET /api/news/:ticker - 뉴스 (ticker 포함)
+  // 실제 백엔드 계약과 동일하게 {news, analysis} 형태로 반환한다.
   http.get(`${BASE_URL}/news/:ticker`, ({ params }) => {
     const { ticker } = params
-    // 특정 종목에 대한 뉴스 데이터 반환
     const newsForTicker = mockNewsData.filter(news => news.ticker === ticker)
-    return HttpResponse.json(newsForTicker.length > 0 ? newsForTicker : mockNewsData.slice(0, 2))
+    const news = newsForTicker.length > 0 ? newsForTicker : mockNewsData.slice(0, 2)
+    return HttpResponse.json({ news, analysis: null })
   }),
 
   // GET /api/news - 전체 뉴스

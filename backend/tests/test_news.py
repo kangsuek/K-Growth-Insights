@@ -111,6 +111,19 @@ def test_news_endpoint_empty_list_when_none_collected():
     assert r.json()["news"] == []
 
 
+def test_news_endpoint_honors_limit():
+    seed_stock("005930", "삼성전자", "STOCK")
+    with get_connection() as conn:
+        for i in range(8):
+            conn.execute(
+                "INSERT INTO news (ticker, title, link, pub_date) VALUES (?,?,?,?)",
+                ("005930", f"뉴스 {i}", f"https://n/{i}", f"2026-07-{i + 1:02d}T09:00:00"),
+            )
+    # limit=3이면 최신 3건만.
+    body = client.get("/api/news/005930?limit=3").json()
+    assert len(body["news"]) == 3
+
+
 # --- 이식 프론트 계약: /api/news/{ticker} ---
 
 def test_news_router_list_shape():
