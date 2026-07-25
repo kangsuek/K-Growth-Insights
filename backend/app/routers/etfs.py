@@ -11,7 +11,7 @@ import threading
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.services import collectors, comparison, insights, repository
+from app.services import ai_prompt, collectors, comparison, insights, repository
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +186,27 @@ def batch_summary(req: BatchSummaryRequest):
     return {"data": out}
 
 
+class PromptStock(BaseModel):
+    ticker: str
+    name: str
+
+
+class MultiPromptRequest(BaseModel):
+    stocks: list[PromptStock] = Field(..., max_length=20)
+
+
+@router.post("/ai-prompt-multi")
+def get_ai_prompt_multi(body: MultiPromptRequest):
+    """복수 종목 통합 비교 분석 프롬프트 생성(LLM 호출 없이 프롬프트만 반환).
+
+    각 종목의 DB 데이터를 RAG context로 결합한다. 고정 경로이므로 /{ticker} 앞에 둔다.
+    """
+    stocks = [s.model_dump() for s in body.stocks]
+    if len(stocks) < 2:
+        raise HTTPException(status_code=400, detail="통합 분석은 2개 이상의 종목이 필요합니다")
+    return {"stocks": stocks, "prompt": ai_prompt.get_multi_prompt(stocks)}
+
+
 @router.get("/compare")
 def compare_etfs(
     tickers: str = Query(..., description="쉼표 구분 종목 코드(2~20개)"),
@@ -329,3 +350,16 @@ def get_etf_insights(ticker: str, period: str = Query("1m")):
     if data is None:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
     return data
+
+
+@router.get("/{ticker}/ai-prompt")
+def get_ai_prompt(ticker: str):
+    """단일 종목 AI 투자분석 프롬프트 생성(LLM 호출 없이 프롬프트만 반환).
+
+    DB에 저장된 실제 데이터(시세·매매동향·뉴스·펀더멘털)를 RAG context로 결합한다.
+    """
+    stock = repository.get_stock(ticker)
+    if not stock:
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+    prompt = ai_prompt.get_prompt(ticker, stock["name"])
+    return {"ticker": ticker, "name": stock["name"], "prompt": prompt}
