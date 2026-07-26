@@ -760,6 +760,7 @@ export default function ETFDetail() {
             ticker={ticker}
             height={300}
             previousClose={previousClose}
+            purchasePrice={etf?.purchase_price}
             pivotLevels={supportResistanceData?.pivot}
             fitToWidth={intradayFit}
           />

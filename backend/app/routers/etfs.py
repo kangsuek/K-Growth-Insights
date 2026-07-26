@@ -222,7 +222,9 @@ def compare_etfs(
 
 @router.get("/{ticker}")
 def get_etf(ticker: str):
-    stock = repository.get_stock(ticker)
+    # 상세 화면은 구매 정보(매입가·수량·구매일)도 함께 쓴다. 가격 차트·분봉의
+    # 매입가 기준선, 매입가 카드, 수익률·평가금액이 모두 이 값에 달려 있다.
+    stock = repository.get_stock_full(ticker)
     if not stock:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
     return {
@@ -230,6 +232,9 @@ def get_etf(ticker: str):
         "name": stock["name"],
         "type": stock.get("type", "STOCK"),
         "theme": stock.get("theme"),
+        "purchase_date": stock.get("purchase_date"),
+        "purchase_price": stock.get("purchase_price"),
+        "quantity": stock.get("quantity"),
     }
 
 

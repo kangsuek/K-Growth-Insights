@@ -109,12 +109,14 @@ const CustomTooltip = ({ active, payload }) => {
  * @param {string} ticker - 종목 코드
  * @param {number} height - 차트 높이 (기본값: 300)
  * @param {number} previousClose - 전일 종가 (기준선 표시용)
+ * @param {number} purchasePrice - 매입 평균가 (기준선 표시용)
  */
 const IntradayChart = memo(function IntradayChart({
   data = [],
   ticker,
   height = 300,
   previousClose = null,
+  purchasePrice = null,
   pivotLevels = null,
   fitToWidth = false,
 }) {
@@ -264,6 +266,8 @@ const IntradayChart = memo(function IntradayChart({
     ...highs,
     ...lows,
     ...(previousClose != null ? [previousClose] : []),
+    // 매입가도 도메인에 넣어, 장중 가격대와 떨어져 있어도 기준선이 잘리지 않게 한다.
+    ...(purchasePrice != null ? [purchasePrice] : []),
   ]
   const minPrice = Math.min(...allPriceValues)
   const maxPrice = Math.max(...allPriceValues)
@@ -290,6 +294,9 @@ const IntradayChart = memo(function IntradayChart({
   const priceGuide = [
     ...(previousClose != null
       ? [{ key: 'prev', label: '전일', name: '전일 종가', color: '#9ca3af', value: previousClose }]
+      : []),
+    ...(purchasePrice != null
+      ? [{ key: 'buy', label: '매입', name: '매입 평균가', color: '#22c55e', value: purchasePrice }]
       : []),
     ...(pivotLevels
       ? [
@@ -400,6 +407,23 @@ const IntradayChart = memo(function IntradayChart({
                 position: 'insideTopRight',
                 fill: '#9ca3af',
                 fontSize: 10,
+              }}
+            />
+          )}
+
+          {/* 매입가 기준선 (일별 가격 차트와 같은 초록 점선) */}
+          {purchasePrice && (
+            <ReferenceLine
+              y={purchasePrice}
+              stroke="#22c55e"
+              strokeDasharray="5 5"
+              strokeWidth={1.5}
+              label={{
+                value: `매입가 ${formatPrice(purchasePrice)}`,
+                position: 'insideBottomRight',
+                fill: '#22c55e',
+                fontSize: 10,
+                fontWeight: 'bold',
               }}
             />
           )}
@@ -529,6 +553,7 @@ IntradayChart.propTypes = {
   height: PropTypes.number,
   fitToWidth: PropTypes.bool,
   previousClose: PropTypes.number,
+  purchasePrice: PropTypes.number,
   pivotLevels: PropTypes.shape({
     pp: PropTypes.number,
     r1: PropTypes.number,

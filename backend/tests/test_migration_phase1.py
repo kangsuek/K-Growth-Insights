@@ -96,6 +96,36 @@ def test_etf_detail_404_for_unknown():
     assert client.get("/api/etfs/999999").status_code == 404
 
 
+def test_etf_detail_includes_purchase_info():
+    """상세 응답에 구매 정보가 있어야 한다.
+
+    회귀 방지: 이 값이 빠져 있으면 상세 화면의 매입가 기준선(가격 차트·분봉),
+    매입가 카드, 수익률·평가금액이 모두 조용히 사라진다.
+    """
+    seed_stock("005930", "삼성전자", "STOCK", theme="반도체")
+    client.put("/api/settings/stocks/005930", json={
+        "purchase_date": "2026-07-24", "purchase_price": 165200, "quantity": 535,
+    })
+
+    body = client.get("/api/etfs/005930").json()
+
+    assert body["purchase_price"] == 165200
+    assert body["quantity"] == 535
+    assert body["purchase_date"] == "2026-07-24"
+    assert body["name"] == "삼성전자" and body["theme"] == "반도체"
+
+
+def test_etf_detail_purchase_info_null_when_unset():
+    """구매 정보를 넣지 않은 종목은 null로 온다(키 자체는 있어야 한다)."""
+    seed_stock("000660", "SK하이닉스", "STOCK")
+
+    body = client.get("/api/etfs/000660").json()
+
+    assert body["purchase_price"] is None
+    assert body["quantity"] is None
+    assert body["purchase_date"] is None
+
+
 # --- data 확장 ---------------------------------------------------------------
 
 def test_scheduler_status_shape():
