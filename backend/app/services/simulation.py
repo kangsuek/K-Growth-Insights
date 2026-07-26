@@ -11,16 +11,27 @@ from app.services import repository
 
 
 def _prices_in_range(ticker: str, start: str, end: str) -> list[dict]:
-    rows = repository.get_prices(ticker, days=400)  # 오래된→최신
-    return [p for p in rows if p.get("close_price") and start <= (p.get("date") or "") <= end]
+    """기간(start~end) 시세(오래된→최신).
+
+    기간으로 직접 조회한다. 예전에는 최근 400거래일만 읽어와 필터했는데, 그보다
+    오래된 시작일을 주면 데이터가 있어도 조용히 잘려 매수일이 앞당겨졌다
+    (2020-01-02 요청 → 2024-11-29로 계산).
+    """
+    rows = repository.get_prices_range(ticker, start, end)
+    return [p for p in rows if p.get("close_price")]
 
 
-def _nearest(prices: list[dict], target: str) -> dict | None:
-    """target(YYYY-MM-DD) 이후 첫 거래일, 없으면 마지막 거래일."""
-    after = [p for p in prices if (p.get("date") or "") >= target]
-    if after:
-        return after[0]
-    return prices[-1] if prices else None
+def _first_trading_day(prices: list[dict], target: str) -> dict | None:
+    """target(YYYY-MM-DD) 이후 첫 거래일. 없으면 None.
+
+    없을 때 마지막 거래일로 되돌리지 않는다. 그 폴백은 데이터 범위를 넘어선
+    날짜까지 '마지막 거래일에 매수'한 것으로 만들어, 적립식에서 미래 월이
+    같은 날짜로 중복 매수되는 문제를 낳았다.
+    """
+    for p in prices:
+        if (p.get("date") or "") >= target:
+            return p
+    return None
 
 
 def _name(ticker: str) -> str:
@@ -31,10 +42,15 @@ def _name(ticker: str) -> str:
 # --- 일시 투자 ---------------------------------------------------------------
 
 def lump_sum(ticker: str, buy_date: str, amount: float) -> dict:
-    prices = _prices_in_range(ticker, buy_date, date.today().isoformat())
+    today = date.today().isoformat()
+    if buy_date > today:
+        raise ValueError(f"매수일({buy_date})이 미래입니다")
+    prices = _prices_in_range(ticker, buy_date, today)
     if not prices:
         raise ValueError("해당 기간의 시세 데이터가 없습니다")
-    buy_entry = _nearest(prices, buy_date)
+    buy_entry = _first_trading_day(prices, buy_date)
+    if not buy_entry:
+        raise ValueError(f"{buy_date} 이후 거래일이 없습니다 (매수일을 확인하세요)")
     buy_price = buy_entry["close_price"]
     shares = int(amount // buy_price)
     if shares == 0:
@@ -93,9 +109,14 @@ def dca(ticker: str, monthly_amount: float, start_date: str, end_date: str, buy_
     cum_invested = 0.0
     cum_remainder = 0.0
     total_cost = 0.0
+    # 시세가 중간에 비면 두 달이 같은 거래일로 매칭될 수 있어, 한 거래일에 두 번
+    # 매수하는 것을 막는다.
+    bought_dates: set[str] = set()
     while current <= end:
-        entry = _nearest(prices, current.isoformat())
-        if entry:
+        # 그 달의 매수일 이후 첫 거래일. 시세가 아직 없는(미래) 월은 건너뛴다.
+        entry = _first_trading_day(prices, current.isoformat())
+        if entry and entry["date"] not in bought_dates:
+            bought_dates.add(entry["date"])
             buy_price = entry["close_price"]
             shares_bought = int(monthly_amount // buy_price)
             if shares_bought > 0:
@@ -136,12 +157,16 @@ def portfolio(holdings: list[dict], amount: float, start_date: str, end_date: st
     """holdings: [{ticker, weight(0~1)}]. 비중대로 배분해 일시 매수 후 일별 평가."""
     per_ticker = {}
     date_set: set[str] = set()
+    skipped: list[str] = []
     for h in holdings:
         ticker, weight = h["ticker"], h["weight"]
         prices = _prices_in_range(ticker, start_date, end_date)
-        if not prices:
+        buy_entry = _first_trading_day(prices, start_date) if prices else None
+        if not buy_entry:
+            # 기간에 시세가 없는 종목은 배분에서 제외한다. 조용히 빠지면 투자금이
+            # 줄어든 이유를 알 수 없으므로 응답에 담아 화면에서 알릴 수 있게 한다.
+            skipped.append(ticker)
             continue
-        buy_entry = _nearest(prices, start_date)
         alloc = amount * weight
         buy_price = buy_entry["close_price"]
         shares = int(alloc // buy_price)
@@ -167,6 +192,12 @@ def portfolio(holdings: list[dict], amount: float, start_date: str, end_date: st
             if price is not None:
                 last_prices[t] = price
                 valuation += v["shares"] * price + v["remainder"]
+            else:
+                # 이 종목의 첫 거래일 전 구간 — 아직 매수하지 않았으므로 배분액을
+                # 현금으로 들고 있는 것으로 평가한다. 예전에는 이 금액이 평가액에서
+                # 아예 빠져, 상장일이 다른 종목을 섞으면 첫날 수익률이 -50%처럼
+                # 크게 왜곡됐다.
+                valuation += v["invested"]
         daily_series.append({
             "date": d, "valuation": round(valuation),
             "return_pct": round((valuation - total_invested) / total_invested * 100, 2)
@@ -185,10 +216,15 @@ def portfolio(holdings: list[dict], amount: float, start_date: str, end_date: st
             if v["invested"] > 0 else 0.0,
         })
 
-    total_valuation = daily_series[-1]["valuation"] if daily_series else total_invested
+    # 종목별 평가액 합을 총평가액으로 쓴다(마지막 일자의 반올림값을 재사용하면
+    # daily_series 마지막 수익률과 미세하게 어긋난다).
+    total_valuation = sum(v["shares"] * (last_prices[t] or v["buy_price"]) + v["remainder"]
+                          for t, v in per_ticker.items())
     return {
-        "total_invested": round(total_invested), "total_valuation": total_valuation,
+        "total_invested": round(total_invested), "total_valuation": round(total_valuation),
         "total_return_pct": round((total_valuation - total_invested) / total_invested * 100, 2)
         if total_invested > 0 else 0.0,
         "holdings_result": holdings_result, "daily_series": daily_series,
+        # 기간에 시세가 없어 배분에서 빠진 종목(있으면 화면에서 알린다)
+        "skipped_tickers": skipped,
     }

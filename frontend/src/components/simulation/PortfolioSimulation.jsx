@@ -219,6 +219,18 @@ export default function PortfolioSimulation() {
       {/* 결과 */}
       {result && (
         <>
+          {/* 선택한 기간에 시세가 없어 배분에서 빠진 종목을 알린다.
+              알리지 않으면 총 투자금이 입력한 금액보다 적은 이유를 알 수 없다. */}
+          {result.skipped_tickers?.length > 0 && (
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                <span className="font-semibold">{result.skipped_tickers.join(', ')}</span>
+                는 선택한 기간에 시세가 없어 배분에서 제외했습니다. 총 투자금은 나머지 종목
+                기준입니다.
+              </p>
+            </div>
+          )}
+
           {/* 요약 카드 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <SummaryCard label="총 투자금" value={`${formatCurrency(result.total_invested)}원`} />
