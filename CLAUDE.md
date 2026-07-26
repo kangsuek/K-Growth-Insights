@@ -18,6 +18,7 @@
 - 사용자에게 보여지는 모든 숫자는 **천 단위 구분 기호**를 사용합니다 (`toLocaleString('ko-KR')`).
 - 백엔드는 **실제 사용하는(호출되는) 엔드포인트만** 유지합니다. 미사용 라우트·래퍼는 만들지 않습니다.
 - 데이터 수집은 반드시 `services/naver_client.py`를 통해 네이버 모바일 API로 합니다.
+- **백엔드 검증은 `uv run pytest`로만 합니다.** `uv run python -c "..."` 같은 raw 스크립트는 `DATABASE_PATH`가 실제 `backend/data/kgrowth.db`를 가리켜 실 데이터를 덮어씁니다 (`temp_db` 픽스처는 pytest 안에서만 적용). 부득이 실제 DB를 볼 땐 읽기 전용 쿼리만 — 오염 시 `collectors.collect_stock` / `collect_trading_flow(days=N)`로 재수집해 복구합니다.
 - 커밋 메시지 끝에 다음을 추가합니다:
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 
