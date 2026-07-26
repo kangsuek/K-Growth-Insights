@@ -13,6 +13,15 @@ from app.services import repository
 TRADING_DAYS_PER_YEAR = 252
 RISK_FREE_RATE = 3.0
 
+# 연환산(annualized)은 표본이 짧으면 극단적으로 증폭된다(20거래일 +39% → 연환산 +8043%).
+# 화면도 '3개월 이상 데이터만 연환산 표시, 3개월 미만은 N/A'로 안내하므로, 그 미만은
+# 계산하지 않고 None을 준다.
+#
+# 기준은 60거래일. 이론값 252/4=63이 아니라 실제 거래일 수를 쓴다 — 달력 3개월
+# 구간에는 공휴일이 끼어 60일 안팎이 나오므로(예: 2026-04-26~07-26이 60거래일),
+# 63으로 두면 사용자가 '3개월'을 골라도 '3개월 미만'으로 표시된다.
+MIN_POINTS_FOR_ANNUALIZED = 60
+
 
 def _daily_returns(values: list[float]) -> list[float]:
     return [(values[i] / values[i - 1] - 1) for i in range(1, len(values)) if values[i - 1]]
@@ -48,7 +57,11 @@ def _statistics(closes: list[float]) -> dict:
     period_return = (closes[-1] / closes[0] - 1) * 100
     rets = _daily_returns(closes)
     volatility = _std(rets) * math.sqrt(TRADING_DAYS_PER_YEAR) * 100 if rets else None
-    annualized = ((closes[-1] / closes[0]) ** (TRADING_DAYS_PER_YEAR / max(n - 1, 1)) - 1) * 100
+    # 표본이 3개월 미만이면 연환산은 의미가 없어 계산하지 않는다.
+    annualized = (
+        ((closes[-1] / closes[0]) ** (TRADING_DAYS_PER_YEAR / max(n - 1, 1)) - 1) * 100
+        if n >= MIN_POINTS_FOR_ANNUALIZED else None
+    )
     # 최대 낙폭
     peak = closes[0]
     max_dd = 0.0
@@ -56,12 +69,13 @@ def _statistics(closes: list[float]) -> dict:
         peak = max(peak, c)
         if peak:
             max_dd = min(max_dd, (c - peak) / peak * 100)
+    # 샤프는 연환산 수익률에 기반하므로 연환산이 없으면 함께 None.
     sharpe = None
-    if volatility and volatility > 0:
+    if annualized is not None and volatility and volatility > 0:
         sharpe = round((annualized - RISK_FREE_RATE) / volatility, 2)
     return {
         "period_return": round(period_return, 2),
-        "annualized_return": round(annualized, 2),
+        "annualized_return": round(annualized, 2) if annualized is not None else None,
         "volatility": round(volatility, 2) if volatility is not None else None,
         "max_drawdown": round(max_dd, 2),
         "sharpe_ratio": sharpe,

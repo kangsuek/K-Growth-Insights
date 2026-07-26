@@ -60,6 +60,14 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
     return Math.max(...values)
   }
 
+  // 값이 없는 칸(N/A)에는 최고 표시를 하지 않는다. value와 best가 모두 null이면
+  // `value === best`가 참이 되어, 전 종목이 N/A인 컬럼에 ⭐가 모두 붙었다.
+  const isBestValue = (column, value) => {
+    if (value === null || value === undefined) return false
+    const best = getBestValue(column)
+    return best !== null && value === best
+  }
+
   const formatNumber = (value, decimals = 2) => {
     if (value === null || value === undefined) return 'N/A'
     return value.toFixed(decimals)
@@ -184,7 +192,7 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
                   </td>
                   {columns.map(col => {
                     const value = row[col.key]
-                    const isBest = value === getBestValue(col.key)
+                    const isBest = isBestValue(col.key, value)
                     const isReturn = col.key.includes('return')
                     const isDrawdown = col.key === 'max_drawdown'
 
@@ -237,7 +245,7 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
             <div className="grid grid-cols-2 gap-2 text-sm">
               {columns.map(col => {
                 const value = row[col.key]
-                const isBest = value === getBestValue(col.key)
+                const isBest = isBestValue(col.key, value)
                 const isReturn = col.key.includes('return')
                 const isDrawdown = col.key === 'max_drawdown'
 
