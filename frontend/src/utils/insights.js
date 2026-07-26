@@ -70,11 +70,16 @@ function calculateMovingAverage(data, period) {
 }
 
 /**
- * 일간 변동성 계산 (표준편차)
+ * 일간 변동성 계산 (표본표준편차, %)
+ *
+ * 관측된 수익률은 표본이므로 n-1(베셀 보정)로 나눈다. 백엔드의 연환산 변동성
+ * (services/metrics.py annualized_volatility)과 같은 기준을 쓴다 — 여기는 연환산하지
+ * 않은 '일간' 값이라는 점만 다르다.
+ *
  * @param {Array} data - 가격 데이터 (최신순)
- * @returns {number|null} 일간 변동성 (%)
+ * @returns {number|null} 일간 변동성 (%). 수익률 표본이 2개 미만이면 null
  */
-function calculateDailyVolatility(data) {
+export function calculateDailyVolatility(data) {
   if (!data || data.length < 2) return null
 
   const dailyReturns = []
@@ -86,10 +91,12 @@ function calculateDailyVolatility(data) {
     }
   }
 
-  if (dailyReturns.length === 0) return null
+  // n-1로 나누므로 표본이 2개 미만이면 계산할 수 없다(0으로 나누기 방지).
+  if (dailyReturns.length < 2) return null
 
   const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-  const variance = dailyReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / dailyReturns.length
+  const variance =
+    dailyReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (dailyReturns.length - 1)
   return Math.sqrt(variance) * 100
 }
 
