@@ -41,6 +41,22 @@ mac:
         - arm64
         - x64
   icon: icons/icon.icns
+  # ── 코드 서명 ──────────────────────────────────────────────────────────
+  # 키체인에 'Developer ID Application' 인증서가 있으면 자동으로 찾아 서명하고,
+  # 없으면 서명을 건너뛴다(빌드는 계속된다). 그래서 개발용 로컬 빌드는 인증서 없이도
+  # 그대로 동작한다. CI에서는 CSC_LINK(.p12 base64 또는 경로) + CSC_KEY_PASSWORD로 주입한다.
+  #
+  # 공증을 통과하려면 Hardened Runtime이 필수다. 파이썬 백엔드를 spawn하고 localhost
+  # 서버를 열기 때문에 예외 목록을 별도 파일로 둔다(build/entitlements.mac.plist).
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # 서명 직후 로컬 Gatekeeper 평가는 하지 않는다(공증 전이라 항상 실패한다).
+  gatekeeperAssess: false
+  # ── 공증(notarization) ────────────────────────────────────────────────
+  # 기본은 끈다. 자격증명 없이 켜 두면 개발용 빌드가 매번 실패한다.
+  # 배포용은 `npm run build:release`로 켠다(아래 package.json 참고).
+  notarize: false
 dmg:
   title: "${productName}"
   contents:

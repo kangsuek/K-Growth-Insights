@@ -7,7 +7,9 @@
     "start": "electron .",
     "generate-icons": "node scripts/generate-icons.js",
     "build": "electron-builder",
-    "build:dir": "electron-builder --dir"
+    "build:dir": "electron-builder --dir",
+    "build:release": "node scripts/check-signing-env.js && electron-builder -c.mac.notarize=true",
+    "check:signing": "node scripts/check-signing-env.js"
   },
   "author": "",
   "license": "MIT",

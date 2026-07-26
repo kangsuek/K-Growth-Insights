@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened Runtime 예외 목록 (Developer ID 배포용, App Sandbox 아님).
+
+  이 앱은 Electron 셸이 uv로 파이썬 백엔드(FastAPI)를 띄우고 localhost로 통신한다.
+  그래서 Electron 자체에 필요한 항목 외에, 외부 인터프리터 실행과 로컬 서버에
+  필요한 예외를 함께 넣는다. 필요한 것만 최소로 유지한다.
+-->
+<plist version="1.0">
+<dict>
+    <!-- V8(JIT)이 실행 가능 메모리를 만든다. Electron 필수. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- 서명되지 않은 실행 메모리 사용. Electron/V8이 요구한다. -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- uv가 설치한 파이썬 패키지의 .so/.dylib는 우리 팀 인증서로 서명돼 있지 않다.
+         이걸 끄지 않으면 백엔드 기동 시 라이브러리 로드가 차단된다. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- 파이썬 실행에 필요한 환경변수(PATH, VIRTUAL_ENV 등)를 자식 프로세스에 넘긴다. -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+
+    <!-- 네이버 API 호출 등 외부로 나가는 연결. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- 백엔드가 localhost에 FastAPI 서버를 연다(main.js의 BACKEND_PORT). -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+</dict>
+</plist>
