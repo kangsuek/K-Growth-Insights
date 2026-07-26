@@ -30,11 +30,14 @@ export default function TickerDeleteConfirm({ ticker, onConfirm, onClose, isDele
                 <p className="text-xs sm:text-sm text-red-800 dark:text-red-300 font-medium mb-2">
                   ⚠️ 다음 데이터가 함께 삭제됩니다:
                 </p>
+                {/* 실제로 지우는 것만 적는다. 백엔드는 DB의 종목과 수집 데이터를
+                    삭제하며 config/stocks.json은 건드리지 않는다(최초 시딩 전용 파일). */}
                 <ul className="text-xs sm:text-sm text-red-700 dark:text-red-400 space-y-1 list-disc list-inside text-left">
-                  <li>stocks.json 파일에서 종목 정보 제거</li>
+                  <li>추적 종목 목록에서 제거</li>
                   <li>데이터베이스의 모든 가격 데이터</li>
                   <li>데이터베이스의 모든 뉴스 데이터</li>
                   <li>데이터베이스의 모든 매매 동향 데이터</li>
+                  <li>데이터베이스의 분봉·펀더멘털·ETF 구성종목 데이터</li>
                 </ul>
               </div>
               <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-3">

@@ -26,7 +26,7 @@ export default function TickerManagementPanel({ prefillStock }) {
     }
   }, [prefillStock])
 
-  // 현재 종목 목록 조회 (stocks.json 기반)
+  // 현재 추적 종목 목록 조회 (DB 기준. stocks.json은 최초 시딩에만 쓰인다)
   const { data: stocks, isLoading, error } = useQuery({
     queryKey: ['settings-stocks'],
     queryFn: async () => {

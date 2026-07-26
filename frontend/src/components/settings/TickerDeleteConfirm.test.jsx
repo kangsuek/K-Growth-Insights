@@ -55,7 +55,9 @@ describe('TickerDeleteConfirm 컴포넌트', () => {
     )
 
     expect(screen.getByText(/다음 데이터가 함께 삭제됩니다/)).toBeInTheDocument()
-    expect(screen.getByText(/stocks.json 파일에서 종목 정보 제거/)).toBeInTheDocument()
+    // 삭제는 DB만 건드린다. stocks.json을 지운다고 안내하면 사실과 다르다.
+    expect(screen.getByText(/추적 종목 목록에서 제거/)).toBeInTheDocument()
+    expect(screen.queryByText(/stocks\.json/)).not.toBeInTheDocument()
     expect(screen.getByText(/데이터베이스의 모든 가격 데이터/)).toBeInTheDocument()
     expect(screen.getByText(/데이터베이스의 모든 뉴스 데이터/)).toBeInTheDocument()
     expect(screen.getByText(/데이터베이스의 모든 매매 동향 데이터/)).toBeInTheDocument()

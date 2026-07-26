@@ -3,15 +3,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from app.services import jobs, repository, scheduler, stocks_sync
+from app.services import jobs, repository, scheduler
 
 router = APIRouter(prefix="/api/data", tags=["data"])
-
-
-@router.post("/sync-stocks")
-def sync_stocks():
-    count = stocks_sync.sync_stocks(refresh_from_api=True)
-    return {"synced": count}
 
 
 @router.post("/collect-all")

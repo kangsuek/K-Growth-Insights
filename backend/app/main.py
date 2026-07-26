@@ -24,9 +24,9 @@ async def lifespan(app: FastAPI):
     # 저장된 API 키를 런타임에 적용(네이버 검색 등).
     api_keys.load_to_runtime()
     try:
-        # Seed the catalog from stocks.json without hitting the network on boot;
-        # names/types get refreshed by POST /api/data/sync-stocks.
-        stocks_sync.sync_stocks(refresh_from_api=False)
+        # 추적 종목이 하나도 없을 때(최초 실행)만 stocks.json으로 시딩한다.
+        # 매번 동기화하면 사용자가 삭제한 종목이 재시작 때 되살아난다.
+        stocks_sync.seed_stocks_if_empty()
     except Exception as exc:  # noqa: BLE001 - never block startup on seeding
         logger.warning("stock seeding skipped: %s", exc)
     # 자동 수집 스케줄러 기동(장중 N분 + 평일 15:40 KST 마감).
