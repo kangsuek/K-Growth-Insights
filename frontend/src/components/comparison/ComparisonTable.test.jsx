@@ -65,6 +65,55 @@ describe('ComparisonTable', () => {
     expect(container.querySelector('tbody').textContent).not.toContain('N/A')
   })
 
+  // 변동성은 표준편차라 항상 0 이상이다. '+'를 붙이면 상승 수익률처럼 읽힌다.
+  it('변동성은 부호 없이 표시한다', () => {
+    const statistics = {
+      '005930': { period_return: 11.14, annualized_return: 56.98, volatility: 92.98, max_drawdown: -32.69, sharpe_ratio: 0.58, data_points: 60 },
+    }
+
+    const { container } = render(
+      <ComparisonTable statistics={statistics} tickerInfo={tickerInfo} />
+    )
+
+    const body = container.querySelector('tbody').textContent
+    expect(body).toContain('92.98%')
+    expect(body).not.toContain('+92.98%')
+    // 수익률에는 부호를 유지한다
+    expect(body).toContain('+11.14%')
+    expect(body).toContain('+56.98%')
+  })
+
+  // 회귀 방지: `null >= 0`이 참이라 N/A가 상승색(빨강)으로 표시됐다.
+  it('N/A 값에는 상승/하락 색을 쓰지 않는다', () => {
+    const statistics = {
+      '005930': { period_return: -26.51, annualized_return: null, volatility: 92.87, max_drawdown: -28.13, sharpe_ratio: null, data_points: 20 },
+    }
+
+    const { container } = render(
+      <ComparisonTable statistics={statistics} tickerInfo={tickerInfo} />
+    )
+
+    const naEls = Array.from(container.querySelectorAll('span, div')).filter(
+      (el) => el.children.length === 0 && /^N\/A/.test(el.textContent.trim())
+    )
+    expect(naEls.length).toBeGreaterThan(0)
+    naEls.forEach((el) => {
+      expect(el.className).not.toMatch(/text-red-600|text-blue-600/)
+    })
+  })
+
+  it('0%는 부호 없이 표시한다', () => {
+    const statistics = {
+      '005930': { period_return: 0, annualized_return: 0, volatility: 0, max_drawdown: 0, sharpe_ratio: 0, data_points: 60 },
+    }
+
+    const { container } = render(
+      <ComparisonTable statistics={statistics} tickerInfo={tickerInfo} />
+    )
+
+    expect(container.querySelector('tbody').textContent).not.toContain('+0.00%')
+  })
+
   it('통계가 비어 있으면 안내 문구를 표시한다', () => {
     render(<ComparisonTable statistics={{}} tickerInfo={{}} />)
     expect(screen.getByText('데이터가 없습니다')).toBeInTheDocument()

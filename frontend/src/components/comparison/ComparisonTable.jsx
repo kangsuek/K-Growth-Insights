@@ -76,7 +76,31 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
   const formatPercent = (value, decimals = 2) => {
     if (value === null || value === undefined) return 'N/A'
     const formatted = value.toFixed(decimals)
-    return value >= 0 ? `+${formatted}%` : `${formatted}%`
+    // 0은 상승도 하락도 아니므로 부호를 붙이지 않는다.
+    if (value === 0) return `${formatted}%`
+    return value > 0 ? `+${formatted}%` : `${formatted}%`
+  }
+
+  // 변동성은 표준편차라 항상 0 이상이다. '+'를 붙이면 상승 수익률처럼 읽히므로
+  // 부호 없이 표기한다.
+  const formatVolatility = (value, decimals = 2) => {
+    if (value === null || value === undefined) return 'N/A'
+    return `${value.toFixed(decimals)}%`
+  }
+
+  // 값 색상: 수익률만 상승(빨강)/하락(파랑), 낙폭은 주황, 그 외는 중립.
+  // 값이 없으면(N/A) 중립으로 둔다 — `null >= 0`이 참이어서 N/A가 상승색으로
+  // 표시되던 문제를 막는다.
+  const valueClass = (column, value) => {
+    const neutral = 'text-gray-900 dark:text-white'
+    if (value === null || value === undefined) return neutral
+    if (column.includes('return')) {
+      return value >= 0
+        ? 'text-red-600 dark:text-red-400'
+        : 'text-blue-600 dark:text-blue-400'
+    }
+    if (column === 'max_drawdown') return 'text-orange-600 dark:text-orange-400'
+    return neutral
   }
 
   const SortIcon = ({ column }) => {
@@ -108,7 +132,12 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
       },
       tooltip: '3개월 이상 데이터만 연환산 표시\n(3개월 미만은 N/A)'
     },
-    { key: 'volatility', label: '변동성', format: formatPercent },
+    {
+      key: 'volatility',
+      label: '변동성',
+      format: formatVolatility,
+      tooltip: '일간 수익률의 표준편차를 연환산한 값.\n클수록 가격이 크게 출렁인다.'
+    },
     { key: 'max_drawdown', label: '최대 낙폭', format: formatPercent },
     {
       key: 'sharpe_ratio',
@@ -193,8 +222,6 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
                   {columns.map(col => {
                     const value = row[col.key]
                     const isBest = isBestValue(col.key, value)
-                    const isReturn = col.key.includes('return')
-                    const isDrawdown = col.key === 'max_drawdown'
 
                     return (
                       <td
@@ -203,15 +230,7 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
                           isBest ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''
                         }`}
                       >
-                        <span className={`${
-                          isReturn
-                            ? value >= 0
-                              ? 'text-red-600 dark:text-red-400'
-                              : 'text-blue-600 dark:text-blue-400'
-                            : isDrawdown
-                            ? 'text-orange-600 dark:text-orange-400'
-                            : 'text-gray-900 dark:text-white'
-                        }`}>
+                        <span className={valueClass(col.key, value)}>
                           {col.format(value)}
                         </span>
                         {isBest && (
@@ -246,8 +265,6 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
               {columns.map(col => {
                 const value = row[col.key]
                 const isBest = isBestValue(col.key, value)
-                const isReturn = col.key.includes('return')
-                const isDrawdown = col.key === 'max_drawdown'
 
                 return (
                   <div key={col.key}>
@@ -275,15 +292,7 @@ export default function ComparisonTable({ statistics = null, tickerInfo = {} }) 
                         </div>
                       )}
                     </div>
-                    <div className={`font-medium ${
-                      isReturn
-                        ? value >= 0
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-blue-600 dark:text-blue-400'
-                        : isDrawdown
-                        ? 'text-orange-600 dark:text-orange-400'
-                        : 'text-gray-900 dark:text-white'
-                    }`}>
+                    <div className={`font-medium ${valueClass(col.key, value)}`}>
                       {col.format(value)}
                       {isBest && <span className="ml-1 text-xs">⭐</span>}
                     </div>
