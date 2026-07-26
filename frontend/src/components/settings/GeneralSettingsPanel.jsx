@@ -28,11 +28,6 @@ export default function GeneralSettingsPanel() {
   // 새로고침 간격을 읽기 쉬운 텍스트로 변환 (대시보드와 같은 표기를 쓴다)
   const getIntervalLabel = (interval) => formatRefreshInterval(interval)
 
-  // 자동 새로고침 토글 핸들러
-  const handleAutoRefreshToggle = (enabled) => {
-    updateSettings('autoRefresh.enabled', enabled)
-  }
-
   // 새로고침 간격 변경 핸들러
   const handleIntervalChange = (interval) => {
     updateSettings('autoRefresh.interval', interval)
@@ -100,58 +95,37 @@ export default function GeneralSettingsPanel() {
         <section>
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">자동 새로고침</h3>
           <div className="space-y-4">
-            {/* 토글 스위치 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  자동 새로고침 활성화
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  대시보드 데이터를 자동으로 갱신합니다
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.autoRefresh.enabled}
-                  onChange={(e) => handleAutoRefreshToggle(e.target.checked)}
-                  className="sr-only peer"
-                  aria-label="자동 새로고침 활성화"
-                />
-                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+            {/* 새로고침 간격 선택. 자동 갱신은 항상 켜져 있고 주기만 고른다. */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                새로고침 간격
               </label>
-            </div>
-
-            {/* 새로고침 간격 선택 */}
-            {settings.autoRefresh.enabled && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  새로고침 간격
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {refreshIntervals.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleIntervalChange(option.value)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
-                        settings.autoRefresh.interval === option.value
-                          ? 'bg-primary-500 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                      aria-label={`${option.label} 간격 선택`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  현재 설정: <span className="font-medium text-gray-700 dark:text-gray-300">
-                    자동 갱신: {getIntervalLabel(settings.autoRefresh.interval)}마다
-                  </span>
-                </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                대시보드 데이터를 선택한 주기마다 자동으로 갱신합니다
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {refreshIntervals.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleIntervalChange(option.value)}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
+                      settings.autoRefresh.interval === option.value
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                    aria-label={`${option.label} 간격 선택`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
-            )}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                현재 설정: <span className="font-medium text-gray-700 dark:text-gray-300">
+                  자동 갱신: {getIntervalLabel(settings.autoRefresh.interval)}마다
+                </span>
+              </p>
+            </div>
           </div>
         </section>
 

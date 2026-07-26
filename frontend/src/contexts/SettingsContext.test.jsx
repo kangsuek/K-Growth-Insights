@@ -17,7 +17,6 @@ describe('SettingsContext', () => {
 
       expect(result.current.settings).toEqual({
         autoRefresh: {
-          enabled: true,
           interval: 30000,
         },
         defaultDateRange: '1M',
@@ -48,7 +47,7 @@ describe('SettingsContext', () => {
         wrapper: SettingsProvider,
       })
 
-      expect(result.current.settings.autoRefresh.enabled).toBe(true)
+      expect(result.current.settings.autoRefresh.interval).toBe(30000)
       expect(result.current.settings.defaultDateRange).toBe('1M')
     })
   })
@@ -97,27 +96,33 @@ describe('SettingsContext', () => {
       })
 
       act(() => {
-        result.current.updateSettings('autoRefresh.enabled', false)
+        result.current.updateSettings('autoRefresh.interval', 60000)
       })
 
-      expect(result.current.settings.autoRefresh.enabled).toBe(false)
-      expect(result.current.settings.autoRefresh.interval).toBe(30000) // 다른 값은 유지
+      expect(result.current.settings.autoRefresh.interval).toBe(60000)
     })
 
-    // 표시 옵션(거래량·매매동향)은 설정에서 제거했다. 거래량·매매동향 차트는 항상
-    // 표시되므로, 예전 버전이 저장해 둔 display 값이 남아 있어도 무시해야 한다.
-    it('예전 설정에 남은 display 값은 무시해야 함', () => {
-      localStorage.setItem('app_settings', JSON.stringify({
-        defaultDateRange: '1M',
-        theme: 'light',
-        display: { showVolume: false, showTradingFlow: false },
-      }))
-
+    // 제거한 설정(표시 옵션, 자동 갱신 on/off)은 검증에서 걸러내 상태에 남지 않아야
+    // 한다. 두 차트와 자동 갱신은 이제 항상 켜져 있다. 예전 버전이 localStorage에
+    // 저장해 둔 값도 같은 경로(validateSettings)를 지나므로 함께 정리된다.
+    // (테스트 환경의 localStorage는 항상 null을 주는 stub이라 저장값 로드는
+    //  검증할 수 없어, 같은 검증 함수를 타는 updateSettings로 확인한다.)
+    it('제거한 display·autoRefresh.enabled 값은 상태에 남지 않아야 함', () => {
       const { result } = renderHook(() => useSettings(), {
         wrapper: SettingsProvider,
       })
 
+      act(() => {
+        result.current.updateSettings('display.showVolume', false)
+      })
+      act(() => {
+        result.current.updateSettings('autoRefresh.enabled', false)
+      })
+
       expect(result.current.settings.display).toBeUndefined()
+      expect(result.current.settings.autoRefresh.enabled).toBeUndefined()
+      // 주기는 그대로 유지된다
+      expect(result.current.settings.autoRefresh.interval).toBe(30000)
     })
 
     it('설정 업데이트 시 Context가 업데이트되어야 함', () => {
@@ -157,11 +162,11 @@ describe('SettingsContext', () => {
       // 설정 변경
       act(() => {
         result.current.updateSettings('defaultDateRange', '7D')
-        result.current.updateSettings('autoRefresh.enabled', false)
+        result.current.updateSettings('autoRefresh.interval', 600000)
       })
 
       expect(result.current.settings.defaultDateRange).toBe('7D')
-      expect(result.current.settings.autoRefresh.enabled).toBe(false)
+      expect(result.current.settings.autoRefresh.interval).toBe(600000)
 
       // 초기화
       act(() => {
@@ -169,7 +174,7 @@ describe('SettingsContext', () => {
       })
 
       expect(result.current.settings.defaultDateRange).toBe('1M')
-      expect(result.current.settings.autoRefresh.enabled).toBe(true)
+      expect(result.current.settings.autoRefresh.interval).toBe(30000)
     })
 
     it('초기화 시 Context가 기본값으로 업데이트되어야 함', () => {

@@ -177,8 +177,8 @@ describe('Dashboard', () => {
     })
   })
 
-  it('자동 갱신을 활성화/비활성화할 수 있다', async () => {
-    const user = userEvent.setup()
+  // 자동 갱신은 항상 켜져 있다(끄는 조작 없음). 주기만 표시한다.
+  it('자동 갱신 주기를 표시하고 끄는 조작을 두지 않는다', async () => {
     renderWithProviders(<Dashboard />)
 
     // 데이터 로딩 대기
@@ -186,17 +186,11 @@ describe('Dashboard', () => {
       expect(screen.getAllByText('삼성 KODEX AI전력핵심설비 ETF').length).toBeGreaterThan(0)
     })
 
-    // 자동 갱신 체크박스 찾기 (기본값 ON)
-    const autoRefreshCheckbox = screen.getByRole('checkbox', { name: /자동 갱신/ })
-    expect(autoRefreshCheckbox).toBeChecked()
+    // 주기 표시는 있고
+    expect(screen.getByText(/자동 갱신 \(/)).toBeInTheDocument()
 
-    // 비활성화
-    await user.click(autoRefreshCheckbox)
-    expect(autoRefreshCheckbox).not.toBeChecked()
-
-    // 다시 활성화
-    await user.click(autoRefreshCheckbox)
-    expect(autoRefreshCheckbox).toBeChecked()
+    // 끄는 체크박스는 없다
+    expect(screen.queryByRole('checkbox', { name: /자동 갱신/ })).not.toBeInTheDocument()
   })
 
   it('스케줄러 상태를 표시한다', async () => {

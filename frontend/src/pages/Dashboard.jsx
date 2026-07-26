@@ -141,15 +141,13 @@ export default function Dashboard() {
 
   const isLoading = etfsLoading || summaryLoading
 
-  // 자동 갱신 시 화면 데이터만 다시 읽는다 (설정 기반, 수집은 하지 않음)
+  // 자동 갱신은 항상 켜져 있다. 설정한 주기마다 화면 데이터만 다시 읽는다(수집은 하지 않음).
   useEffect(() => {
-    if (settings.autoRefresh.enabled) {
-      const interval = setInterval(() => {
-        handleRefetchOnly()
-      }, settings.autoRefresh.interval)
-      return () => clearInterval(interval)
-    }
-  }, [settings.autoRefresh.enabled, settings.autoRefresh.interval, handleRefetchOnly])
+    const interval = setInterval(() => {
+      handleRefetchOnly()
+    }, settings.autoRefresh.interval)
+    return () => clearInterval(interval)
+  }, [settings.autoRefresh.interval, handleRefetchOnly])
 
   // 오늘 날짜 포맷팅
   const formatDate = (date) => {
@@ -419,19 +417,10 @@ export default function Dashboard() {
 
         {/* 컨트롤 버튼 */}
         <div className="flex items-center gap-3">
-          {/* 자동 새로고침 토글 */}
-          <label className="flex items-center gap-2 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={settings.autoRefresh.enabled}
-              onChange={(e) => updateSettings('autoRefresh.enabled', e.target.checked)}
-              className="w-4 h-4 text-primary-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500 focus:ring-2 transition-colors"
-              aria-label="자동 갱신 토글"
-            />
-            <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200 transition-colors">
-              자동 갱신 ({formatRefreshInterval(settings.autoRefresh.interval)})
-            </span>
-          </label>
+          {/* 자동 갱신 주기 표시 (자동 갱신은 항상 켜져 있어 끄는 조작이 없다) */}
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            자동 갱신 ({formatRefreshInterval(settings.autoRefresh.interval)})
+          </span>
 
           {/* 수동 새로고침 버튼 */}
           <button

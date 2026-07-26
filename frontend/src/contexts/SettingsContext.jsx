@@ -8,7 +8,7 @@ const STORAGE_KEY = 'app_settings'
  */
 const DEFAULT_SETTINGS = {
   autoRefresh: {
-    enabled: true,
+    // 자동 갱신은 항상 켜져 있다(끄는 설정 없음). 주기만 고를 수 있다.
     interval: 30000, // 30초 (milliseconds)
   },
   defaultDateRange: '1M', // "7D" | "1M" | "3M"
@@ -30,10 +30,8 @@ function validateSettings(settings) {
 
   // autoRefresh 검증
   if (settings.autoRefresh && typeof settings.autoRefresh === 'object') {
+    // enabled는 설정에서 제거했다. 예전 설정에 남아 있어도 걸러내 저장하지 않는다.
     validated.autoRefresh = {
-      enabled: typeof settings.autoRefresh.enabled === 'boolean'
-        ? settings.autoRefresh.enabled
-        : DEFAULT_SETTINGS.autoRefresh.enabled,
       interval: [30000, 60000, 300000, 600000].includes(settings.autoRefresh.interval)
         ? settings.autoRefresh.interval
         : DEFAULT_SETTINGS.autoRefresh.interval,
