@@ -16,8 +16,13 @@ const TABS = [
   { id: 'theme', label: '테마 탐색' },
 ]
 
-const SORT_OPTIONS = [
+// 표에서 정렬할 수 있는 컬럼(ScreeningTable의 COLUMNS)과 같은 집합을 유지한다.
+// 여기 없는 값으로 정렬되면 select가 그 값을 표시할 수 없어 첫 옵션(주간수익률)이
+// 선택된 것처럼 보이고, 실제 정렬 기준과 어긋난다.
+export const SORT_OPTIONS = [
   { value: 'weekly_return', label: '주간수익률' },
+  { value: 'monthly_return', label: '월간수익률' },
+  { value: 'ytd_return', label: '연간수익률(YTD)' },
   { value: 'daily_change_pct', label: '등락률' },
   { value: 'volume', label: '거래량' },
   { value: 'close_price', label: '현재가' },

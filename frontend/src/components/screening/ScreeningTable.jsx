@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { formatNumber, formatSignedNumber, formatPercent, getChangeColor } from '../../utils/formatters'
 
-const COLUMNS = [
+export const COLUMNS = [
   { key: 'name', label: '종목명', sortable: true },
   { key: 'close_price', label: '현재가', sortable: true, align: 'right' },
   { key: 'daily_change_pct', label: '등락률', sortable: true, align: 'right' },
