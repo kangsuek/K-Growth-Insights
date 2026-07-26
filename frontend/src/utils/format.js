@@ -109,3 +109,17 @@ export const getNetBuyingColor = (value) => {
   if (value < 0) return COLORS.NET_SELLING
   return COLORS.PRICE_NEUTRAL
 }
+
+/**
+ * 자동 갱신 주기(ms)를 사람이 읽는 텍스트로 변환한다.
+ *
+ * 설정 화면은 "10분", 대시보드는 "600초"로 서로 다르게 표기하던 것을 한 곳으로 모은다.
+ *
+ * @param {number} ms - 갱신 주기(밀리초)
+ * @returns {string} - '30초' / '1분' / '10분'
+ */
+export const formatRefreshInterval = (ms) => {
+  if (!ms || ms < 1000) return '-'
+  const seconds = ms / 1000
+  return seconds < 60 ? `${seconds}초` : `${seconds / 60}분`
+}

@@ -13,7 +13,7 @@ from datetime import date, datetime, time as dtime, timedelta
 
 from app import config, timeutil
 from app.database import get_connection
-from app.services import naver_client
+from app.services import metrics, naver_client
 from app.timeutil import KST
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def _metrics_for(ticker: str, cached_ytd_base: dict | None = None) -> dict | Non
         base = prices[idx].get("close_price")
         return (cur - base) / base * 100 if base else None
 
-    weekly = _ret(min(4, n - 1)) if n >= 5 else None
+    weekly = metrics.weekly_return([p.get("close_price") for p in prices])
     monthly = _ret(min(19, n - 1)) if n >= 20 else None
 
     # YTD: 캐시가 유효하면 캐시 기준가, 아니면 올해 가장 오래된 거래일을 기준가로 잡고 캐시.

@@ -95,3 +95,20 @@ def test_insights_endpoint_shape():
 
 def test_insights_endpoint_404():
     assert client.get("/api/etfs/999999/insights").status_code == 404
+
+
+def test_weekly_return_is_shared_across_screens():
+    """대시보드·발굴·인사이트가 같은 기준일(5거래일 전)을 쓰는지 고정한다.
+
+    과거 batch-summary만 6거래일 전을 써서 같은 종목의 '주간 수익률'이 화면마다
+    다르게 보였다.
+    """
+    from app.services import metrics
+
+    closes_desc = [110, 100, 99, 98, 97, 96, 95]  # 최신 → 오래된
+    assert round(metrics.weekly_return(closes_desc), 4) == round((110 / 97 - 1) * 100, 4)
+
+    # 데이터가 5건 미만이면 계산하지 않는다.
+    assert metrics.weekly_return([110, 100, 99, 98]) is None
+    # 기준일 종가가 없으면 계산하지 않는다.
+    assert metrics.weekly_return([110, 100, 99, 98, None]) is None

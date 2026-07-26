@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 
 from app.database import get_connection
@@ -37,15 +38,17 @@ _SECTOR_KEYWORDS: list[tuple[list[str], str]] = [
     (["AI", "인공지능", "로봇", "자율주행", "GPT", "생성형"], "AI/로봇"),
     (["바이오", "헬스케어", "제약", "의료", "게놈", "진단"], "바이오"),
     (["자동차", "전기차", "EV", "모빌리티", "완성차"], "자동차"),
-    (["은행", "금융", "보험", "증권", "KRX은행"], "금융"),
+    (["은행", "금융", "보험", "화재", "증권", "KRX은행"], "금융"),
     (["태양광", "풍력", "신재생", "에너지", "원자력", "우라늄", "탄소"], "에너지"),
     (["소프트웨어", "IT", "클라우드", "사이버보안", "게임", "미디어", "메타버스", "플랫폼"], "IT/SW"),
+    # 부동산은 건설/인프라보다 앞에 둔다. '리츠부동산인프라'처럼 두 키워드를 함께
+    # 가진 리츠 상품이 건설/인프라로 새는 것을 막는다.
+    (["부동산", "리츠", "REIT"], "부동산"),
     (["건설", "인프라", "조선", "해운", "항공", "운송"], "건설/인프라"),
     (["화학", "소재", "철강", "비철금속", "희토류"], "화학/소재"),
     (["식품", "유통", "음식료", "필수소비재"], "식품/유통"),
     (["방산", "우주항공", "국방", "방위"], "방산/우주"),
     (["통신", "5G", "6G", "K-뉴딜"], "통신"),
-    (["부동산", "리츠", "REIT"], "부동산"),
     (["배당", "고배당", "커버드콜", "인컴"], "배당"),
     (["채권", "국채", "회사채", "금리", "국고채", "통안채"], "채권"),
     (["골드", "GOLD", "금현물", "순금", "은현물", "실버", "원자재", "구리", "곡물",
@@ -59,6 +62,47 @@ _SECTOR_KEYWORDS: list[tuple[list[str], str]] = [
 ]
 
 
+# 단순 부분 문자열 매칭은 'DAISHIN'⊃'AI', '메리츠'⊃'리츠'처럼 무관한 종목을 끌어들인다
+# (부동산 섹터가 메리츠 ETN으로 뒤덮인 원인).
+#
+# 두 경우를 다르게 다룬다.
+# - 라틴 문자 키워드: 영문 단어 안에 묻힌 경우만 걸러낸다(D'AI'SHIN은 제외, '미국AI데이터'는 유지).
+#   한글 합성어에 붙어 쓰이는 것은 정상이므로 한글 경계는 보지 않는다.
+# - 한글 키워드: 조사·합성어로 붙여 쓰는 게 정상이라 경계 검사가 통하지 않는다
+#   ('SK리츠'는 진짜 리츠). 충돌이 확인된 조합만 예외로 제외한다.
+_LATIN_BOUNDARY_KEYWORDS = {"AI", "IT", "EV", "SOX", "REIT"}
+_KEYWORD_EXCLUSIONS = {"리츠": ("메리츠",)}
+
+_LATIN = re.compile(r"[A-Za-z]")
+
+
+def _contains_keyword(name_upper: str, keyword: str) -> bool:
+    """종목명에 키워드가 포함되는지 검사(오탐 방지 규칙 적용)."""
+    kw = keyword.upper()
+
+    excluded = _KEYWORD_EXCLUSIONS.get(keyword)
+    if excluded:
+        # 충돌 단어를 지운 뒤 남은 부분에서만 찾는다.
+        remainder = name_upper
+        for word in excluded:
+            remainder = remainder.replace(word.upper(), "")
+        return kw in remainder
+
+    if kw in _LATIN_BOUNDARY_KEYWORDS:
+        start = name_upper.find(kw)
+        while start != -1:
+            before = name_upper[start - 1] if start > 0 else ""
+            after_idx = start + len(kw)
+            after = name_upper[after_idx] if after_idx < len(name_upper) else ""
+            # 앞뒤가 영문자가 아니면 독립된 토큰으로 본다.
+            if not _LATIN.match(before) and not _LATIN.match(after):
+                return True
+            start = name_upper.find(kw, start + 1)
+        return False
+
+    return kw in name_upper
+
+
 def match_sector(name: str) -> str | None:
     """종목명에서 섹터(테마)를 추론한다(대소문자 무시, 첫 매칭 우선). 없으면 None.
 
@@ -68,7 +112,7 @@ def match_sector(name: str) -> str | None:
         return None
     name_upper = name.upper()
     for keywords, sector in _SECTOR_KEYWORDS:
-        if any(kw.upper() in name_upper for kw in keywords):
+        if any(_contains_keyword(name_upper, kw) for kw in keywords):
             return sector
     return None
 
@@ -129,21 +173,6 @@ def _upsert_row(conn, row: dict) -> None:
          row.get("market_value"), row.get("close_price"),
          row.get("daily_change_pct"), row.get("volume")),
     )
-
-
-def sync_catalog(market: str | None = None, limit: int | None = None) -> dict:
-    """시장 종목을 stock_catalog에 upsert. limit=None이면 전체. 반환: {시장: 반영 건수}."""
-    markets = (market,) if market else naver_client.MARKETS
-    result: dict[str, int] = {}
-    with get_connection() as conn:
-        for mkt in markets:
-            rows = naver_client.fetch_market_catalog(mkt, limit=limit)
-            for row in rows:
-                _upsert_row(conn, row)
-            result[mkt] = len(rows)
-            logger.info("Catalog synced %s: %d stocks", mkt, len(rows))
-        map_sectors(conn)  # 이름 기반 섹터(테마) 매핑 — 발굴 '테마탐색' 그룹핑용
-    return result
 
 
 def sync_catalog_detailed(limit: int | None = None) -> dict:

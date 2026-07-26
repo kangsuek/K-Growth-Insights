@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useSettings } from '../../contexts/SettingsContext'
+import { formatRefreshInterval } from '../../utils/format'
 
 /**
  * 일반 설정 패널 컴포넌트
@@ -6,6 +8,7 @@ import { useSettings } from '../../contexts/SettingsContext'
  */
 export default function GeneralSettingsPanel() {
   const { settings, updateSettings, resetSettings } = useSettings()
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false)
 
   // 새로고침 간격 옵션
   const refreshIntervals = [
@@ -22,11 +25,8 @@ export default function GeneralSettingsPanel() {
     { label: '3개월', value: '3M' },
   ]
 
-  // 새로고침 간격을 읽기 쉬운 텍스트로 변환
-  const getIntervalLabel = (interval) => {
-    const option = refreshIntervals.find((opt) => opt.value === interval)
-    return option ? option.label : '30초'
-  }
+  // 새로고침 간격을 읽기 쉬운 텍스트로 변환 (대시보드와 같은 표기를 쓴다)
+  const getIntervalLabel = (interval) => formatRefreshInterval(interval)
 
   // 자동 새로고침 토글 핸들러
   const handleAutoRefreshToggle = (enabled) => {
@@ -54,10 +54,12 @@ export default function GeneralSettingsPanel() {
   }
 
   // 기본값으로 초기화 핸들러 (일반 설정 + 대시보드 카드 순서만 초기화, 종목/API/데이터는 유지)
-  const handleReset = () => {
-    if (window.confirm('일반 설정(테마, 자동 갱신, 기본 날짜 범위, 표시 옵션, 대시보드 카드 순서)을 기본값으로 초기화합니다. 종목·API 키·데이터는 변경되지 않습니다. 계속하시겠습니까?')) {
-      resetSettings()
-    }
+  // 네이티브 confirm 대신 화면 내 모달을 쓴다(앱 전반의 Toast/모달 UX와 통일).
+  const handleReset = () => setIsResetModalOpen(true)
+
+  const handleConfirmReset = () => {
+    resetSettings()
+    setIsResetModalOpen(false)
   }
 
   // 테마 옵션
@@ -86,7 +88,7 @@ export default function GeneralSettingsPanel() {
           </div>
           <button
             onClick={handleReset}
-            className="w-full sm:w-auto px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+            className="w-full sm:w-auto px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
             aria-label="설정 초기화"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,14 +123,14 @@ export default function GeneralSettingsPanel() {
                   className="sr-only peer"
                   aria-label="자동 새로고침 활성화"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
               </label>
             </div>
 
             {/* 새로고침 간격 선택 */}
             {settings.autoRefresh.enabled && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   새로고침 간격
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -140,7 +142,7 @@ export default function GeneralSettingsPanel() {
                       className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
                         settings.autoRefresh.interval === option.value
                           ? 'bg-primary-500 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
                       }`}
                       aria-label={`${option.label} 간격 선택`}
                     >
@@ -148,8 +150,8 @@ export default function GeneralSettingsPanel() {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  현재 설정: <span className="font-medium text-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  현재 설정: <span className="font-medium text-gray-700 dark:text-gray-300">
                     자동 갱신: {getIntervalLabel(settings.autoRefresh.interval)}마다
                   </span>
                 </p>
@@ -205,7 +207,7 @@ export default function GeneralSettingsPanel() {
                   className="sr-only peer"
                   aria-label="거래량 표시"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
               </label>
             </div>
 
@@ -227,7 +229,7 @@ export default function GeneralSettingsPanel() {
                   className="sr-only peer"
                   aria-label="매매 동향 표시"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
               </label>
             </div>
 
@@ -272,6 +274,36 @@ export default function GeneralSettingsPanel() {
           </div>
         </section>
       </div>
+
+      {/* 일반 설정 초기화 확인 모달 */}
+      {isResetModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">일반 설정 초기화</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              테마, 자동 갱신, 기본 날짜 범위, 표시 옵션, 대시보드 카드 순서를 기본값으로 되돌립니다.
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              종목·API 키·수집 데이터는 변경되지 않습니다.
+            </p>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setIsResetModalOpen(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmReset}
+                className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
+              >
+                초기화
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

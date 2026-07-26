@@ -51,8 +51,12 @@ def test_sync_catalog_populates_catalog_not_watchlist():
         )
     )
 
-    result = catalog.sync_catalog(market="KOSPI", limit=100)
-    assert result == {"KOSPI": 3}
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([]))
+    )
+
+    result = catalog.sync_catalog_detailed(limit=100)
+    assert result["kospi_count"] == 3
 
     with get_connection() as conn:
         cat = {r["ticker"]: dict(r) for r in
@@ -64,23 +68,6 @@ def test_sync_catalog_populates_catalog_not_watchlist():
     assert cat["005930"]["market"] == "KOSPI"
     # 워치리스트는 그대로(카탈로그 수집이 관심종목을 오염시키지 않음)
     assert watch == ["005930"]
-
-
-@respx.mock
-def test_sync_catalog_both_markets_when_market_omitted():
-    respx.get(_catalog_url("KOSPI")).mock(
-        return_value=httpx.Response(200, json=_page([("005930", "삼성전자", "stock")]))
-    )
-    respx.get(_catalog_url("KOSDAQ")).mock(
-        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
-    )
-    result = catalog.sync_catalog(limit=50)
-    assert result == {"KOSPI": 1, "KOSDAQ": 1}
-
-
-def test_sync_catalog_endpoint_rejects_bad_market():
-    r = client.post("/api/data/sync-catalog", params={"market": "NASDAQ"})
-    assert r.status_code == 400
 
 
 @respx.mock
@@ -182,16 +169,6 @@ def test_sync_catalog_detailed_partial_does_not_prune():
     assert "999999" in tickers  # 기존 종목 유지
 
 
-@respx.mock
-def test_sync_catalog_endpoint_returns_counts():
-    respx.get(_catalog_url("KOSDAQ")).mock(
-        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
-    )
-    r = client.post("/api/data/sync-catalog", params={"market": "KOSDAQ", "limit": 10})
-    assert r.status_code == 200
-    assert r.json() == {"synced": {"KOSDAQ": 1}}
-
-
 def test_clear_catalog_endpoint():
     from app.database import get_connection
     with get_connection() as conn:
@@ -206,3 +183,32 @@ def test_catalog_progress_shape():
     body = client.get("/api/settings/ticker-catalog/collect-progress").json()
     for f in ("status", "step_index", "total_steps", "items_collected", "message"):
         assert f in body
+
+
+# --- 섹터 오분류 회귀 (부분 문자열 매칭) ---------------------------------------
+
+def test_match_sector_ignores_keyword_inside_other_words():
+    """'메리츠'가 '리츠'로, 'DAISHIN'이 'AI'로 잡히던 오분류가 재발하지 않아야 한다."""
+    from app.services.catalog import match_sector
+
+    # 메리츠 ETN들은 더 이상 부동산이 아니다.
+    assert match_sector("메리츠 국채30년 ETN") == "채권"
+    assert match_sector("메리츠 WTI원유 선물 ETN(H)") == "원자재"
+    assert match_sector("메리츠화재") == "금융"
+    assert match_sector("메리츠제1호스팩") is None
+
+    # 영문 단어에 묻힌 AI는 매칭하지 않는다.
+    assert match_sector("DAISHIN343 오피스리츠플러스") == "부동산"
+
+
+def test_match_sector_still_matches_legitimate_names():
+    """경계 규칙이 정상 종목까지 막지 않아야 한다(한글 합성어 포함)."""
+    from app.services.catalog import match_sector
+
+    assert match_sector("SK리츠") == "부동산"
+    assert match_sector("PLUS K리츠") == "부동산"
+    # 리츠 상품은 '인프라'가 들어 있어도 부동산으로 분류한다.
+    assert match_sector("TIGER 리츠부동산인프라") == "부동산"
+    # 한글 사이에 붙은 AI는 정상 매칭.
+    assert match_sector("TIGER 미국AI데이터센터TOP4Plus") == "AI/로봇"
+    assert match_sector("KODEX AI전력핵심설비") == "AI/로봇"

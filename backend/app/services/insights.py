@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 
-from app.services import repository
+from app.services import metrics, repository
 
 # 외국인 '대규모 순매수/매도 지속' 판정 파라미터(원본과 동일).
 FOREIGN_NET_SUSTAINED_DAYS = 5
@@ -34,8 +34,7 @@ def _compute_metrics(prices_desc: list[dict]) -> tuple[dict, float | None]:
             return (cur - base) / base * 100
         return None
 
-    if n >= 5:
-        returns["1w"] = _ret(min(4, n - 1))
+    returns["1w"] = metrics.weekly_return([p["close_price"] for p in prices_desc])
     if n >= 20:
         returns["1m"] = _ret(min(19, n - 1))
 

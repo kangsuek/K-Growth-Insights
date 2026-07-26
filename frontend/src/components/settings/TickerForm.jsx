@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import PropTypes from 'prop-types'
 import { settingsApi } from '../../services/api'
+import { useToast } from '../../contexts/ToastContext'
 import { MIN_SEARCH_LENGTH } from '../../constants'
 import { formatPrice, formatNumber } from '../../utils/format'
 
@@ -57,6 +58,7 @@ StockSuggestions.propTypes = {
 }
 
 export default function TickerForm({ mode, initialData, prefillData, onSubmit, onClose, isSubmitting }) {
+  const toast = useToast()
   const [formData, setFormData] = useState({
     ticker: '',
     name: '',
@@ -171,16 +173,16 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
         relevance_keywords: data.relevance_keywords || [],
       }))
       setKeywordsInput((data.relevance_keywords || []).join(', '))
-      alert('종목 정보를 자동으로 입력했습니다. 확인 후 저장하세요.')
+      toast.success('종목 정보를 자동으로 입력했습니다. 확인 후 저장하세요.', 3000)
     },
     onError: (error) => {
-      alert(`종목 정보를 가져올 수 없습니다: ${error.message}`)
+      toast.error(`종목 정보를 가져올 수 없습니다: ${error.message}`, 3000)
     },
   })
 
   const handleAutoFill = () => {
     if (!formData.ticker) {
-      alert('티커 코드를 먼저 입력하세요.')
+      toast.warning('티커 코드를 먼저 입력하세요.', 2000)
       return
     }
     validateMutation.mutate(formData.ticker)

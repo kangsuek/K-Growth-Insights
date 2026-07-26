@@ -9,11 +9,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
+PROJECT_ROOT = BASE_DIR.parent
 DATA_DIR = BASE_DIR / "data"
 CONFIG_DIR = BASE_DIR / "config"
 
-DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "kgrowth.db"))
-STOCKS_CONFIG_PATH = os.getenv("STOCKS_CONFIG_PATH", str(CONFIG_DIR / "stocks.json"))
+
+def _resolve_path(value: str) -> str:
+    """상대 경로를 프로젝트 루트 기준으로 고정 해석한다.
+
+    .env의 `DATABASE_PATH=backend/data/kgrowth.db`는 프로젝트 루트 기준 경로인데,
+    백엔드는 `cd backend && uvicorn ...`으로 실행돼 cwd가 backend/다. 그대로 두면
+    `backend/backend/data/kgrowth.db`로 해석돼 DB가 두 벌로 갈라진다.
+    """
+    path = Path(value)
+    return str(path if path.is_absolute() else (PROJECT_ROOT / path).resolve())
+
+
+DATABASE_PATH = _resolve_path(os.getenv("DATABASE_PATH", str(DATA_DIR / "kgrowth.db")))
+STOCKS_CONFIG_PATH = _resolve_path(
+    os.getenv("STOCKS_CONFIG_PATH", str(CONFIG_DIR / "stocks.json"))
+)
 
 # CORS origins for the Vite dev server
 CORS_ORIGINS = os.getenv(

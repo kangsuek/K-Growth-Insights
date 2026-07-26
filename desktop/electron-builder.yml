@@ -21,8 +21,10 @@ extraResources:
       - "!venv/**"
       - "!.venv/**"
       - "!tests/**"
-      - "!*.db"
-      - "!data/*.db"
+      # 사용자 데이터 DB는 어떤 경로에 있든 패키지에 넣지 않는다.
+      - "!**/*.db"
+      - "!**/*.db-wal"
+      - "!**/*.db-shm"
       - "!.coverage"
       - "!.pytest_cache/**"
   - from: ../frontend/dist

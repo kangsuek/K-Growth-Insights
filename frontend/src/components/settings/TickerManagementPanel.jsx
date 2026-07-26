@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { settingsApi } from '../../services/api'
+import { useToast } from '../../contexts/ToastContext'
 import { formatPrice, formatNumber } from '../../utils/format'
 import TickerForm from './TickerForm'
 import TickerDeleteConfirm from './TickerDeleteConfirm'
 
 export default function TickerManagementPanel({ prefillStock }) {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [selectedTicker, setSelectedTicker] = useState(null)
@@ -40,10 +42,10 @@ export default function TickerManagementPanel({ prefillStock }) {
       queryClient.invalidateQueries({ queryKey: ['settings-stocks'] })
       queryClient.invalidateQueries({ queryKey: ['etfs'] }) // 대시보드 캐시도 무효화
       setIsFormOpen(false)
-      alert('종목이 성공적으로 추가되었습니다.')
+      toast.success('종목이 추가되었습니다.', 2000)
     },
     onError: (error) => {
-      alert(`종목 추가 실패: ${error.message}`)
+      toast.error(`종목 추가 실패: ${error.message}`, 3000)
     },
   })
 
@@ -56,10 +58,10 @@ export default function TickerManagementPanel({ prefillStock }) {
       queryClient.invalidateQueries({ queryKey: ['etf', variables.ticker] }) // ETFDetail 페이지 캐시 무효화
       setIsFormOpen(false)
       setSelectedTicker(null)
-      alert('종목이 성공적으로 수정되었습니다.')
+      toast.success('종목이 수정되었습니다.', 2000)
     },
     onError: (error) => {
-      alert(`종목 수정 실패: ${error.message}`)
+      toast.error(`종목 수정 실패: ${error.message}`, 3000)
     },
   })
 
@@ -78,15 +80,15 @@ export default function TickerManagementPanel({ prefillStock }) {
       setIsDeleteConfirmOpen(false)
       setSelectedTicker(null)
       const deleted = response.data.deleted
-      alert(
-        `종목이 삭제되었습니다.\n` +
-        `- 가격 데이터: ${deleted.prices}개\n` +
-        `- 뉴스: ${deleted.news}개\n` +
-        `- 매매 동향: ${deleted.trading_flow}개`
+      toast.success(
+        `종목이 삭제되었습니다. 가격 ${(deleted.prices || 0).toLocaleString('ko-KR')}건, ` +
+        `뉴스 ${(deleted.news || 0).toLocaleString('ko-KR')}건, ` +
+        `매매 동향 ${(deleted.trading_flow || 0).toLocaleString('ko-KR')}건 삭제`,
+        4000
       )
     },
     onError: (error) => {
-      alert(`종목 삭제 실패: ${error.message}`)
+      toast.error(`종목 삭제 실패: ${error.message}`, 3000)
     },
   })
 
@@ -111,7 +113,7 @@ export default function TickerManagementPanel({ prefillStock }) {
       queryClient.invalidateQueries({ queryKey: ['etfs'] }) // 대시보드 캐시도 무효화
     },
     onError: (error, tickers, context) => {
-      alert(`순서 변경 실패: ${error.message}`)
+      toast.error(`순서 변경 실패: ${error.message}`, 3000)
       // Rollback
       if (context?.previousStocks) {
         queryClient.setQueryData(['settings-stocks'], context.previousStocks)

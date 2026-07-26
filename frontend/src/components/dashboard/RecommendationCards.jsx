@@ -22,6 +22,36 @@ const PRESET_ICONS = {
   ),
 }
 
+/**
+ * 프리셋마다 정렬 기준이 다르므로 그 기준 지표를 보여준다.
+ * 모든 카드에 주간 수익률을 띄우면 '외국인 순매수 상위' 카드에 순매수량이 아닌 값이 떠
+ * 바로 위 히트맵의 일간 등락률과 충돌하는 것처럼 보인다.
+ */
+const getPresetMetric = (presetId, item) => {
+  switch (presetId) {
+    case 'foreign_buying':
+      return {
+        text: `${formatNumber(item.foreign_net)}주`,
+        color: getChangeColor(item.foreign_net),
+      }
+    case 'institutional_buying':
+      return {
+        text: `${formatNumber(item.institutional_net)}주`,
+        color: getChangeColor(item.institutional_net),
+      }
+    case 'high_volume':
+      return {
+        text: `${formatNumber(item.volume)}주`,
+        color: 'text-gray-600 dark:text-gray-300',
+      }
+    default:
+      return {
+        text: formatPercent(item.weekly_return),
+        color: getChangeColor(item.weekly_return),
+      }
+  }
+}
+
 export default function RecommendationCards() {
   const navigate = useNavigate()
   const { data: presets, isLoading } = useQuery({
@@ -97,8 +127,8 @@ export default function RecommendationCards() {
                     <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                       {formatNumber(item.close_price)}
                     </span>
-                    <span className={`text-xs font-medium tabular-nums ${getChangeColor(item.weekly_return)}`}>
-                      {formatPercent(item.weekly_return)}
+                    <span className={`text-xs font-medium tabular-nums ${getPresetMetric(preset.preset_id, item).color}`}>
+                      {getPresetMetric(preset.preset_id, item).text}
                     </span>
                   </div>
                 </div>

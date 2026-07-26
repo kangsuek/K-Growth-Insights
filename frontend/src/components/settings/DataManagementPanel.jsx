@@ -40,6 +40,7 @@ export default function DataManagementPanel() {
   const [isResetModalOpen, setIsResetModalOpen] = useState(false)
   const [isCollectTickerCatalogModalOpen, setIsCollectTickerCatalogModalOpen] = useState(false)
   const [isCollectAllModalOpen, setIsCollectAllModalOpen] = useState(false)
+  const [isClearCatalogModalOpen, setIsClearCatalogModalOpen] = useState(false)
   const [collectionDays, setCollectionDays] = useState(90)
 
   // 진행률 상태
@@ -217,10 +218,12 @@ export default function DataManagementPanel() {
       return response.data
     },
     onSuccess: (data) => {
+      setIsClearCatalogModalOpen(false)
       toast.success(`종목 카탈로그 ${(data.deleted || 0).toLocaleString('ko-KR')}개 삭제됨`, 4000)
       queryClient.invalidateQueries({ queryKey: ['data-stats'] })
     },
     onError: (error) => {
+      setIsClearCatalogModalOpen(false)
       toast.error(`카탈로그 삭제 실패: ${error.message}`)
     },
   })
@@ -234,13 +237,15 @@ export default function DataManagementPanel() {
     onSuccess: (data) => {
       setIsResetModalOpen(false)
 
-      // 성공 메시지 표시
+      // 성공 메시지 표시 (백엔드 reset_collected_data가 실제로 지우는 테이블만 나열)
       const deletedCounts = [
         `가격: ${(data.deleted.prices || 0).toLocaleString('ko-KR')}건`,
         `뉴스: ${(data.deleted.news || 0).toLocaleString('ko-KR')}건`,
         `매매 동향: ${(data.deleted.trading_flow || 0).toLocaleString('ko-KR')}건`,
-        `수집 상태: ${(data.deleted.collection_status || 0).toLocaleString('ko-KR')}건`,
-        `분봉: ${(data.deleted.intraday_prices || 0).toLocaleString('ko-KR')}건`
+        `분봉: ${(data.deleted.intraday_prices || 0).toLocaleString('ko-KR')}건`,
+        `주식 펀더멘털: ${(data.deleted.stock_fundamentals || 0).toLocaleString('ko-KR')}건`,
+        `ETF 펀더멘털: ${(data.deleted.etf_fundamentals || 0).toLocaleString('ko-KR')}건`,
+        `ETF 구성종목: ${(data.deleted.etf_holdings || 0).toLocaleString('ko-KR')}건`
       ].filter(item => !item.includes(': 0건')).join(', ')
 
       toast.success(
@@ -407,6 +412,12 @@ export default function DataManagementPanel() {
                 <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatNumber(stats.trading_flow)}</div>
               </div>
 
+              {/* 분봉 레코드 */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">분봉 레코드</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatNumber(stats.intraday_prices)}</div>
+              </div>
+
               {/* 뉴스 수 */}
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">뉴스 수</div>
@@ -490,7 +501,7 @@ export default function DataManagementPanel() {
                   최초 1회 실행 권장. 이후에는 분기별 1회 정도 실행하면 충분합니다.
                 </p>
                 <button
-                  onClick={() => clearTickerCatalogMutation.mutate()}
+                  onClick={() => setIsClearCatalogModalOpen(true)}
                   disabled={clearTickerCatalogMutation.isPending || collectTickerCatalogMutation.isPending}
                   className="text-xs font-medium text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 whitespace-nowrap ml-3"
                 >
@@ -603,11 +614,53 @@ export default function DataManagementPanel() {
             </button>
 
             <p className="text-xs text-red-700 dark:text-red-300 mt-2">
-              종목 정보를 제외한 모든 데이터(가격, 뉴스, 매매 동향, 수집 상태, 분봉)가 삭제됩니다.
+              종목 정보를 제외한 모든 데이터(가격, 뉴스, 매매 동향, 분봉, 펀더멘털, ETF 구성종목)가 삭제됩니다.
             </p>
           </div>
         </section>
       </div>
+
+      {/* 카탈로그 삭제 확인 모달 (수천 건이 한 번에 지워지므로 초기화와 동일하게 확인받는다) */}
+      {isClearCatalogModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <svg className="w-8 h-8 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">종목 카탈로그 삭제</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  발굴 유니버스 {(stats?.stock_catalog || 0).toLocaleString('ko-KR')}개를 모두 삭제합니다.
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  삭제 후에는 종목 발굴 화면과 새 종목 추가 자동완성을 쓸 수 없고,
+                  다시 쓰려면 &lsquo;종목 목록 수집&rsquo;을 처음부터 실행해야 합니다.
+                </p>
+                <p className="text-sm font-semibold text-red-600 dark:text-red-400 mt-3">
+                  이 작업은 되돌릴 수 없습니다!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setIsClearCatalogModalOpen(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => clearTickerCatalogMutation.mutate()}
+                disabled={clearTickerCatalogMutation.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+              >
+                {clearTickerCatalogMutation.isPending ? '삭제 중...' : '삭제하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 초기화 확인 모달 */}
       {isResetModalOpen && (
@@ -626,8 +679,8 @@ export default function DataManagementPanel() {
                   <li>모든 가격 데이터 삭제</li>
                   <li>모든 뉴스 데이터 삭제</li>
                   <li>모든 매매 동향 데이터 삭제</li>
-                  <li>모든 수집 상태 정보 삭제</li>
                   <li>모든 분봉 데이터 삭제</li>
+                  <li>모든 펀더멘털·ETF 구성종목 삭제</li>
                 </ul>
                 <p className="text-sm font-semibold text-red-600 dark:text-red-400 mt-3">
                   이 작업은 되돌릴 수 없습니다!

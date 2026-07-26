@@ -87,8 +87,9 @@ def test_batch_summary_computes_weekly_return():
     assert s["latest_price"]["close_price"] == 110  # 최신
     # prices는 최신→오래된 순: [110,100,99,98,97,96,95]
     assert s["prices"][0]["close_price"] == 110
-    # weekly_return = 최신 / 약 5거래일 전(prices_desc[5]=96)
-    assert round(s["weekly_return"], 1) == round((110 / 96 - 1) * 100, 1)
+    # weekly_return = 최신 / 5거래일 전(prices_desc[4]=97).
+    # 발굴(scanner)·인사이트와 같은 기준을 쓴다 — metrics.weekly_return 참조.
+    assert round(s["weekly_return"], 1) == round((110 / 97 - 1) * 100, 1)
 
 
 def test_etf_detail_404_for_unknown():

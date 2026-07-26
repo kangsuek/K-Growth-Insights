@@ -392,7 +392,11 @@ def get_news(ticker: str, limit: int = 10) -> list[dict]:
 
 
 def reset_collected_data() -> dict:
-    """수집 데이터 전체 삭제(stocks 목록은 보존). 테이블별 삭제 건수 반환."""
+    """수집 데이터 전체 삭제(stocks 목록은 보존). 테이블별 삭제 건수 반환.
+
+    삭제 후 VACUUM으로 파일을 실제로 줄인다. 이걸 하지 않으면 전부 지운 뒤에도
+    화면의 '데이터베이스 크기'가 그대로라 삭제가 안 된 것처럼 보인다.
+    """
     tables = [
         "prices", "trading_flow", "intraday_prices", "news",
         "stock_fundamentals", "etf_fundamentals", "etf_holdings",
@@ -402,6 +406,9 @@ def reset_collected_data() -> dict:
         for t in tables:
             cur = conn.execute(f"DELETE FROM {t}")
             deleted[t] = cur.rowcount
+    # VACUUM은 트랜잭션 안에서 실행할 수 없어 커밋 이후 별도 연결로 처리한다.
+    with get_connection() as conn:
+        conn.execute("VACUUM")
     return deleted
 
 

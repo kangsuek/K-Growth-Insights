@@ -2,6 +2,9 @@
 
 검증일: 2026-07-26 / 방법: 브라우저 실조작 + API 직접 호출 + DB 읽기 대조 + 정적 분석
 
+> **수정 완료 (2026-07-26).** 아래 1~4장의 결함을 모두 수정했다. 항목별 조치 내용과
+> 검증 방법은 [9. 수정 이력](#9-수정-이력)에 정리했다. 5장(규칙 충돌)만 판단이 필요해 남겨 두었다.
+
 착수 기준선: 백엔드 pytest **138 passed**, 프론트 vitest **328 passed**(정리 후 326).
 검증 중 실제 DB를 파괴적으로 조작했고(카탈로그 삭제·DB 초기화), 사전 백업본으로 **원상 복구 완료**
 (종목 15 / 시세 5,178 / 매매동향 3,138 / 분봉 4,924 / 뉴스 171 / 카탈로그 4,292).
@@ -260,3 +263,63 @@ CLAUDE.md의 "사용자에게 보여지는 모든 숫자는 천 단위 구분 �
 7. **2-4** alert → Toast 통일 (이후 E2E 검증 가능해짐)
 8. **3-x** 표시 오류들
 9. **4** 죽은 코드 제거
+
+---
+
+## 9. 수정 이력
+
+2026-07-26 적용. 검증: 백엔드 pytest **138 passed**, 프론트 vitest **326 passed / 3 skipped**,
+eslint 무경고, 프로덕션 빌드 성공.
+
+백엔드 테스트 수는 착수 시점과 같은 138이다. 회귀 테스트 3건(섹터 오분류 2건, 주간 수익률 기준 1건)을
+추가했고, 죽은 코드 제거로 그 코드만 검증하던 테스트 3건을 정리했다.
+
+### 1장 — 치명
+
+| 항목 | 조치 | 검증 |
+|------|------|------|
+| 1-1 Y축 1/100 표시 | `TradingFlowChart.jsx` `formatYAxis`의 만 단위 환산을 `/1000` → `/10`으로 수정 | **브라우저 확인**: 삼성전자 축 눈금 `7.3만` → `734.3만` (개인 순매수 6,675,340주와 자릿수 일치) |
+| 1-2 음수 부호 소실 | 같은 함수에 `sign` 변수를 두고 만 분기에도 부호를 붙임 | **브라우저 확인**: 축이 `-734.3만  -334.3만  657천  734.3만` (이전 `7.3만 3.3만 657천 7.3만`) |
+| 1-3 주간 수익률 기준 불일치 | `app/services/metrics.py` 신설(`WEEKLY_LOOKBACK = 4`). `routers/etfs.py`·`scanner.py`·`insights.py`가 모두 이 함수를 호출 | API 대조: 457990 기준 대시보드·발굴 모두 **19.5794%** 로 일치. `test_migration_phase1.py` 기대값을 인덱스 4로 갱신, `test_insights.py`에 공용 기준 고정 테스트 추가 |
+| 1-4 섹터 부분일치 오분류 | `catalog.py`에 `_contains_keyword` 도입. 라틴 키워드(AI/IT/EV/SOX/REIT)는 영문 단어 경계 검사, 한글은 충돌 조합만 제외(`리츠` ← `메리츠`). `부동산`을 `건설/인프라` 앞으로 이동, `금융`에 `화재` 추가 | `test_catalog.py`에 회귀 테스트 2건 추가. 메리츠 ETN → 채권/원자재, 메리츠화재 → 금융, `TIGER 리츠부동산인프라`·`DAISHIN343 오피스리츠플러스` → 부동산, `TIGER 미국AI데이터센터` → AI/로봇 |
+
+한글 키워드에 단어 경계를 그대로 적용하면 `SK리츠`·`미국AI데이터센터` 같은 정상 합성어까지
+막힌다. 처음 시도한 접두 검사 방식이 이 회귀를 냈고, 위 방식으로 교체해 해결했다.
+
+### 2장 — 높음
+
+| 항목 | 조치 | 검증 |
+|------|------|------|
+| 2-1 자동 갱신이 전체 수집 유발 | `Dashboard.jsx`에 `handleRefetchOnly` 추가. 자동 갱신 타이머는 이제 쿼리 재요청만 하고 `collectAll`을 호출하지 않는다. 수동 새로고침 버튼은 기존대로 수집 수행 | 대시보드 로드 후 백엔드 로그에 `POST /api/data/collect-all` 자동 호출 없음 |
+| 2-2 카탈로그 삭제에 확인 없음 | 확인 모달(`isClearCatalogModalOpen`) 추가. 삭제 건수와 재수집 필요성을 안내 | 코드 검토 + 빌드. 버튼이 즉시 삭제 대신 모달을 연다 |
+| 2-3 DATABASE_PATH 상대 경로 | `config.py`에 `_resolve_path()` 추가 — 상대 경로를 프로젝트 루트 기준으로 고정 해석(`DATABASE_PATH`·`STOCKS_CONFIG_PATH`). 실데이터를 `backend/data/kgrowth.db`로 이전하고 중첩 `backend/backend/` 제거. `electron-builder.yml` 제외 규칙을 `!**/*.db`(+ wal/shm)로 확대 | 앱이 보는 경로가 `<루트>/backend/data/kgrowth.db`로 확인. 이전 후 종목 15·시세 5,178·카탈로그 4,292 그대로 |
+| 2-4 네이티브 alert/confirm | `TickerManagementPanel`·`TickerForm`의 `alert()` 10곳을 Toast로, `GeneralSettingsPanel`의 `window.confirm`을 확인 모달로 교체 | 전체 스캔 결과 `alert(`·`window.confirm` 잔존 0건 |
+
+### 3장 — 중간
+
+| 항목 | 조치 | 검증 |
+|------|------|------|
+| 3-1 다크모드 변형 누락 | `GeneralSettingsPanel.jsx` 7곳에 `dark:` 변형 추가(라벨·현재설정 문구·간격 버튼·초기화 버튼·토글 트랙 3개) | 재스캔 결과 `dark:` 없는 `text-gray-700/800/900`·`bg-gray-100/200` 잔존 0건 |
+| 3-2 주기 단위 표기 불일치 | `utils/format.js`에 `formatRefreshInterval()` 추가. 대시보드·설정이 같은 함수 사용 | 600초 → "10분"으로 표기 통일 (코드 검토) |
+| 3-3 초기화 안내 불일치 | 존재하지 않는 `collection_status` 제거, 실제 삭제 대상(펀더멘털·ETF 구성종목) 추가 — 토스트·설명문·모달 목록 3곳 | **브라우저 확인**: "가격, 뉴스, 매매 동향, 분봉, 펀더멘털, ETF 구성종목" |
+| 3-4 통계에 분봉 누락 | `DataManagementPanel`에 '분봉 레코드' 카드 추가 | **브라우저 확인**: 분봉 레코드 4,924 표시 |
+| 3-5 초기화 후 DB 크기 유지 | `reset_collected_data()`가 삭제 후 별도 연결로 `VACUUM` 실행 | pytest 통과(기존 초기화 테스트 유지) |
+| 3-6 추천 카드 지표 불일치 | `RecommendationCards.jsx`에 `getPresetMetric()` 추가 — 프리셋별로 외국인/기관 순매수량, 거래량, 주간수익률을 각각 표시 | 코드 검토 + 빌드 |
+
+### 4장 — 죽은 코드 제거
+
+- `POST /api/data/sync-catalog` 라우트와 `catalog.sync_catalog()` 서비스 제거
+- `POST /api/data/collect/{ticker}` 라우트 제거
+- `routers/data.py`의 미사용 임포트 정리(`catalog`, `collectors`, `naver_client`, `HTTPException`, `CollectResult`)
+- `test_catalog.py`의 관련 테스트 3건 정리 — 워치리스트 분리 검증은 실사용 경로(`sync_catalog_detailed`) 기준으로 이관
+
+`POST /api/data/sync-stocks`는 `justfile`의 `just collect`가 호출하므로 유지했다.
+
+### 남은 항목
+
+- **5장 규칙 충돌**(`formatVolume`의 `7.9M` 표기): CLAUDE.md의 천단위 규칙과 어긋나지만
+  테스트가 의도적으로 고정하고 있어 **미결**. 규칙을 고칠지 구현을 고칠지 결정 필요.
+- **7장 미검증 범위**: 종목 삭제·추가·수정 폼은 alert 제거로 이제 브라우저 자동화가
+  가능해졌으나 이번 회차에서는 재검증하지 못했다.
+- `메리츠 솔랙티브 금 선물 ETN(H)`은 키워드 목록에 `금선물`만 있고 `금 선물`(띄어쓰기)이
+  없어 미분류로 남는다. 부분일치 버그와는 별개인 키워드 커버리지 문제다.

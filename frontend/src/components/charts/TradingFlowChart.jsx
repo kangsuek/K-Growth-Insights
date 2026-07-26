@@ -165,11 +165,13 @@ const TradingFlowChart = memo(function TradingFlowChart({ data = [], ticker, hei
   const formatYAxis = (value) => {
     if (value === 0) return '0'
     const absValue = Math.abs(value)
-    
-    // 1,000천 이상이면 "만" 단위로 표시
+    const sign = value < 0 ? '-' : ''
+
+    // 1,000천(=100만) 이상이면 "만" 단위로 표시.
+    // 1만 = 10천이므로 천 단위 값을 10으로 나눠야 만 단위가 된다.
     if (absValue >= 1000) {
-      const tenThousands = absValue / 1000
-      return `${tenThousands.toLocaleString('ko-KR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}만`
+      const tenThousands = absValue / 10
+      return `${sign}${tenThousands.toLocaleString('ko-KR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}만`
     }
     // 1,000천 미만이면 "천" 단위로 표시
     return `${value.toLocaleString('ko-KR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}천`

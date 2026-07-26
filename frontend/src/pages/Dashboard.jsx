@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { etfApi, dataApi, settingsApi } from '../services/api'
+import { formatRefreshInterval } from '../utils/format'
 import ETFCardSkeleton from '../components/common/ETFCardSkeleton'
 import PageHeader from '../components/common/PageHeader'
 import DashboardFilters from '../components/dashboard/DashboardFilters'
@@ -97,6 +98,21 @@ export default function Dashboard() {
     }
   }, [queryClient, isRefreshing, toast])
 
+  // 자동 갱신용: 수집 없이 화면 데이터만 다시 읽는다.
+  // 수집(collectAll)은 종목당 6요청 × 전체 종목이라 주기 실행 시 네이버 API 호출이
+  // 폭증한다(뉴스 검색이 429로 막힌 원인). 수집은 수동 버튼·스케줄러에만 맡긴다.
+  const handleRefetchOnly = useCallback(async () => {
+    try {
+      await queryClient.refetchQueries({ queryKey: ['market-overview'] })
+      await queryClient.refetchQueries({ queryKey: ['etfs'] })
+      await queryClient.refetchQueries({ queryKey: ['batch-summary'] })
+      await queryClient.refetchQueries({ queryKey: ['scheduler-status'] })
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error('Auto refetch failed:', error)
+    }
+  }, [queryClient])
+
   // 전체 종목 목록 조회
   const { data: etfs, isLoading: etfsLoading, error, refetch } = useQuery({
     queryKey: ['etfs'],
@@ -115,7 +131,7 @@ export default function Dashboard() {
     queryFn: async () => {
       if (!etfs || etfs.length === 0) return null
       const tickers = etfs.map(e => e.ticker)
-      const response = await etfApi.getBatchSummary(tickers, 14, 5)  // 14 캘린더일 = 주말 포함 최소 10 거래일 (주간수익률 계산에 prices[5] 필요)
+      const response = await etfApi.getBatchSummary(tickers, 14, 5)  // 14 캘린더일 = 주말 포함 최소 10 거래일 (주간수익률 계산에 prices[4] 필요)
       return response.data.data  // response.data.data = {ticker: summary}
     },
     enabled: !!etfs && etfs.length > 0,  // etfs가 로드된 후에만 실행
@@ -125,15 +141,15 @@ export default function Dashboard() {
 
   const isLoading = etfsLoading || summaryLoading
 
-  // 자동 갱신 시 모든 데이터 갱신 (설정 기반)
+  // 자동 갱신 시 화면 데이터만 다시 읽는다 (설정 기반, 수집은 하지 않음)
   useEffect(() => {
     if (settings.autoRefresh.enabled) {
       const interval = setInterval(() => {
-        handleRefreshAll()
+        handleRefetchOnly()
       }, settings.autoRefresh.interval)
       return () => clearInterval(interval)
     }
-  }, [settings.autoRefresh.enabled, settings.autoRefresh.interval, handleRefreshAll])
+  }, [settings.autoRefresh.enabled, settings.autoRefresh.interval, handleRefetchOnly])
 
   // 오늘 날짜 포맷팅
   const formatDate = (date) => {
@@ -413,7 +429,7 @@ export default function Dashboard() {
               aria-label="자동 갱신 토글"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200 transition-colors">
-              자동 갱신 ({settings.autoRefresh.interval / 1000}초)
+              자동 갱신 ({formatRefreshInterval(settings.autoRefresh.interval)})
             </span>
           </label>
 
