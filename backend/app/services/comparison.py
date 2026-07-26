@@ -8,9 +8,10 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 
-from app.services import repository
+from app.services import metrics, repository
 
-TRADING_DAYS_PER_YEAR = 252
+# 연환산 기준 거래일 수는 metrics와 같은 값을 쓴다(지표가 화면마다 어긋나지 않게).
+TRADING_DAYS_PER_YEAR = metrics.TRADING_DAYS_PER_YEAR
 RISK_FREE_RATE = 3.0
 
 # 연환산(annualized)은 표본이 짧으면 극단적으로 증폭된다(20거래일 +39% → 연환산 +8043%).
@@ -25,13 +26,6 @@ MIN_POINTS_FOR_ANNUALIZED = 60
 
 def _daily_returns(values: list[float]) -> list[float]:
     return [(values[i] / values[i - 1] - 1) for i in range(1, len(values)) if values[i - 1]]
-
-
-def _std(xs: list[float]) -> float:
-    if len(xs) < 2:
-        return 0.0
-    mean = sum(xs) / len(xs)
-    return math.sqrt(sum((x - mean) ** 2 for x in xs) / len(xs))
 
 
 def _correlation(a: list[float], b: list[float]) -> float:
@@ -56,7 +50,8 @@ def _statistics(closes: list[float]) -> dict:
                 "max_drawdown": None, "sharpe_ratio": None, "data_points": n}
     period_return = (closes[-1] / closes[0] - 1) * 100
     rets = _daily_returns(closes)
-    volatility = _std(rets) * math.sqrt(TRADING_DAYS_PER_YEAR) * 100 if rets else None
+    # 변동성은 표본표준편차(n-1) 기준 연환산. rets는 비율이므로 퍼센트로 바꿔 넘긴다.
+    volatility = metrics.annualized_volatility([r * 100 for r in rets]) if rets else None
     # 표본이 3개월 미만이면 연환산은 의미가 없어 계산하지 않는다.
     annualized = (
         ((closes[-1] / closes[0]) ** (TRADING_DAYS_PER_YEAR / max(n - 1, 1)) - 1) * 100

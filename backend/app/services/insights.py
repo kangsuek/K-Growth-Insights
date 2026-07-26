@@ -6,7 +6,6 @@
 """
 from __future__ import annotations
 
-import math
 from datetime import date, timedelta
 
 from app.services import metrics, repository
@@ -16,7 +15,6 @@ FOREIGN_NET_SUSTAINED_DAYS = 5
 FOREIGN_NET_AVG_VOLUME_WINDOW = 20
 FOREIGN_NET_SUSTAINED_VOLUME_RATIO = 0.05
 FOREIGN_NET_SUSTAINED_FALLBACK_THRESHOLD = 1000
-TRADING_DAYS_PER_YEAR = 252
 RISK_KEYWORDS = ["규제", "관세", "금리", "환율", "경기", "리스크"]
 
 
@@ -43,12 +41,9 @@ def _compute_metrics(prices_desc: list[dict]) -> tuple[dict, float | None]:
     if len(ytd) >= 2 and ytd[0]["close_price"] and ytd[-1]["close_price"]:
         returns["ytd"] = (ytd[0]["close_price"] - ytd[-1]["close_price"]) / ytd[-1]["close_price"] * 100
 
+    # 연환산 변동성은 비교 화면과 같은 식(표본표준편차 기준)을 쓴다.
     changes = [p["change_pct"] for p in prices_desc if p.get("change_pct") is not None]
-    volatility = None
-    if len(changes) >= 10:
-        mean = sum(changes) / len(changes)
-        variance = sum((x - mean) ** 2 for x in changes) / len(changes)
-        volatility = math.sqrt(variance) * math.sqrt(TRADING_DAYS_PER_YEAR)
+    volatility = metrics.annualized_volatility(changes) if len(changes) >= 10 else None
 
     return returns, volatility
 
