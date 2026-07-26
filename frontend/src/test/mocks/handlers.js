@@ -174,11 +174,6 @@ export const handlers = [
     return HttpResponse.json(mockETFData)
   }),
 
-  // GET /api/etfs - 모든 ETF 목록 (슬래시 없음)
-  http.get(`${BASE_URL}/etfs`, () => {
-    return HttpResponse.json(mockETFData)
-  }),
-
   // GET /api/etfs/:ticker - 특정 ETF 상세
   http.get(`${BASE_URL}/etfs/:ticker`, ({ params }) => {
     const { ticker } = params
@@ -210,11 +205,6 @@ export const handlers = [
     return HttpResponse.json({ news, analysis: null })
   }),
 
-  // GET /api/news - 전체 뉴스
-  http.get(`${BASE_URL}/news`, () => {
-    return HttpResponse.json(mockNewsData)
-  }),
-
   // GET /api/settings/stocks - 종목 목록(설정 화면)
   http.get(`${BASE_URL}/settings/stocks`, () => {
     return HttpResponse.json([
@@ -226,7 +216,7 @@ export const handlers = [
   // GET /api/settings/api-keys - 네이버 검색 API 키 상태
   http.get(`${BASE_URL}/settings/api-keys`, () => {
     return HttpResponse.json({
-      keys: { NAVER_CLIENT_ID: '', NAVER_CLIENT_SECRET: '', PERPLEXITY_API_KEY: '' },
+      keys: { NAVER_CLIENT_ID: '', NAVER_CLIENT_SECRET: '' },
       configured: { naver: false },
     })
   }),
@@ -246,40 +236,6 @@ export const handlers = [
         last_collection_time: '2025-11-10T09:00:00',
         next_collection_time: '2025-11-10T15:00:00',
       },
-    })
-  }),
-
-  // GET /api/data/status - 수집 상태
-  http.get(`${BASE_URL}/data/status`, () => {
-    return HttpResponse.json({
-      total_tickers: 6,
-      completed: 6,
-      failed: 0,
-      status: 'completed',
-    })
-  }),
-
-  // POST /api/etfs/:ticker/collect - 가격 데이터 수집
-  http.post(`${BASE_URL}/etfs/:ticker/collect`, () => {
-    return HttpResponse.json({
-      message: 'Price collection started',
-      status: 'success',
-    })
-  }),
-
-  // POST /api/etfs/:ticker/collect-trading-flow - 매매 동향 수집
-  http.post(`${BASE_URL}/etfs/:ticker/collect-trading-flow`, () => {
-    return HttpResponse.json({
-      message: 'Trading flow collection started',
-      status: 'success',
-    })
-  }),
-
-  // POST /api/news/:ticker/collect - 뉴스 수집
-  http.post(`${BASE_URL}/news/:ticker/collect`, () => {
-    return HttpResponse.json({
-      message: 'News collection started',
-      status: 'success',
     })
   }),
 

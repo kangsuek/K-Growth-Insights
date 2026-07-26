@@ -266,7 +266,6 @@ export const CACHE_STALE_TIME_FAST = 30 * 1000 // 30초
  *
  * 적용 대상:
  * - /api/news/{ticker} (뉴스)
- * - /api/etfs/{ticker}/metrics (지표)
  * - /api/etfs/compare (종목 비교)
  *
  * 백엔드 CACHE_TTL_SLOW_CHANGING과 일치
@@ -277,7 +276,7 @@ export const CACHE_STALE_TIME_SLOW = 60 * 1000 // 1분
  * 상태 정보 캐시 TTL (10초)
  *
  * 적용 대상:
- * - /api/data/status (수집 상태)
+ * - /api/data/collect-progress (수집 진행률)
  * - /api/data/scheduler-status (스케줄러 상태)
  *
  * 백엔드 CACHE_TTL_STATUS와 일치

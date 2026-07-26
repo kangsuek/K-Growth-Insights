@@ -15,7 +15,7 @@ from app import config
 logger = logging.getLogger(__name__)
 
 _KEYS_PATH = Path(config.DATA_DIR) / "api_keys.json"
-_MANAGED = ("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "PERPLEXITY_API_KEY")
+_MANAGED = ("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET")
 
 
 def _load() -> dict:

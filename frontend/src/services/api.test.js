@@ -80,22 +80,6 @@ describe('API Services', () => {
       expect(response.data).toEqual(mockData)
     })
 
-    it('getMetrics - 종목 지표를 조회한다', async () => {
-      const mockData = {
-        ticker: '487240',
-        average_volume: 1200000,
-        volatility: 1.25,
-      }
-
-      server.use(
-        http.get('http://localhost:8000/api/etfs/487240/metrics', () => {
-          return HttpResponse.json(mockData)
-        })
-      )
-
-      const response = await etfApi.getMetrics('487240')
-      expect(response.data).toEqual(mockData)
-    })
   })
 
   describe('newsApi', () => {
@@ -124,18 +108,6 @@ describe('API Services', () => {
       expect(response.data).toHaveLength(2)
     })
 
-    it('collect - 뉴스 수집을 트리거한다', async () => {
-      const mockData = { message: 'News collection started', status: 'success' }
-
-      server.use(
-        http.post('http://localhost:8000/api/news/487240/collect', () => {
-          return HttpResponse.json(mockData)
-        })
-      )
-
-      const response = await newsApi.collect('487240', 7)
-      expect(response.data).toEqual(mockData)
-    })
   })
 
   describe('dataApi', () => {

@@ -69,7 +69,6 @@ class StockUpdate(BaseModel):
 class ApiKeysUpdate(BaseModel):
     NAVER_CLIENT_ID: Optional[str] = None
     NAVER_CLIENT_SECRET: Optional[str] = None
-    PERPLEXITY_API_KEY: Optional[str] = None
 
 
 # --- 종목 관리 ---------------------------------------------------------------

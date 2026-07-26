@@ -117,9 +117,6 @@ export const etfApi = {
     })
   },
 
-  // 종목 지표 조회 (일반 조회)
-  getMetrics: (ticker) => api.get(`/etfs/${ticker}/metrics`, { timeout: NORMAL_API_TIMEOUT }),
-
   // 펀더멘털 조회 (ETF: NAV 추이 + 구성종목, STOCK: 재무 지표) (일반 조회)
   getFundamentals: (ticker) => api.get(`/etfs/${ticker}/fundamentals`, { timeout: NORMAL_API_TIMEOUT }),
 
@@ -187,13 +184,6 @@ export const newsApi = {
       }
     })
   },
-
-  // 뉴스 수집 트리거 (긴 작업)
-  collect: (ticker, days = 7) =>
-    api.post(`/news/${ticker}/collect`, null, { 
-      timeout: LONG_API_TIMEOUT,
-      params: { days } 
-    }),
 }
 
 // Data Collection API 서비스
