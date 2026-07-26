@@ -94,30 +94,48 @@ export function calculateAllocation(investedETFs, batchSummary) {
 export function calculateDailyPortfolioTrend(investedETFs, batchSummary, totalInvestment) {
   if (!investedETFs || investedETFs.length === 0 || !batchSummary || totalInvestment <= 0) return []
 
-  // 날짜별 포트폴리오 가치 집계
-  const dateMap = new Map()
+  // 시세가 있는 종목만 대상으로 한다(totalInvestment도 같은 기준으로 계산된다).
+  const eligible = investedETFs.filter((etf) => batchSummary[etf.ticker]?.prices?.length > 0)
+  if (eligible.length === 0) return []
 
-  for (const etf of investedETFs) {
-    const summary = batchSummary[etf.ticker]
-    const prices = summary?.prices
-    if (!prices) continue
+  // 모든 대상 종목에 시세가 있는 날짜(교집합)만 쓴다.
+  // 일부 종목만 있는 날짜를 넣으면 그 종목 평가액만 합산돼 포트폴리오 가치가
+  // 실제보다 작아지고, 신규 상장 종목이 하나 있으면 차트가 -50%에서 시작하는 것처럼
+  // 보였다.
+  const dateSets = eligible.map((etf) => new Set(batchSummary[etf.ticker].prices.map((p) => p.date)))
+  let commonDates = [...dateSets[0]]
+    .filter((date) => dateSets.every((set) => set.has(date)))
+    .sort((a, b) => a.localeCompare(b))
 
-    for (const p of prices) {
-      const existing = dateMap.get(p.date) || 0
-      dateMap.set(p.date, existing + p.close_price * etf.quantity)
-    }
+  // 실제로 보유한 기간만 수익률로 본다. 매수일 이전 구간은 아직 사지도 않은 기간의
+  // 손익이어서, 그대로 그리면 '어제 산 종목'이 한 달 전에 -35%였던 것처럼 보인다.
+  // 보유 종목 전체의 매수일을 아는 경우에만 적용하고(하나라도 모르면 전 구간 유지),
+  // 모두 보유하게 된 시점(가장 늦은 매수일) 이후로 자른다.
+  const purchaseDates = eligible.map((etf) => etf.purchase_date).filter(Boolean)
+  if (purchaseDates.length === eligible.length) {
+    const heldFrom = purchaseDates.reduce((a, b) => (a > b ? a : b))
+    commonDates = commonDates.filter((date) => date >= heldFrom)
   }
 
-  // 날짜 오름차순 정렬
-  const sorted = Array.from(dateMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, portfolioValue]) => ({
+  // 종목별 {date: close_price} 조회용 맵
+  const priceByTicker = new Map(
+    eligible.map((etf) => [
+      etf.ticker,
+      new Map(batchSummary[etf.ticker].prices.map((p) => [p.date, p.close_price])),
+    ]),
+  )
+
+  return commonDates.map((date) => {
+    let portfolioValue = 0
+    for (const etf of eligible) {
+      portfolioValue += priceByTicker.get(etf.ticker).get(date) * etf.quantity
+    }
+    return {
       date,
       portfolioValue,
       returnPct: ((portfolioValue - totalInvestment) / totalInvestment) * 100,
-    }))
-
-  return sorted
+    }
+  })
 }
 
 /**
