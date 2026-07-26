@@ -71,20 +71,37 @@ def create_stock(data: dict) -> dict:
     return get_stock_full(ticker)
 
 
+# name·type은 NOT NULL이므로 null을 받아도 지우지 않고 기존 값을 유지한다.
+_STOCK_REQUIRED_COLS = ("name", "type")
+# 선택 필드는 null을 "지우기"로 해석해 NULL을 반영한다(수정 폼에서 칸을 비운 경우).
+_STOCK_OPTIONAL_COLS = ("theme", "purchase_date", "purchase_price", "quantity",
+                        "search_keyword")
+
+
 def update_stock(ticker: str, data: dict) -> dict | None:
-    """부분 업데이트. 제공된 필드만 갱신. 종목 없으면 None."""
+    """부분 업데이트. 제공된 필드만 갱신. 종목 없으면 None.
+
+    라우터가 exclude_unset=True로 넘기므로 "보내지 않은 필드"와 "null로 보낸 필드"가
+    구분된다. 전자는 그대로 두고, 후자는 선택 필드에 한해 NULL로 지운다.
+    """
     with get_connection() as conn:
         if not conn.execute("SELECT 1 FROM stocks WHERE ticker = ?", (ticker,)).fetchone():
             return None
         fields, values = [], []
-        for col in ("name", "type", "theme", "purchase_date", "purchase_price",
-                    "quantity", "search_keyword"):
+        for col in _STOCK_REQUIRED_COLS:
             if col in data and data[col] is not None:
                 fields.append(f"{col} = ?")
                 values.append(data[col])
-        if "relevance_keywords" in data and data["relevance_keywords"] is not None:
+        for col in _STOCK_OPTIONAL_COLS:
+            if col in data:
+                fields.append(f"{col} = ?")
+                values.append(data[col])
+        if "relevance_keywords" in data:
             fields.append("relevance_keywords = ?")
-            values.append(json.dumps(data["relevance_keywords"], ensure_ascii=False))
+            values.append(
+                json.dumps(data["relevance_keywords"], ensure_ascii=False)
+                if data["relevance_keywords"] is not None else None
+            )
         if fields:
             fields.append("updated_at = datetime('now')")
             conn.execute(f"UPDATE stocks SET {', '.join(fields)} WHERE ticker = ?",

@@ -406,6 +406,14 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
       submitData.quantity = null
     }
 
+    // 비운 선택 필드는 빈 문자열 대신 null로 보낸다. 백엔드는 null을 "지우기"로
+    // 해석해 컬럼을 NULL로 만든다(빈 문자열이 그대로 저장되는 것을 막는다).
+    for (const key of ['theme', 'search_keyword']) {
+      if (typeof submitData[key] === 'string' && submitData[key].trim() === '') {
+        submitData[key] = null
+      }
+    }
+
     onSubmit(submitData)
   }
 
