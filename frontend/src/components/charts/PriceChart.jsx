@@ -85,7 +85,7 @@ const CustomTooltip = ({ active, payload, baseline }) => {
  * PriceChart 컴포넌트
  * 캔들스틱 차트 (상단) + 거래량 바 차트 (하단) 조합
  */
-const PriceChart = memo(function PriceChart({ data = [], ticker, height = null, dateRange = '7d', scrollRef, onScroll, purchasePrice = null }) {
+const PriceChart = memo(function PriceChart({ data = [], ticker, height = null, dateRange = '7d', showVolume = true, scrollRef, onScroll, purchasePrice = null }) {
   const [showMA5, setShowMA5] = useState(false)
   const [showMA10, setShowMA10] = useState(false)
   const [showMA20, setShowMA20] = useState(false)
@@ -217,12 +217,15 @@ const PriceChart = memo(function PriceChart({ data = [], ticker, height = null, 
 
   const barCategoryGap = dataCount > 30 ? '1%' : dataCount > 15 ? '2%' : '5%'
 
-  // 가격 / 거래량 차트 높이 분배 (72% / 28%)
-  const priceH = Math.round(finalHeight * 0.72)
+  // 가격 / 거래량 차트 높이 분배 (72% / 28%).
+  // 거래량을 숨기면 가격 차트가 전체 높이를 쓴다.
+  const priceH = showVolume ? Math.round(finalHeight * 0.72) : finalHeight
   const volumeH = Math.round(finalHeight * 0.28)
 
-  const sharedMargin = { top: 8, right: 15, left: 15, bottom: 0 }
   const volumeMargin = { top: 4, right: 15, left: 15, bottom: dataCount > 15 ? 60 : 20 }
+  // 날짜 축은 맨 아래 패널에만 그린다. 거래량이 없으면 가격 차트가 날짜 축을 맡으므로
+  // 하단 여백도 거래량 패널과 같게 준다.
+  const sharedMargin = { top: 8, right: 15, left: 15, bottom: showVolume ? 0 : volumeMargin.bottom }
 
   return (
     <div
@@ -248,7 +251,15 @@ const PriceChart = memo(function PriceChart({ data = [], ticker, height = null, 
             style={{ cursor: 'pointer' }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} />
-            <XAxis dataKey="date" hide />
+            <XAxis
+              dataKey="date"
+              hide={showVolume}
+              tickFormatter={formatXAxis}
+              tick={{ fontSize: 12 }}
+              stroke={COLORS.CHART_AXIS}
+              interval="preserveStartEnd"
+              minTickGap={40}
+            />
             <YAxis
               orientation="left"
               tickFormatter={(v) => formatPrice(v)}
@@ -299,33 +310,35 @@ const PriceChart = memo(function PriceChart({ data = [], ticker, height = null, 
           </ComposedChart>
         </ResponsiveContainer>
 
-        {/* ── 거래량 차트 ── */}
-        <ResponsiveContainer width="100%" height={volumeH}>
-          <ComposedChart data={chartData} margin={volumeMargin} barCategoryGap={barCategoryGap}>
-            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={formatXAxis}
-              tick={{ fontSize: 12 }}
-              stroke={COLORS.CHART_AXIS}
-              interval="preserveStartEnd"
-              minTickGap={40}
-            />
-            <YAxis
-              orientation="left"
-              tickFormatter={(v) => formatVolume(v)}
-              tick={{ fontSize: 10 }}
-              stroke={COLORS.CHART_AXIS}
-              domain={volumeDomain}
-              width={55}
-            />
-            <Bar dataKey="volume" isAnimationActive={false} legendType="none">
-              {chartData.map((entry, i) => (
-                <Cell key={`vol-${i}`} fill={entry.volumeColor} opacity={0.7} />
-              ))}
-            </Bar>
-          </ComposedChart>
-        </ResponsiveContainer>
+        {/* ── 거래량 차트 ('거래량 표시' 설정으로 켜고 끈다) ── */}
+        {showVolume && (
+          <ResponsiveContainer width="100%" height={volumeH}>
+            <ComposedChart data={chartData} margin={volumeMargin} barCategoryGap={barCategoryGap}>
+              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatXAxis}
+                tick={{ fontSize: 12 }}
+                stroke={COLORS.CHART_AXIS}
+                interval="preserveStartEnd"
+                minTickGap={40}
+              />
+              <YAxis
+                orientation="left"
+                tickFormatter={(v) => formatVolume(v)}
+                tick={{ fontSize: 10 }}
+                stroke={COLORS.CHART_AXIS}
+                domain={volumeDomain}
+                width={55}
+              />
+              <Bar dataKey="volume" isAnimationActive={false} legendType="none">
+                {chartData.map((entry, i) => (
+                  <Cell key={`vol-${i}`} fill={entry.volumeColor} opacity={0.7} />
+                ))}
+              </Bar>
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
 
         {/* ── 범례 ── */}
         <div className="flex justify-center gap-6 pt-2 pb-2 text-sm flex-wrap">
@@ -397,6 +410,7 @@ PriceChart.propTypes = {
   ticker: PropTypes.string.isRequired,
   height: PropTypes.number,
   dateRange: PropTypes.oneOf(['7d', '1m', '3m', '6m', 'ytd', '1y', 'custom']),
+  showVolume: PropTypes.bool,
   scrollRef: PropTypes.object,
   onScroll: PropTypes.func,
   purchasePrice: PropTypes.number,

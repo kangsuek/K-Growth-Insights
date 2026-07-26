@@ -82,10 +82,16 @@ describe('ETFCharts', () => {
     expect(screen.getByText('데이터를 불러올 수 없습니다')).toBeInTheDocument()
   })
 
-  it('showVolume이 false일 때 가격 차트를 표시하지 않는다', () => {
-    render(<ETFCharts {...defaultProps} showVolume={false} />)
+  // 회귀 방지: '거래량 표시'를 끄면 가격 차트 카드 전체가 사라지던 결함.
+  // 이 설정은 거래량 패널만 켜고 끄며, 일자별 가격 차트는 항상 보여야 한다.
+  it('showVolume이 false여도 가격 차트를 표시한다', () => {
+    const pricesData = [
+      { date: '2024-01-01', close_price: 1000, volume: 1000000 },
+    ]
 
-    expect(screen.queryByTestId('price-chart')).not.toBeInTheDocument()
+    render(<ETFCharts {...defaultProps} pricesData={pricesData} showVolume={false} />)
+
+    expect(screen.getByTestId('price-chart')).toBeInTheDocument()
   })
 
   it('showTradingFlow가 false일 때 매매 동향 차트를 표시하지 않는다', () => {

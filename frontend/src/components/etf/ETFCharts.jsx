@@ -257,41 +257,41 @@ export default function ETFCharts({
 }) {
   return (
     <div className="space-y-4 mb-4">
-      {/* 가격 차트 (거래량 포함) */}
-      {showVolume && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-all duration-300 ease-in-out hover:shadow-xl relative">
-          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">가격 차트</h3>
-          {pricesFetching && !pricesLoading && (
-            <span className="absolute top-4 right-4 flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              갱신 중
-            </span>
-          )}
-          {pricesLoading ? (
-            // 최초 로딩(데이터 없음)에만 스켈레톤. 백그라운드 재조회(pricesFetching) 중에는
-            // 기존 차트를 계속 보여준다(재조회 때마다 스켈레톤으로 깜빡이며 느려 보이는 문제 방지).
-            <LoadingIndicator
-              isLoading={true}
-              message="가격 데이터를 불러오는 중..."
-              subMessage="데이터 수집 시 최대 30초가 소요될 수 있습니다."
-            />
-          ) : pricesError ? (
-            <ErrorFallback error={pricesError} onRetry={refetchPrices} />
-          ) : (
-            <PriceChart
-              data={pricesData}
-              ticker={ticker}
-              dateRange={dateRange}
-              scrollRef={priceChartScrollRef}
-              onScroll={onPriceChartScroll}
-              purchasePrice={purchasePrice}
-            />
-          )}
-        </div>
-      )}
+      {/* 일자별 가격 차트. '거래량 표시' 설정은 하단 거래량 패널만 켜고 끈다
+          (분봉 차트와 같은 방식). 가격 차트 자체는 항상 표시한다. */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-all duration-300 ease-in-out hover:shadow-xl relative">
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">가격 차트</h3>
+        {pricesFetching && !pricesLoading && (
+          <span className="absolute top-4 right-4 flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            갱신 중
+          </span>
+        )}
+        {pricesLoading ? (
+          // 최초 로딩(데이터 없음)에만 스켈레톤. 백그라운드 재조회(pricesFetching) 중에는
+          // 기존 차트를 계속 보여준다(재조회 때마다 스켈레톤으로 깜빡이며 느려 보이는 문제 방지).
+          <LoadingIndicator
+            isLoading={true}
+            message="가격 데이터를 불러오는 중..."
+            subMessage="데이터 수집 시 최대 30초가 소요될 수 있습니다."
+          />
+        ) : pricesError ? (
+          <ErrorFallback error={pricesError} onRetry={refetchPrices} />
+        ) : (
+          <PriceChart
+            data={pricesData}
+            ticker={ticker}
+            dateRange={dateRange}
+            showVolume={showVolume}
+            scrollRef={priceChartScrollRef}
+            onScroll={onPriceChartScroll}
+            purchasePrice={purchasePrice}
+          />
+        )}
+      </div>
 
       {/* 매매 동향 차트 (고급 분석 모드에서만 표시) */}
       {showTradingFlow && (

@@ -161,6 +161,22 @@ describe('PriceChart', () => {
     expect(yAxes.length).toBe(2)
   })
 
+  // '거래량 표시'를 끄면 거래량 패널만 사라지고 가격(캔들) 차트는 남아야 한다.
+  it('showVolume이 false일 때 거래량 패널만 숨기고 가격 차트는 유지한다', () => {
+    const { container } = render(
+      <PriceChart data={mockPriceData} ticker="487240" showVolume={false} />
+    )
+
+    // 가격 차트(캔들 + 종가 라인)는 그대로 렌더링된다
+    expect(container.querySelector('.recharts-line')).toBeInTheDocument()
+
+    // 거래량 패널이 사라지므로 Y축은 가격 축 1개만 남는다
+    expect(container.querySelectorAll('.recharts-yAxis').length).toBe(1)
+
+    // 날짜 축은 가격 차트가 대신 표시한다
+    expect(container.querySelector('.recharts-xAxis')).toBeInTheDocument()
+  })
+
   it('반응형으로 동작한다', () => {
     const { container } = render(
       <PriceChart data={mockPriceData} ticker="487240" />
