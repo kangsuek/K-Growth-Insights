@@ -108,14 +108,12 @@ const CustomTooltip = ({ active, payload }) => {
  * @param {Array} data - 분봉 데이터 배열
  * @param {string} ticker - 종목 코드
  * @param {number} height - 차트 높이 (기본값: 300)
- * @param {boolean} showVolume - 거래량 표시 여부
  * @param {number} previousClose - 전일 종가 (기준선 표시용)
  */
 const IntradayChart = memo(function IntradayChart({
   data = [],
   ticker,
   height = 300,
-  showVolume = true,
   previousClose = null,
   pivotLevels = null,
   fitToWidth = false,
@@ -349,7 +347,7 @@ const IntradayChart = memo(function IntradayChart({
   // 가격 / 거래량 패널 높이 분배(HTS처럼 하단에 거래량 별도 패널). 두 패널의 Y축
   // 폭(60)과 좌우 여백을 맞춰 플롯 영역을 세로로 정렬한다.
   const AXIS_WIDTH = 60
-  const priceH = showVolume ? Math.round(height * 0.72) : height
+  const priceH = Math.round(height * 0.72)
   const volumeH = Math.round(height * 0.28)
   const pricePanelMargin = { top: 10, right: 15, left: 0, bottom: 0 }
   const volumePanelMargin = { top: 4, right: 15, left: 0, bottom: 20 }
@@ -429,40 +427,38 @@ const IntradayChart = memo(function IntradayChart({
       </ResponsiveContainer>
 
       {/* ── 거래량 패널 ── */}
-      {showVolume && (
-        <ResponsiveContainer width="100%" height={volumeH}>
-          <ComposedChart data={chartData} margin={volumePanelMargin}>
-            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} vertical={false} />
-            <XAxis
-              dataKey="time"
-              tick={{ fontSize: 11 }}
-              stroke={COLORS.CHART_AXIS}
-              interval={0}
-              ticks={xAxisTicks}
-              angle={-45}
-              textAnchor="end"
-              height={40}
-            />
-            <YAxis
-              orientation="left"
-              tickFormatter={formatVolume}
-              tick={{ fontSize: 10 }}
-              stroke={COLORS.CHART_AXIS}
-              domain={volumeDomain}
-              // 기본값이면 축이 데이터 최대에 맞춰 확장돼 상한(p95)이 무시된다.
-              // overflow를 허용해 상한을 강제하고, 급증 봉은 상단에서 잘리게 둔다.
-              allowDataOverflow
-              width={AXIS_WIDTH}
-            />
-            <Tooltip {...tooltipProps} />
-            <Bar dataKey="volume" opacity={0.7} name="거래량" barSize={fitToWidth ? undefined : BAR_WIDTH} isAnimationActive={false}>
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.volumeColor} />
-              ))}
-            </Bar>
-          </ComposedChart>
-        </ResponsiveContainer>
-      )}
+      <ResponsiveContainer width="100%" height={volumeH}>
+        <ComposedChart data={chartData} margin={volumePanelMargin}>
+          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.CHART_GRID} vertical={false} />
+          <XAxis
+            dataKey="time"
+            tick={{ fontSize: 11 }}
+            stroke={COLORS.CHART_AXIS}
+            interval={0}
+            ticks={xAxisTicks}
+            angle={-45}
+            textAnchor="end"
+            height={40}
+          />
+          <YAxis
+            orientation="left"
+            tickFormatter={formatVolume}
+            tick={{ fontSize: 10 }}
+            stroke={COLORS.CHART_AXIS}
+            domain={volumeDomain}
+            // 기본값이면 축이 데이터 최대에 맞춰 확장돼 상한(p95)이 무시된다.
+            // overflow를 허용해 상한을 강제하고, 급증 봉은 상단에서 잘리게 둔다.
+            allowDataOverflow
+            width={AXIS_WIDTH}
+          />
+          <Tooltip {...tooltipProps} />
+          <Bar dataKey="volume" opacity={0.7} name="거래량" barSize={fitToWidth ? undefined : BAR_WIDTH} isAnimationActive={false}>
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.volumeColor} />
+            ))}
+          </Bar>
+        </ComposedChart>
+      </ResponsiveContainer>
       </div>
 
       {/* ── 범례 ── */}
@@ -531,7 +527,6 @@ IntradayChart.propTypes = {
   ),
   ticker: PropTypes.string.isRequired,
   height: PropTypes.number,
-  showVolume: PropTypes.bool,
   fitToWidth: PropTypes.bool,
   previousClose: PropTypes.number,
   pivotLevels: PropTypes.shape({

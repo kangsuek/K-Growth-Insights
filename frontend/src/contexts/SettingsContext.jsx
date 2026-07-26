@@ -13,10 +13,6 @@ const DEFAULT_SETTINGS = {
   },
   defaultDateRange: '1M', // "7D" | "1M" | "3M"
   theme: 'light', // "light" | "dark" | "system"
-  display: {
-    showVolume: true,
-    showTradingFlow: true,
-  },
   cardOrder: [], // 사용자 정의 카드 순서 (ticker 배열)
 }
 
@@ -54,17 +50,8 @@ function validateSettings(settings) {
     validated.theme = settings.theme
   }
 
-  // display 검증
-  if (settings.display && typeof settings.display === 'object') {
-    validated.display = {
-      showVolume: typeof settings.display.showVolume === 'boolean'
-        ? settings.display.showVolume
-        : DEFAULT_SETTINGS.display.showVolume,
-      showTradingFlow: typeof settings.display.showTradingFlow === 'boolean'
-        ? settings.display.showTradingFlow
-        : DEFAULT_SETTINGS.display.showTradingFlow,
-    }
-  }
+  // 표시 옵션(거래량·매매동향)은 설정에서 제거했다. 두 차트는 항상 표시하며,
+  // 예전 설정에 남아 있는 display 값은 검증에서 걸러 저장하지 않는다.
 
   // cardOrder 검증
   if (Array.isArray(settings.cardOrder)) {

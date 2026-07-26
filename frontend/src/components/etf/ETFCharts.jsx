@@ -232,8 +232,6 @@ export default function ETFCharts({
   tradingFlowData,
   ticker,
   dateRange,
-  showVolume,
-  showTradingFlow,
   pricesLoading,
   pricesFetching,
   tradingFlowLoading,
@@ -257,8 +255,7 @@ export default function ETFCharts({
 }) {
   return (
     <div className="space-y-4 mb-4">
-      {/* 일자별 가격 차트. '거래량 표시' 설정은 하단 거래량 패널만 켜고 끈다
-          (분봉 차트와 같은 방식). 가격 차트 자체는 항상 표시한다. */}
+      {/* 일자별 가격 차트 (캔들 + 거래량) */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-all duration-300 ease-in-out hover:shadow-xl relative">
         <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">가격 차트</h3>
         {pricesFetching && !pricesLoading && (
@@ -285,7 +282,6 @@ export default function ETFCharts({
             data={pricesData}
             ticker={ticker}
             dateRange={dateRange}
-            showVolume={showVolume}
             scrollRef={priceChartScrollRef}
             onScroll={onPriceChartScroll}
             purchasePrice={purchasePrice}
@@ -293,29 +289,27 @@ export default function ETFCharts({
         )}
       </div>
 
-      {/* 매매 동향 차트 (고급 분석 모드에서만 표시) */}
-      {showTradingFlow && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-all duration-300 ease-in-out hover:shadow-xl relative">
-          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">투자자별 매매 동향</h3>
-          {tradingFlowLoading || tradingFlowFetching ? (
-            <LoadingIndicator
-              isLoading={true}
-              message="매매 동향 데이터를 불러오는 중..."
-              subMessage={tradingFlowFetching && !tradingFlowLoading ? "데이터를 수집하고 있습니다. 최대 30초가 소요될 수 있습니다." : ""}
-            />
-          ) : tradingFlowError ? (
-            <ErrorFallback error={tradingFlowError} onRetry={refetchTradingFlow} />
-          ) : (
-            <TradingFlowChart
-              data={tradingFlowData}
-              ticker={ticker}
-              dateRange={dateRange}
-              scrollRef={tradingFlowChartScrollRef}
-              onScroll={onTradingFlowChartScroll}
-            />
-          )}
-        </div>
-      )}
+      {/* 투자자별 매매 동향 차트 */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-all duration-300 ease-in-out hover:shadow-xl relative">
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">투자자별 매매 동향</h3>
+        {tradingFlowLoading || tradingFlowFetching ? (
+          <LoadingIndicator
+            isLoading={true}
+            message="매매 동향 데이터를 불러오는 중..."
+            subMessage={tradingFlowFetching && !tradingFlowLoading ? "데이터를 수집하고 있습니다. 최대 30초가 소요될 수 있습니다." : ""}
+          />
+        ) : tradingFlowError ? (
+          <ErrorFallback error={tradingFlowError} onRetry={refetchTradingFlow} />
+        ) : (
+          <TradingFlowChart
+            data={tradingFlowData}
+            ticker={ticker}
+            dateRange={dateRange}
+            scrollRef={tradingFlowChartScrollRef}
+            onScroll={onTradingFlowChartScroll}
+          />
+        )}
+      </div>
 
       {/* 기술지표 (고급 분석 모드에서만 표시) */}
       {showTechnicalSection && (
@@ -337,8 +331,6 @@ ETFCharts.propTypes = {
   tradingFlowData: PropTypes.array,
   ticker: PropTypes.string.isRequired,
   dateRange: PropTypes.string.isRequired,
-  showVolume: PropTypes.bool,
-  showTradingFlow: PropTypes.bool,
   pricesLoading: PropTypes.bool,
   pricesFetching: PropTypes.bool,
   tradingFlowLoading: PropTypes.bool,

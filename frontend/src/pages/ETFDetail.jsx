@@ -648,8 +648,6 @@ export default function ETFDetail() {
         tradingFlowData={tradingFlowData}
         ticker={ticker}
         dateRange={dateRange.range}
-        showVolume={settings.display.showVolume}
-        showTradingFlow={settings.display.showTradingFlow}
         pricesLoading={pricesLoading}
         pricesFetching={pricesFetching}
         tradingFlowLoading={tradingFlowLoading}
@@ -761,7 +759,6 @@ export default function ETFDetail() {
             data={intradayData?.data || []}
             ticker={ticker}
             height={300}
-            showVolume={settings.display.showVolume}
             previousClose={previousClose}
             pivotLevels={supportResistanceData?.pivot}
             fitToWidth={intradayFit}

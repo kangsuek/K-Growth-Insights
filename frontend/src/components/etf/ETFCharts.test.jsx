@@ -28,8 +28,6 @@ describe('ETFCharts', () => {
   const defaultProps = {
     ticker: '069660',
     dateRange: '7d',
-    showVolume: true,
-    showTradingFlow: true,
     pricesLoading: false,
     pricesFetching: false,
     tradingFlowLoading: false,
@@ -82,22 +80,23 @@ describe('ETFCharts', () => {
     expect(screen.getByText('데이터를 불러올 수 없습니다')).toBeInTheDocument()
   })
 
-  // 회귀 방지: '거래량 표시'를 끄면 가격 차트 카드 전체가 사라지던 결함.
-  // 이 설정은 거래량 패널만 켜고 끄며, 일자별 가격 차트는 항상 보여야 한다.
-  it('showVolume이 false여도 가격 차트를 표시한다', () => {
+  // 회귀 방지: 예전에는 '거래량 표시'·'매매 동향 표시' 설정으로 두 카드를 숨길 수
+  // 있었고, 거래량 토글 하나가 가격 차트 카드 전체를 없애기도 했다. 설정을 제거한
+  // 뒤로는 두 차트가 항상 함께 보여야 한다.
+  it('가격 차트와 매매 동향 차트를 항상 함께 표시한다', () => {
     const pricesData = [
       { date: '2024-01-01', close_price: 1000, volume: 1000000 },
     ]
+    const tradingFlowData = [
+      { date: '2024-01-01', individual_net: 1000, institutional_net: 2000, foreign_net: 3000 },
+    ]
 
-    render(<ETFCharts {...defaultProps} pricesData={pricesData} showVolume={false} />)
+    render(
+      <ETFCharts {...defaultProps} pricesData={pricesData} tradingFlowData={tradingFlowData} />
+    )
 
     expect(screen.getByTestId('price-chart')).toBeInTheDocument()
-  })
-
-  it('showTradingFlow가 false일 때 매매 동향 차트를 표시하지 않는다', () => {
-    render(<ETFCharts {...defaultProps} showTradingFlow={false} />)
-
-    expect(screen.queryByTestId('trading-flow-chart')).not.toBeInTheDocument()
+    expect(screen.getByTestId('trading-flow-chart')).toBeInTheDocument()
   })
 })
 

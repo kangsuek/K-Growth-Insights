@@ -4,7 +4,7 @@ import { formatRefreshInterval } from '../../utils/format'
 
 /**
  * 일반 설정 패널 컴포넌트
- * 자동 새로고침, 날짜 범위, 표시 옵션 등을 관리합니다.
+ * 자동 새로고침, 날짜 범위, 테마 등을 관리합니다.
  */
 export default function GeneralSettingsPanel() {
   const { settings, updateSettings, resetSettings } = useSettings()
@@ -41,11 +41,6 @@ export default function GeneralSettingsPanel() {
   // 기본 날짜 범위 변경 핸들러
   const handleDateRangeChange = (range) => {
     updateSettings('defaultDateRange', range)
-  }
-
-  // 표시 옵션 토글 핸들러
-  const handleDisplayToggle = (key, value) => {
-    updateSettings(`display.${key}`, value)
   }
 
   // 테마 변경 핸들러
@@ -185,57 +180,6 @@ export default function GeneralSettingsPanel() {
           </div>
         </section>
 
-        {/* 표시 옵션 섹션 */}
-        <section className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">표시 옵션</h3>
-          <div className="space-y-4">
-            {/* 거래량 표시 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  거래량 표시
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  차트에서 거래량을 표시합니다
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.display.showVolume}
-                  onChange={(e) => handleDisplayToggle('showVolume', e.target.checked)}
-                  className="sr-only peer"
-                  aria-label="거래량 표시"
-                />
-                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-              </label>
-            </div>
-
-            {/* 매매 동향 표시 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  매매 동향 표시
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  종목 상세에서 고급 분석을 펼쳤을 때 투자자별 매매동향 차트를 표시합니다
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.display.showTradingFlow}
-                  onChange={(e) => handleDisplayToggle('showTradingFlow', e.target.checked)}
-                  className="sr-only peer"
-                  aria-label="매매 동향 표시"
-                />
-                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-              </label>
-            </div>
-
-          </div>
-        </section>
-
         {/* 테마 설정 섹션 */}
         <section className="border-t border-gray-200 dark:border-gray-700 pt-6">
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">테마 설정</h3>
@@ -281,7 +225,7 @@ export default function GeneralSettingsPanel() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">일반 설정 초기화</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-              테마, 자동 갱신, 기본 날짜 범위, 표시 옵션, 대시보드 카드 순서를 기본값으로 되돌립니다.
+              테마, 자동 갱신, 기본 날짜 범위, 대시보드 카드 순서를 기본값으로 되돌립니다.
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
               종목·API 키·수집 데이터는 변경되지 않습니다.

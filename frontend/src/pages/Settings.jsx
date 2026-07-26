@@ -16,7 +16,7 @@ export default function Settings() {
         description="종목 관리 및 환경 설정"
       />
 
-      {/* 일반 설정 (테마, 자동 갱신, 날짜 범위, 표시 옵션) */}
+      {/* 일반 설정 (테마, 자동 갱신, 날짜 범위) */}
       <div className="mt-4 sm:mt-6">
         <GeneralSettingsPanel />
       </div>

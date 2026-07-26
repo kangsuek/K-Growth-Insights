@@ -22,10 +22,6 @@ describe('SettingsContext', () => {
         },
         defaultDateRange: '1M',
         theme: 'light',
-        display: {
-          showVolume: true,
-          showTradingFlow: true,
-        },
         cardOrder: [],
       })
     })
@@ -42,7 +38,7 @@ describe('SettingsContext', () => {
       expect(result.current.settings.autoRefresh).toBeDefined()
       expect(result.current.settings.defaultDateRange).toBeDefined()
       expect(result.current.settings.theme).toBeDefined()
-      expect(result.current.settings.display).toBeDefined()
+      expect(result.current.settings.cardOrder).toBeDefined()
     })
 
     it('잘못된 LocalStorage 데이터는 기본값으로 폴백되어야 함', () => {
@@ -108,17 +104,20 @@ describe('SettingsContext', () => {
       expect(result.current.settings.autoRefresh.interval).toBe(30000) // 다른 값은 유지
     })
 
-    it('중첩된 설정 (3단계)을 업데이트해야 함', () => {
+    // 표시 옵션(거래량·매매동향)은 설정에서 제거했다. 거래량·매매동향 차트는 항상
+    // 표시되므로, 예전 버전이 저장해 둔 display 값이 남아 있어도 무시해야 한다.
+    it('예전 설정에 남은 display 값은 무시해야 함', () => {
+      localStorage.setItem('app_settings', JSON.stringify({
+        defaultDateRange: '1M',
+        theme: 'light',
+        display: { showVolume: false, showTradingFlow: false },
+      }))
+
       const { result } = renderHook(() => useSettings(), {
         wrapper: SettingsProvider,
       })
 
-      act(() => {
-        result.current.updateSettings('display.showVolume', false)
-      })
-
-      expect(result.current.settings.display.showVolume).toBe(false)
-      expect(result.current.settings.display.showTradingFlow).toBe(true) // 다른 값은 유지
+      expect(result.current.settings.display).toBeUndefined()
     })
 
     it('설정 업데이트 시 Context가 업데이트되어야 함', () => {
