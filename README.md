@@ -5,6 +5,10 @@
 
 [소개 사이트](https://kangsuek.github.io/K-Growth-Insights/) · [최신 릴리스 내려받기](https://github.com/kangsuek/K-Growth-Insights/releases/latest)
 
+![대시보드 — 시장 현황, 추적 종목 히트맵, 주간 수익률·외국인·기관 순매수 상위](site/images/dashboard.png)
+
+수집한 데이터는 **로컬 SQLite 파일 하나**에만 저장됩니다. 외부로 전송하는 서버가 없고 계정 가입도 없습니다.
+
 ## 왜 모바일 API인가
 
 기존 방식(`finance.naver.com` HTML 파싱) 대비:
@@ -39,6 +43,10 @@
 | `/simulation` | 시뮬레이션 | 일시 투자·적립식(DCA)·포트폴리오 배분 — "그때 샀다면?" |
 | `/portfolio` | 포트폴리오 | 투자금·평가액·손익, 비중, 수익률 추이, 종목별 기여도, 분석 리포트 |
 | `/settings` | 설정 | 종목 관리(추가·수정·삭제·순서), API 키, 데이터 수집·초기화, 테마 |
+
+![종목 상세 — 인사이트 요약과 투자 전략, 기간별 캔들+거래량 차트](site/images/detail.png)
+
+![종목 발굴 — 시총 상위 카탈로그 전체를 대상으로 한 조건 검색](site/images/scanner.png)
 
 ## 아키텍처
 
@@ -134,6 +142,20 @@ just collect    # 전체 데이터 수집(네이버 모바일 API)
 
 ## 데스크톱 앱 (macOS)
 
+### 설치해서 쓰기
+
+1. **`uv`를 먼저 설치합니다.** dmg에는 파이썬 환경이 들어있지 않고, 앱이 처음 실행될 때 `uv`로
+   백엔드 가상환경을 만듭니다.
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+2. [최신 릴리스](https://github.com/kangsuek/K-Growth-Insights/releases/latest)에서 dmg를 받습니다 —
+   Apple Silicon은 `-arm64.dmg`, Intel Mac은 접미사 없는 `.dmg`.
+3. 서명·공증되지 않은 빌드라면 처음 열 때 Gatekeeper 경고가 뜹니다. 시스템 설정 →
+   개인정보 보호 및 보안에서 "확인 없이 열기"를 누르면 실행됩니다. 서명 여부는 각 릴리스 노트에 표시됩니다.
+
+### 직접 빌드하기
+
 ```bash
 just build                 # 프론트엔드 빌드 (필수 — dmg에 포함된다)
 cd desktop
@@ -147,8 +169,8 @@ npm run build:release      # 서명 + 공증 (배포용, 자격증명 필요)
 서명·공증 준비물과 검증 방법은 [docs/desktop-release.md](./docs/desktop-release.md) 참고.
 인증서가 없으면 `npm run build`는 서명을 건너뛰고 계속 진행합니다(로컬 확인용으로는 문제없음).
 
-> 데스크톱 앱은 실행 시 `uv`를 찾아 사용자 워크스페이스에 가상환경을 만들고 백엔드를 띄웁니다.
-> dmg에 파이썬 환경이 들어있지 않으므로 **설치 대상 기기에 `uv`가 필요**합니다.
+> Electron 셸은 실행 시 `uv`를 찾아 사용자 워크스페이스에 가상환경을 만들고 백엔드를 띄운 뒤
+> 빌드된 프론트엔드를 로드합니다. 그래서 **설치 대상 기기에 `uv`가 필요**합니다.
 
 ## 배포 (GitHub)
 
@@ -186,3 +208,13 @@ npm --prefix frontend test -- --run    # 프론트엔드 350건
 - 사용자에게 보이는 숫자는 천 단위 구분 기호
 - 데이터 수집은 반드시 `services/naver_client.py`를 통해
 - 실제 호출되는 엔드포인트만 유지 — 미사용 라우트·래퍼를 만들지 않음
+
+## 라이선스
+
+MIT License.
+
+## 면책
+
+본 프로그램이 제공하는 모든 수치와 분석은 **투자 참고용**이며 투자 권유가 아닙니다.
+데이터는 네이버 모바일 API에서 수집한 것으로 정확성·완전성을 보장하지 않습니다.
+투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다.
