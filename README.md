@@ -1,7 +1,7 @@
 # K-Growth Insights
 
 한국 고성장 섹터 **ETF·주식** 분석 애플리케이션. 웹으로 쓰거나 macOS 데스크톱 앱으로 실행합니다.
-모든 시장 데이터를 **네이버 모바일 API**(JSON)에서 수집합니다 — 데스크톱 HTML 스크래핑을 쓰지 않습니다.
+모든 시장 데이터를 **네이버 모바일 API**(JSON)에서 수집합니다.
 
 [소개 사이트](https://kangsuek.github.io/K-Growth-Insights/) · [최신 릴리스 내려받기](https://github.com/kangsuek/K-Growth-Insights/releases/latest)
 
