@@ -157,8 +157,6 @@
     background: var(--bg-soft); border: 1px solid var(--border);
     padding: 1px 6px; border-radius: 5px; font-size: .9em;
   }
-  /* 수식처럼 중간에서 끊기면 읽기 나쁜 코드 조각에만 적용한다. */
-  code.nowrap { white-space: nowrap; }
 
   .two-col { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
   .two-col h3 { font-size: 15px; margin: 0 0 10px; }
@@ -291,12 +289,8 @@
   <div class="wrap">
     <p class="eyebrow">데이터</p>
     <h2>전부 네이버 모바일 API</h2>
-    <p class="lede">
-      데스크톱 HTML을 파싱하지 않습니다. JSON이라 마크업 변경에 견고하고,
-      개인 순매수도 <code class="nowrap">개인 = -(기관+외국인)</code> 근사가 아니라 실제값을 받습니다.
-    </p>
 
-    <div class="table-scroll">
+    <div class="table-scroll" style="margin-top: 24px">
       <table>
         <thead>
           <tr><th>데이터</th><th>엔드포인트</th></tr>
