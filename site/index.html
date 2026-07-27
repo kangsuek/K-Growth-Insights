@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>K-Growth Insights — 한국 고성장 섹터 ETF·주식 분석</title>
+<meta name="description" content="네이버 모바일 API로 수집한 국내 ETF·주식 데이터를 분석하는 오픈소스 데스크톱 앱. 종목 발굴, 비교, 시뮬레이션, 포트폴리오까지 한 곳에서." />
+<link rel="icon" href="images/icon.png" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="K-Growth Insights" />
+<meta property="og:description" content="한국 고성장 섹터 ETF·주식 분석 데스크톱 앱 — 네이버 모바일 API 기반, 오픈소스" />
+<meta property="og:image" content="images/dashboard.png" />
+
+<style>
+  :root {
+    --brand: #2563eb;
+    --brand-strong: #1d4ed8;
+    --bg: #ffffff;
+    --bg-soft: #f6f8fc;
+    --bg-card: #ffffff;
+    --fg: #0f172a;
+    --fg-muted: #55637a;
+    --border: #e2e8f0;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 12px 32px -12px rgba(15, 23, 42, .18);
+    --code-bg: #0f172a;
+    --code-fg: #e2e8f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1120;
+      --bg-soft: #0f172a;
+      --bg-card: #131c31;
+      --fg: #e8edf7;
+      --fg-muted: #98a5bd;
+      --border: #24304a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px -12px rgba(0, 0, 0, .7);
+      --code-bg: #060b16;
+      --code-fg: #dbe3f2;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI",
+      "Malgun Gothic", "Noto Sans KR", sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    word-break: keep-all;
+  }
+  a { color: var(--brand); }
+  h1, h2, h3 { line-height: 1.3; letter-spacing: -0.02em; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 72px 0; }
+  section + section { border-top: 1px solid var(--border); }
+  .eyebrow {
+    font-size: 13px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--brand);
+    margin: 0 0 10px;
+  }
+  h2 { font-size: clamp(24px, 3.4vw, 32px); margin: 0 0 12px; }
+  .lede { color: var(--fg-muted); margin: 0 0 36px; max-width: 62ch; }
+
+  /* ── 히어로 ───────────────────────────────────────── */
+  .hero {
+    background:
+      radial-gradient(900px 420px at 12% -10%, rgba(37, 99, 235, .18), transparent 65%),
+      radial-gradient(700px 400px at 92% 8%, rgba(14, 165, 233, .14), transparent 60%),
+      var(--bg-soft);
+    border-bottom: 1px solid var(--border);
+    padding: 84px 0 72px;
+  }
+  .hero-inner { display: flex; gap: 28px; align-items: flex-start; }
+  .hero-icon {
+    width: 84px; height: 84px; border-radius: 20px; flex: none;
+    box-shadow: var(--shadow);
+  }
+  .hero h1 { font-size: clamp(32px, 5.2vw, 48px); margin: 0 0 8px; }
+  .hero p.tagline { font-size: clamp(16px, 2vw, 19px); color: var(--fg-muted); margin: 0 0 8px; max-width: 60ch; }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 28px; }
+  .badge {
+    font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+    background: var(--bg-card); border: 1px solid var(--border); color: var(--fg-muted);
+  }
+
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 13px 22px; border-radius: 12px; font-weight: 700; font-size: 15px;
+    text-decoration: none; border: 1px solid transparent; transition: transform .12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: var(--shadow); }
+  .btn-primary:hover { background: var(--brand-strong); }
+  .btn-ghost { background: var(--bg-card); color: var(--fg); border-color: var(--border); }
+  .btn small { display: block; font-weight: 500; font-size: 12px; opacity: .78; }
+
+  /* ── 안내 박스 ────────────────────────────────────── */
+  .callout {
+    border: 1px solid var(--border); border-left: 4px solid var(--brand);
+    background: var(--bg-card); border-radius: 12px;
+    padding: 18px 20px; margin: 28px 0 0;
+  }
+  .callout.warn { border-left-color: #f59e0b; }
+  .callout h3 { margin: 0 0 6px; font-size: 15px; }
+  .callout p { margin: 0; font-size: 14.5px; color: var(--fg-muted); }
+  .callout + .callout { margin-top: 14px; }
+
+  /* ── 카드 그리드 ──────────────────────────────────── */
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 16.5px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--fg-muted); }
+  .card .route {
+    display: inline-block; font-size: 12px; margin-bottom: 10px;
+    padding: 2px 8px; border-radius: 6px;
+    background: rgba(37, 99, 235, .1); color: var(--brand); font-weight: 600;
+  }
+
+  /* ── 스크린샷 ─────────────────────────────────────── */
+  .shots { display: grid; gap: 34px; }
+  figure { margin: 0; }
+  figure img {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+  }
+  figcaption { margin-top: 12px; font-size: 14px; color: var(--fg-muted); }
+  figcaption b { color: var(--fg); }
+
+  /* ── 표 ───────────────────────────────────────────── */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  th { font-size: 13px; color: var(--fg-muted); font-weight: 700; }
+  td code { font-size: 13px; }
+
+  /* ── 코드 블록 ────────────────────────────────────── */
+  pre {
+    background: var(--code-bg); color: var(--code-fg);
+    padding: 20px; border-radius: 12px; overflow-x: auto;
+    font-size: 13.5px; line-height: 1.75; margin: 0;
+  }
+  pre .c { color: #7f9ac4; }
+  :not(pre) > code {
+    background: var(--bg-soft); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 5px; font-size: .9em;
+  }
+  /* 수식처럼 중간에서 끊기면 읽기 나쁜 코드 조각에만 적용한다. */
+  code.nowrap { white-space: nowrap; }
+
+  .two-col { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .two-col h3 { font-size: 15px; margin: 0 0 10px; }
+
+  ul.plain { margin: 0; padding-left: 20px; color: var(--fg-muted); font-size: 14.5px; }
+  ul.plain li { margin-bottom: 6px; }
+  ul.plain b { color: var(--fg); }
+
+  footer {
+    border-top: 1px solid var(--border); background: var(--bg-soft);
+    padding: 40px 0; font-size: 14px; color: var(--fg-muted);
+  }
+  footer .disclaimer {
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px;
+  }
+
+  @media (max-width: 640px) {
+    section { padding: 52px 0; }
+    .hero { padding: 56px 0 48px; }
+    .hero-inner { flex-direction: column; gap: 18px; }
+    .hero-icon { width: 64px; height: 64px; }
+    .btn { flex: 1 1 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap hero-inner">
+    <img class="hero-icon" src="images/icon.png" alt="" />
+    <div>
+      <h1>K-Growth Insights</h1>
+      <p class="tagline">
+        한국 고성장 섹터 <b>ETF·주식</b> 분석 앱. 네이버 모바일 API에서 시세·매매동향·펀더멘털을 모아
+        발굴부터 비교, 시뮬레이션, 포트폴리오 관리까지 한 화면에서 처리합니다.
+      </p>
+
+      <div class="badges">
+        <span class="badge">macOS 데스크톱 앱</span>
+        <span class="badge">FastAPI + SQLite</span>
+        <span class="badge">React + Vite</span>
+        <span class="badge">MIT 라이선스</span>
+        <span class="badge">데이터는 내 기기에만 저장</span>
+      </div>
+
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/kangsuek/K-Growth-Insights/releases/latest">
+          <span>macOS 앱 내려받기<small>Apple Silicon · Intel dmg</small></span>
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/kangsuek/K-Growth-Insights">
+          <span>GitHub 저장소<small>소스 코드 · 이슈</small></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">화면</p>
+    <h2>수집한 데이터를 바로 쓸 수 있는 형태로</h2>
+    <p class="lede">
+      아래는 실제 앱 화면입니다. 종목·수치는 수집 시점의 데이터입니다.
+    </p>
+
+    <div class="shots">
+      <figure>
+        <img src="images/dashboard.png" alt="대시보드 화면 — 시장 현황, 보유·관찰 종목 히트맵, 추천 카드" />
+        <figcaption><b>대시보드</b> — 코스피·코스닥 현황, 추적 종목 히트맵, 주간 수익률·외국인·기관 순매수 상위</figcaption>
+      </figure>
+      <figure>
+        <img src="images/detail.png" alt="종목 상세 화면 — 인사이트 요약, 투자 전략, 캔들 차트" />
+        <figcaption><b>종목 상세</b> — 인사이트 요약과 투자 전략, 기간별 캔들+거래량 차트, 매매동향, RSI·MACD, 분봉, 뉴스</figcaption>
+      </figure>
+      <figure>
+        <img src="images/scanner.png" alt="종목 발굴 화면 — 조건 검색 결과 표" />
+        <figcaption><b>종목 발굴</b> — 시총 상위 카탈로그 전체를 대상으로 수익률·순매수·섹터 조건 검색</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">기능</p>
+    <h2>7개 화면</h2>
+    <p class="lede">모든 지표는 백엔드에서 계산해 내려줍니다. 같은 이름의 지표가 화면마다 다른 값을 내지 않습니다.</p>
+
+    <div class="grid">
+      <div class="card">
+        <span class="route">/</span>
+        <h3>대시보드</h3>
+        <p>시장 현황, 보유·관찰 종목 히트맵, 주간 수익률·순매수 상위 추천 카드.</p>
+      </div>
+      <div class="card">
+        <span class="route">/etf/:ticker</span>
+        <h3>종목 상세</h3>
+        <p>인사이트 요약·투자 전략·리스크, 캔들+거래량, 투자자별 매매동향, RSI·MACD, 분봉, 뉴스, 펀더멘털.</p>
+      </div>
+      <div class="card">
+        <span class="route">/scanner</span>
+        <h3>종목 발굴</h3>
+        <p>카탈로그 전체 대상 조건 검색(수익률·순매수·섹터), 테마 탐색, 추천 프리셋.</p>
+      </div>
+      <div class="card">
+        <span class="route">/compare</span>
+        <h3>비교</h3>
+        <p>정규화 가격 추이, 위험–수익 산점도, 상관관계 히트맵, 성과 비교표.</p>
+      </div>
+      <div class="card">
+        <span class="route">/simulation</span>
+        <h3>시뮬레이션</h3>
+        <p>일시 투자·적립식(DCA)·포트폴리오 배분 — “그때 샀다면?”을 과거 데이터로 되짚습니다.</p>
+      </div>
+      <div class="card">
+        <span class="route">/portfolio</span>
+        <h3>포트폴리오</h3>
+        <p>투자금·평가액·손익, 비중, 수익률 추이, 종목별 기여도, 분석 리포트.</p>
+      </div>
+      <div class="card">
+        <span class="route">/settings</span>
+        <h3>설정</h3>
+        <p>종목 추가·수정·삭제·순서 변경, 네이버 검색 API 키, 데이터 수집·초기화, 테마.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">데이터</p>
+    <h2>전부 네이버 모바일 API</h2>
+    <p class="lede">
+      데스크톱 HTML을 파싱하지 않습니다. JSON이라 마크업 변경에 견고하고,
+      개인 순매수도 <code class="nowrap">개인 = -(기관+외국인)</code> 근사가 아니라 실제값을 받습니다.
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>데이터</th><th>엔드포인트</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>일별 시세(OHLCV)</td><td><code>m.stock.naver.com/api/stock/{code}/price</code></td></tr>
+          <tr><td>매매동향(외국인·기관·개인)</td><td><code>m.stock.naver.com/api/stock/{code}/trend</code></td></tr>
+          <tr><td>분봉</td><td><code>api.stock.naver.com/chart/domestic/item/{code}/minute</code></td></tr>
+          <tr><td>종목명·유형</td><td><code>m.stock.naver.com/api/stock/{code}/basic</code></td></tr>
+          <tr><td>펀더멘털(PER·PBR·NAV)</td><td><code>m.stock.naver.com/api/stock/{code}/integration</code></td></tr>
+          <tr><td>ETF 구성종목</td><td><code>m.stock.naver.com/api/stock/{code}/etfAnalysis</code></td></tr>
+          <tr><td>시총 상위 카탈로그</td><td><code>m.stock.naver.com/api/stocks/marketValue/{market}</code></td></tr>
+          <tr><td>뉴스</td><td><code>openapi.naver.com/v1/search/news.json</code> (API 키 필요)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <h3>수집한 데이터는 내 기기에만 남습니다</h3>
+      <p>
+        모든 데이터는 로컬 SQLite 파일 하나에 저장됩니다. 외부로 전송하는 서버가 없고,
+        계정 가입도 없습니다. 뉴스 기능만 네이버 검색 API 키가 필요하며, 키가 없어도 나머지는 모두 동작합니다.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">설치</p>
+    <h2>macOS 앱으로 쓰기</h2>
+    <p class="lede">
+      릴리스 페이지에서 Apple Silicon은 <code>-arm64.dmg</code>, Intel Mac은 접미사 없는 <code>.dmg</code>를 받습니다.
+    </p>
+
+    <div class="cta" style="margin-bottom: 8px">
+      <a class="btn btn-primary" href="https://github.com/kangsuek/K-Growth-Insights/releases/latest">
+        <span>최신 릴리스로 이동</span>
+      </a>
+    </div>
+
+    <div class="callout warn">
+      <h3>먼저 <code>uv</code>를 설치해야 합니다</h3>
+      <p>
+        dmg에는 파이썬 환경이 들어있지 않습니다. 앱이 처음 실행될 때 <code>uv</code>로 백엔드 가상환경을 만듭니다.
+        <br />
+        <code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>
+      </p>
+    </div>
+
+    <div class="callout warn">
+      <h3>서명·공증되지 않은 빌드일 수 있습니다</h3>
+      <p>
+        Apple Developer 인증서로 서명·공증된 릴리스가 아니라면 처음 열 때 Gatekeeper 경고가 뜹니다.
+        시스템 설정 → 개인정보 보호 및 보안에서 “확인 없이 열기”를 눌러 실행합니다.
+        각 릴리스 노트에 서명 여부가 표시됩니다.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">개발</p>
+    <h2>소스로 실행하기</h2>
+    <p class="lede">백엔드는 <b>uv</b>, 프론트엔드는 <b>npm</b>. 명령은 <code>just</code>로 묶여 있습니다.</p>
+
+    <div class="two-col">
+      <div>
+        <h3>준비 · 실행</h3>
+        <pre><span class="c"># 의존성 설치 + .env 생성, SQLite 초기화</span>
+just setup
+just db
+
+<span class="c"># 터미널 2개</span>
+just backend   <span class="c"># :8000</span>
+just frontend  <span class="c"># :5173</span>
+
+<span class="c"># 네이버 모바일 API로 전체 수집</span>
+just collect</pre>
+      </div>
+      <div>
+        <h3>테스트 · 빌드</h3>
+        <pre><span class="c"># pytest + vitest</span>
+just test
+
+<span class="c"># 프론트엔드 프로덕션 빌드</span>
+just build
+
+<span class="c"># dmg 생성 (arm64 + x64)</span>
+npm --prefix desktop run build
+
+<span class="c"># 서명 + 공증 (자격증명 필요)</span>
+npm --prefix desktop run build:release</pre>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:26px">
+      <h3>구조</h3>
+      <p>
+        <code>backend/app/routers</code> → <code>services/{naver_client, collectors, repository, metrics, …}</code> → SQLite,
+        프론트엔드는 <code>/api</code>로만 통신합니다. 지표 계산은 백엔드
+        <code>metrics.py</code>에 모읍니다.
+        자세한 내용은 저장소의
+        <a href="https://github.com/kangsuek/K-Growth-Insights#readme">README</a>와
+        <a href="https://github.com/kangsuek/K-Growth-Insights/blob/main/docs/desktop-release.md">배포 문서</a>를 참고하세요.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <b>K-Growth Insights</b> · MIT License ·
+      <a href="https://github.com/kangsuek/K-Growth-Insights">github.com/kangsuek/K-Growth-Insights</a>
+    </div>
+    <p class="disclaimer">
+      본 프로그램이 제공하는 모든 수치와 분석은 <b>투자 참고용</b>이며 투자 권유가 아닙니다.
+      데이터는 네이버 모바일 API에서 수집한 것으로 정확성·완전성을 보장하지 않습니다.
+      투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

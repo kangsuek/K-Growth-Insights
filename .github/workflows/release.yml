@@ -1,0 +1,89 @@
+name: Release
+
+# v로 시작하는 태그를 밀면 macOS dmg를 만들어 GitHub Release에 올린다.
+#   git tag v1.0.0 && git push origin v1.0.0
+# 수동 실행(workflow_dispatch)은 dmg만 아티팩트로 남기고 릴리스는 만들지 않는다.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    # arm64 러너. x64 dmg는 electron-builder가 교차 빌드로 함께 만든다.
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 프론트엔드 빌드
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+
+      - name: 데스크톱 의존성 설치
+        run: npm --prefix desktop ci
+
+      # 서명 인증서가 시크릿으로 등록돼 있으면 서명·공증까지, 없으면 미서명으로 빌드한다.
+      # 미서명 dmg도 배포는 되지만 받는 쪽에서 Gatekeeper 경고를 우회해야 한다.
+      - name: 서명 여부 판단
+        id: signing
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+        run: |
+          if [ -n "$CSC_LINK" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::CSC_LINK 시크릿이 없어 미서명으로 빌드합니다."
+          fi
+
+      - name: dmg 빌드 (서명·공증)
+        if: steps.signing.outputs.signed == 'true'
+        working-directory: desktop
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run build:release
+
+      - name: dmg 빌드 (미서명)
+        if: steps.signing.outputs.signed == 'false'
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run build
+
+      - name: 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmg
+          path: desktop/release/*.dmg
+          if-no-files-found: error
+
+      - name: 릴리스 생성
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/release/*.dmg
+          generate_release_notes: true
+          body: |
+            ## 설치
+
+            Apple Silicon은 `-arm64.dmg`, Intel Mac은 아키텍처 접미사가 없는 `.dmg`를 받습니다.
+
+            > **`uv`가 필요합니다.** 앱이 실행될 때 `uv`로 파이썬 백엔드 환경을 만듭니다.
+            > `curl -LsSf https://astral.sh/uv/install.sh | sh`
+
+            ${{ steps.signing.outputs.signed == 'false' && '⚠️ 이 빌드는 서명·공증되지 않았습니다. 처음 열 때 시스템 설정 > 개인정보 보호 및 보안에서 "확인 없이 열기"를 눌러야 합니다.' || '' }}

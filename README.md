@@ -3,6 +3,8 @@
 한국 고성장 섹터 **ETF·주식** 분석 애플리케이션. 웹으로 쓰거나 macOS 데스크톱 앱으로 실행합니다.
 모든 시장 데이터를 **네이버 모바일 API**(JSON)에서 수집합니다 — 데스크톱 HTML 스크래핑을 쓰지 않습니다.
 
+[소개 사이트](https://kangsuek.github.io/K-Growth-Insights/) · [최신 릴리스 내려받기](https://github.com/kangsuek/K-Growth-Insights/releases/latest)
+
 ## 왜 모바일 API인가
 
 기존 방식(`finance.naver.com` HTML 파싱) 대비:
@@ -147,6 +149,23 @@ npm run build:release      # 서명 + 공증 (배포용, 자격증명 필요)
 
 > 데스크톱 앱은 실행 시 `uv`를 찾아 사용자 워크스페이스에 가상환경을 만들고 백엔드를 띄웁니다.
 > dmg에 파이썬 환경이 들어있지 않으므로 **설치 대상 기기에 `uv`가 필요**합니다.
+
+## 배포 (GitHub)
+
+| 워크플로 | 트리거 | 하는 일 |
+|---|---|---|
+| `.github/workflows/release.yml` | `v*` 태그 push | macOS dmg(arm64·x64) 빌드 → GitHub Release 업로드 |
+| `.github/workflows/pages.yml` | `site/**` 변경 | `site/`의 소개 페이지를 GitHub Pages로 배포 |
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0   # 릴리스 생성
+```
+
+릴리스 워크플로는 `CSC_LINK` 시크릿이 있으면 서명·공증까지 하고, 없으면 미서명으로 빌드합니다.
+서명 시 필요한 시크릿은 `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
+`APPLE_TEAM_ID` — 발급 방법은 [docs/desktop-release.md](./docs/desktop-release.md)에 있습니다.
+
+Pages는 저장소 Settings → Pages → Source를 **GitHub Actions**로 한 번 바꿔야 동작합니다.
 
 ## 테스트
 
