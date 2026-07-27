@@ -21,17 +21,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # package-lock.json이 npm 11로 만들어져 있다. npm 10(Node 20·22)은
+      # vite 8의 선택적 peer 의존성(esbuild)을 락파일에 요구해 `npm ci`가 실패한다.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
+      # 락파일과 npm 버전이 어긋나도 릴리스가 막히지 않도록 install로 폴백한다.
       - name: 프론트엔드 빌드
         run: |
-          npm --prefix frontend ci
+          npm --prefix frontend ci || {
+            echo "::warning::npm ci 실패 — npm install 로 폴백합니다(락파일 확인 필요)."
+            npm --prefix frontend install --no-audit --no-fund
+          }
           npm --prefix frontend run build
 
       - name: 데스크톱 의존성 설치
-        run: npm --prefix desktop ci
+        run: |
+          npm --prefix desktop ci || {
+            echo "::warning::npm ci 실패 — npm install 로 폴백합니다(락파일 확인 필요)."
+            npm --prefix desktop install --no-audit --no-fund
+          }
 
       # 서명 인증서가 시크릿으로 등록돼 있으면 서명·공증까지, 없으면 미서명으로 빌드한다.
       # 미서명 dmg도 배포는 되지만 받는 쪽에서 Gatekeeper 경고를 우회해야 한다.
