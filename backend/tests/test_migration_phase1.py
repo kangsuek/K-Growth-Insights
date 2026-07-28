@@ -219,6 +219,37 @@ def test_etf_intraday_falls_back_to_previous_day():
     assert body["last_time"] == "15:30"
     # 전일(07-21) 종가 100 대비 전일비 계산 확인
     assert body["data"][0]["change_amount"] == 10.0
+    assert body["previous_date"] == "2026-07-21"
+    assert body["previous_close"] == 100
+
+
+def test_etf_intraday_baseline_follows_session_date():
+    """등락률 기준일은 일별 시세 배열의 위치가 아니라 분봉 세션 날짜를 따른다.
+
+    당일(07-23) 분봉은 있는데 당일 일별 시세가 아직 수집되지 않은 상황. 배열의 두
+    번째 행(07-21)이 아니라 세션 직전 거래일(07-22) 종가가 기준이어야 한다.
+    """
+    seed_stock("005930", "삼성전자", "STOCK")
+    with get_connection() as conn:
+        for date, close in (("2026-07-21", 100), ("2026-07-22", 120)):
+            conn.execute(
+                """INSERT INTO prices (ticker, date, open_price, high_price,
+                   low_price, close_price, volume, change_pct)
+                   VALUES ('005930', ?, ?, ?, ?, ?, 1000, 0)""",
+                (date, close, close, close, close),
+            )
+        conn.execute(
+            """INSERT INTO intraday_prices (ticker, datetime, open_price,
+               high_price, low_price, price, volume)
+               VALUES ('005930', '2026-07-23T09:00:00', 130, 133, 129, 132, 500)""",
+        )
+    body = client.get("/api/etfs/005930/intraday",
+                      params={"auto_collect": False}).json()
+    assert body["date"] == "2026-07-23"
+    assert body["previous_date"] == "2026-07-22"
+    assert body["previous_close"] == 120
+    assert body["data"][0]["change_amount"] == 12.0
+    assert body["data"][0]["change_pct"] == 10.0
 
 
 def _seed_flow(ticker, dates):

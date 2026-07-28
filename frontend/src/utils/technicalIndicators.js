@@ -137,6 +137,9 @@ export function calculateMACD(priceData, fastPeriod = 12, slowPeriod = 26, signa
  * 3) 최근 가격대 고점/저점: 최근 N일간 주요 고점/저점
  *
  * @param {Array<{date: string, open_price: number, high_price: number, low_price: number, close_price: number, volume: number}>} priceData - 날짜 내림차순 (최신 → 과거)
+ * @param {number} pivotBaseIndex - 피봇의 기준일(전일) 인덱스. 기본 1(최신 바로 앞).
+ *   분봉처럼 세션 날짜가 정해진 화면에서는 그 세션의 직전 거래일 인덱스를 넘겨,
+ *   배열 위치가 아닌 날짜를 기준으로 피봇이 계산되게 한다.
  * @returns {{
  *   currentPrice: number,
  *   pivot: { pp: number, r1: number, r2: number, r3: number, s1: number, s2: number, s3: number },
@@ -146,11 +149,11 @@ export function calculateMACD(priceData, fastPeriod = 12, slowPeriod = 26, signa
  *   resistances: Array<{ price: number, label: string, type: string }>,
  * } | null}
  */
-export function calculateSupportResistance(priceData) {
+export function calculateSupportResistance(priceData, pivotBaseIndex = 1) {
   if (!priceData || priceData.length < 5) return null
 
   const currentPrice = priceData[0].close_price
-  const yesterday = priceData[1] || priceData[0]
+  const yesterday = priceData[pivotBaseIndex] || priceData[1] || priceData[0]
 
   // 1) 피봇 포인트 (Classic Pivot Point)
   const H = yesterday.high_price
