@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../test/utils'
 import { server } from '../test/mocks/server'
 import { http, HttpResponse } from 'msw'
-import Dashboard, { autoRefreshDashboard, AUTO_REFRESH_QUERY_KEYS } from './Dashboard'
+import Dashboard, { autoRefreshDashboard, collectAndRefreshDashboard, AUTO_REFRESH_QUERY_KEYS } from './Dashboard'
+import { dataApi } from '../services/api'
 
 // Mock API data
 const mockETFsData = [
@@ -249,6 +250,94 @@ describe('Dashboard', () => {
 
       expect(queryClient.refetchQueries.mock.calls.map((c) => c[0].queryKey[0]))
         .toEqual(AUTO_REFRESH_QUERY_KEYS)
+    })
+  })
+
+  describe('수동 새로고침 (수집 → DB → 화면)', () => {
+    const makeToast = () => ({
+      success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(),
+    })
+    const okResponse = { data: { result: { total_tickers: 13, fail_count: 0 } } }
+
+    it('수집이 끝난 뒤에 화면을 다시 읽는다', async () => {
+      const order = []
+      const collectSpy = vi.spyOn(dataApi, 'collectAll').mockImplementation(async () => {
+        order.push('collect')
+        return okResponse
+      })
+      const queryClient = {
+        refetchQueries: vi.fn(async ({ queryKey }) => { order.push(`refetch:${queryKey[0]}`) }),
+        invalidateQueries: vi.fn(),
+      }
+
+      const ok = await collectAndRefreshDashboard(queryClient, makeToast())
+
+      expect(ok).toBe(true)
+      expect(collectSpy).toHaveBeenCalled()
+      // 시장 지수 선갱신 → 수집 → DB 재조회 순서
+      expect(order).toEqual([
+        'refetch:market-overview',
+        'collect',
+        ...AUTO_REFRESH_QUERY_KEYS.map((k) => `refetch:${k}`),
+      ])
+    })
+
+    it('재조회에 throwOnError를 켠다 (없으면 실패가 묻힌다)', async () => {
+      vi.spyOn(dataApi, 'collectAll').mockResolvedValue(okResponse)
+      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined), invalidateQueries: vi.fn() }
+
+      await collectAndRefreshDashboard(queryClient, makeToast())
+
+      for (const call of queryClient.refetchQueries.mock.calls) {
+        expect(call[1]).toEqual({ throwOnError: true })
+      }
+    })
+
+    it('수집 후 재조회가 실패하면 성공이라 하지 않는다', async () => {
+      vi.spyOn(dataApi, 'collectAll').mockResolvedValue(okResponse)
+      const queryClient = {
+        refetchQueries: vi.fn()
+          .mockResolvedValueOnce(undefined)          // 1단계 시장 지수
+          .mockRejectedValue(new Error('Network Error')),  // 3단계 재조회 실패
+        invalidateQueries: vi.fn().mockResolvedValue(undefined),
+      }
+      const toast = makeToast()
+
+      const ok = await collectAndRefreshDashboard(queryClient, toast)
+
+      expect(ok).toBe(false)
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(toast.warning).toHaveBeenCalledWith('갱신 실패: Network Error', expect.any(Number))
+    })
+
+    it('일부 종목만 수집 실패하면 그 사실을 알린다', async () => {
+      vi.spyOn(dataApi, 'collectAll').mockResolvedValue({
+        data: { result: { total_tickers: 13, fail_count: 3 } },
+      })
+      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined), invalidateQueries: vi.fn() }
+      const toast = makeToast()
+
+      const ok = await collectAndRefreshDashboard(queryClient, toast)
+
+      expect(ok).toBe(false)
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(toast.warning).toHaveBeenCalledWith(
+        '13개 중 3개 종목 수집 실패, 나머지는 갱신했습니다', expect.any(Number))
+    })
+
+    it('수집 자체가 실패하면 기존 DB 데이터로 화면을 맞춘다', async () => {
+      vi.spyOn(dataApi, 'collectAll').mockRejectedValue(new Error('timeout'))
+      const queryClient = {
+        refetchQueries: vi.fn().mockResolvedValue(undefined),
+        invalidateQueries: vi.fn().mockResolvedValue(undefined),
+      }
+      const toast = makeToast()
+
+      const ok = await collectAndRefreshDashboard(queryClient, toast)
+
+      expect(ok).toBe(false)
+      expect(queryClient.invalidateQueries).toHaveBeenCalled()
+      expect(toast.warning).toHaveBeenCalledWith('갱신 실패: timeout', expect.any(Number))
     })
   })
 

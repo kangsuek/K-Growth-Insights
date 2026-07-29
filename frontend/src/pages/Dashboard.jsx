@@ -23,6 +23,51 @@ const AUTO_REFRESH_ERROR_TOAST_MS = 5000
 // 자동 갱신이 다시 읽는 쿼리들.
 export const AUTO_REFRESH_QUERY_KEYS = ['market-overview', 'etfs', 'batch-summary', 'scheduler-status']
 
+// 수동 새로고침이 수집할 일수.
+const MANUAL_COLLECT_DAYS = 1
+
+/**
+ * 수동 새로고침: 네이버에서 수집해 DB를 갱신하고, 그 DB를 다시 읽어 화면을 갱신한다.
+ *
+ * 순서가 중요하다. 수집이 끝난 뒤에 읽어야 새 데이터가 화면에 온다.
+ * 재조회에도 throwOnError를 켠다 — 켜지 않으면 수집만 성공하고 화면 재조회가 모두
+ * 실패해도 '갱신되었습니다'가 떠서, 옛 데이터를 보면서 최신인 줄 알게 된다.
+ *
+ * @returns {Promise<boolean>} 전 과정 성공 여부
+ */
+export async function collectAndRefreshDashboard(queryClient, toast) {
+  const opts = { throwOnError: true }
+  try {
+    // 1. 시장 지수는 실시간 API라 수집을 기다릴 필요가 없다. 먼저 갱신해 체감을 줄인다.
+    await queryClient.refetchQueries({ queryKey: ['market-overview'] }, opts)
+
+    // 2. 네이버에서 수집해 DB 갱신.
+    toast.info('데이터 수집 중... 잠시 기다려주세요', 3000)
+    const response = await dataApi.collectAll(MANUAL_COLLECT_DAYS)
+
+    // 3. 갱신된 DB를 다시 읽어 화면 갱신.
+    for (const key of AUTO_REFRESH_QUERY_KEYS) {
+      await queryClient.refetchQueries({ queryKey: [key] }, opts)
+    }
+
+    // 일부 종목만 실패해도 HTTP는 200이라 결과를 직접 확인해야 한다.
+    const failed = response?.data?.result?.fail_count ?? 0
+    if (failed > 0) {
+      const total = response?.data?.result?.total_tickers ?? 0
+      toast.warning(`${total}개 중 ${failed}개 종목 수집 실패, 나머지는 갱신했습니다`, 4000)
+      return false
+    }
+    toast.success('데이터가 갱신되었습니다', 2000)
+    return true
+  } catch (error) {
+    console.error('Refresh failed:', error)
+    // 수집이 실패해도 화면은 DB의 기존 데이터로 맞춰 둔다.
+    await queryClient.invalidateQueries()
+    toast.warning(`갱신 실패: ${error.message}`, 4000)
+    return false
+  }
+}
+
 /**
  * 자동 갱신: 수집 없이 화면 데이터만 다시 읽고 결과를 알린다.
  *
@@ -102,32 +147,13 @@ export default function Dashboard() {
     staleTime: CACHE_STALE_TIME_STATUS, // 10초 (상태 정보)
   })
 
-  // 전체 데이터 새로고침: 네이버에서 최신 데이터 수집 후 화면 갱신
+  // 전체 데이터 새로고침 (로직은 collectAndRefreshDashboard 참고).
   const handleRefreshAll = useCallback(async () => {
     if (isRefreshing) return
     setIsRefreshing(true)
     try {
-      // 1. 시장 지수는 실시간 API이므로 즉시 갱신 (collectAll 완료 대기 불필요)
-      await queryClient.refetchQueries({ queryKey: ['market-overview'] })
-
-      // 2. 백엔드에 데이터 수집 요청 (네이버 금융에서 최신 가격/매매동향 수집)
-      toast.info('데이터 수집 중... 잠시 기다려주세요', 3000)
-      await dataApi.collectAll(1) // 최근 1일 데이터 수집
-
-      // 3. 프론트엔드 React Query 캐시 전체 무효화 후 재요청
-      await queryClient.refetchQueries({ queryKey: ['etfs'] })
-      await queryClient.refetchQueries({ queryKey: ['batch-summary'] })
-      await queryClient.refetchQueries({ queryKey: ['scheduler-status'] })
-      await queryClient.refetchQueries({ queryKey: ['market-overview'] })
-
+      await collectAndRefreshDashboard(queryClient, toast)
       setLastUpdate(new Date())
-      toast.success('데이터가 갱신되었습니다', 2000)
-    } catch (error) {
-      console.error('Refresh failed:', error)
-      // 수집 실패해도 캐시 무효화하여 DB 최신 데이터 재조회
-      await queryClient.invalidateQueries()
-      setLastUpdate(new Date())
-      toast.warning('수집 실패, 기존 데이터로 갱신했습니다', 3000)
     } finally {
       setIsRefreshing(false)
     }
