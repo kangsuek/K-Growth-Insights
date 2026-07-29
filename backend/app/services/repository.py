@@ -287,22 +287,18 @@ def get_intraday_dated(
     return day, [dict(r) for r in rows]
 
 
-def price_row_before(ticker: str, date: str) -> dict | None:
-    """주어진 날짜 직전 거래일의 시세 행(전일 고·저·종가). 분봉 전일비·피봇 계산용.
-
-    분봉 세션 날짜를 기준으로 조회하므로, 당일 분봉이 없어 직전 거래일로 폴백한
-    경우에도 그 세션에 맞는 전일 값이 나온다.
-    """
+def close_before(ticker: str, date: str) -> float | None:
+    """주어진 날짜 직전 거래일의 종가(전일 종가). 분봉 전일비 계산용."""
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT date, high_price, low_price, close_price FROM prices
+            SELECT close_price FROM prices
             WHERE ticker = ? AND date < ?
             ORDER BY date DESC LIMIT 1
             """,
             (ticker, date),
         ).fetchone()
-    return dict(row) if row else None
+    return row["close_price"] if row else None
 
 
 def latest_change_pct(codes: list[str]) -> dict[str, float]:

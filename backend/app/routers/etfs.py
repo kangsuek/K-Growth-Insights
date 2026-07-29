@@ -58,11 +58,7 @@ def _intraday_response(
     actual_date, rows = repository.get_intraday_dated(ticker, target_date)
 
     # 전일 종가 대비 변동(전일비·상승률)을 계산해 막대 색상·툴팁·% 축에 쓰이게 한다.
-    # 기준은 '분봉 세션 날짜의 직전 거래일' 행이다. 프론트가 일별 시세 배열의 두 번째
-    # 행(위치 기준)을 전일로 쓰면 세션 날짜와 어긋날 수 있어(예: 장 시작 직후 당일
-    # 일별 시세가 아직 수집 전), 여기서 계산한 값을 응답에 함께 실어 보낸다.
-    prev = repository.price_row_before(ticker, actual_date) if actual_date else None
-    prev_close = prev["close_price"] if prev else None
+    prev_close = repository.close_before(ticker, actual_date) if actual_date else None
     for r in rows:
         if prev_close is not None and r.get("price") is not None:
             r["change_amount"] = round(r["price"] - prev_close, 2)
@@ -98,10 +94,6 @@ def _intraday_response(
         "count": len(rows),
         "first_time": first_time,
         "last_time": last_time,
-        # 기준일(직전 거래일) 종가·날짜. 차트의 전일 종가 기준선·피봇이 등락률과
-        # 같은 날짜를 쓰도록 프론트에 그대로 넘긴다.
-        "previous_close": prev_close,
-        "previous_date": prev["date"] if prev else None,
     }
     if bg_started:
         response["background_collect_started"] = True

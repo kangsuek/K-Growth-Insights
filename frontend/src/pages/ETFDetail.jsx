@@ -255,12 +255,8 @@ export default function ETFDetail() {
   // background_collect_started 플래그가 유지되는 동안(3초 폴링) 계속 회전시킨다.
   const intradayCollecting = intradayFetching || !!intradayData?.background_collect_started
 
-  // 전일 종가 (분봉 차트 기준선용). 분봉 등락률과 같은 기준일을 쓰도록 백엔드가
-  // 계산해 준 값(분봉 세션 날짜의 직전 거래일 종가)을 우선 쓴다. 일별 시세 배열의
-  // 두 번째 행을 쓰면, 당일 일별 시세가 아직 수집되기 전(장 시작 직후)이나 분봉이
-  // 직전 거래일로 폴백된 경우에 기준일이 하루 어긋난다.
-  const previousClose = intradayData?.previous_close
-    ?? (pricesData && pricesData.length >= 2 ? pricesData[1]?.close_price : null)
+  // 전일 종가 (분봉 차트 기준선용)
+  const previousClose = pricesData && pricesData.length >= 2 ? pricesData[1]?.close_price : null
 
   // 날짜 범위 변경 핸들러
   const handleDateRangeChange = (newRange) => {
@@ -343,18 +339,10 @@ export default function ETFDetail() {
     return calculateMACD(ascending, 12, 26, 9).filter(inSelectedRange)
   }, [showMACD, extendedPricesData, inSelectedRange])
 
-  // 지지선/저항선 계산 (pricesData는 내림차순).
-  // 분봉 차트에만 쓰이므로, 피봇의 기준일도 분봉 등락률과 같은 날(분봉 세션의 직전
-  // 거래일)로 맞춘다. 해당 날짜 행이 조회 범위에 없으면 기본값(인덱스 1)을 쓴다.
+  // 지지선/저항선 계산 (pricesData는 내림차순)
   const supportResistanceData = useMemo(() => {
-    let baseIndex = 1
-    const prevDate = intradayData?.previous_date
-    if (prevDate && pricesData) {
-      const found = pricesData.findIndex((p) => p.date === prevDate)
-      if (found >= 0) baseIndex = found
-    }
-    return calculateSupportResistance(pricesData, baseIndex)
-  }, [pricesData, intradayData?.previous_date])
+    return calculateSupportResistance(pricesData)
+  }, [pricesData])
 
   // 최근 가격 정보 계산
   // API는 날짜 내림차순(최신이 첫 번째)으로 반환
