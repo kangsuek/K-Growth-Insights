@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS prices (
     close_price   REAL,
     volume        INTEGER,
     change_pct    REAL,
+    -- 이 행을 수집한 시각(UTC). '마지막 수집일시' 집계에 쓴다.
+    updated_at    TEXT,
     PRIMARY KEY (ticker, date)
 );
 
@@ -44,6 +46,8 @@ CREATE TABLE IF NOT EXISTS trading_flow (
     institutional_net  INTEGER,
     foreign_net        INTEGER,
     foreign_hold_ratio REAL,
+    -- 이 행을 수집한 시각(UTC). '마지막 수집일시' 집계에 쓴다.
+    updated_at         TEXT,
     PRIMARY KEY (ticker, date)
 );
 
@@ -201,8 +205,24 @@ _CATALOG_ADDED_COLUMNS = {
 }
 
 
+# 시세·매매동향에 나중에 추가된 수집 시각 컬럼(구버전 DB 마이그레이션용).
+# 기존 행은 NULL로 남고, 다음 수집 때 채워진다.
+_TIMESTAMP_ADDED_COLUMNS = {
+    "prices": {"updated_at": "TEXT"},
+    "trading_flow": {"updated_at": "TEXT"},
+}
+
+
 def _migrate(conn) -> None:
     """기존 DB에 없는 컬럼을 추가한다(멱등). SQLite는 컬럼 IF NOT EXISTS가 없어 직접 확인."""
+    for table, columns in _TIMESTAMP_ADDED_COLUMNS.items():
+        existing_cols = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if not existing_cols:
+            continue
+        for col, coltype in columns.items():
+            if col not in existing_cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+                logger.info("Migrated: added %s.%s", table, col)
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(stocks)")}
     for col, coltype in _STOCKS_ADDED_COLUMNS.items():
         if col not in existing:

@@ -321,3 +321,62 @@ def test_prices_range_backfills_missing_history():
                       params={"start_date": "2026-02-01", "end_date": "2026-07-31"}).json()
     dates = [r["date"] for r in body]
     assert "2026-03-02" in dates  # 백필된 과거 시세 포함
+
+
+# --- 마지막 수집일시 ----------------------------------------------------------
+
+def test_last_collection_time_includes_prices_and_trading_flow():
+    """시세·매매동향 수집도 '마지막 수집일시'에 반영된다.
+
+    예전에는 뉴스·펀더멘털·구성종목만 봐서, 시세만 새로 수집되면 표시가 옛날에
+    멈춰 있었다. 대시보드가 실제로 보는 값이 시세·매매동향이므로 포함해야 한다.
+    """
+    from app.services import repository
+
+    assert repository.last_collection_time() is None  # 수집 이력 없음
+
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO prices (ticker, date, close_price, updated_at)
+               VALUES ('005930', '2026-07-29', 100, '2026-07-29 01:00:00')"""
+        )
+    assert repository.last_collection_time().startswith("2026-07-29T10:00:00")
+
+    # 더 나중에 수집된 매매동향이 있으면 그쪽이 최신이다
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO trading_flow (ticker, date, foreign_net, updated_at)
+               VALUES ('005930', '2026-07-29', 10, '2026-07-29 02:30:00')"""
+        )
+    assert repository.last_collection_time().startswith("2026-07-29T11:30:00")
+
+
+def test_collect_stock_stamps_updated_at(monkeypatch):
+    """시세 수집이 updated_at을 채운다."""
+    from app.services import collectors, naver_client
+
+    monkeypatch.setattr(naver_client, "fetch_daily_prices", lambda *a, **k: [
+        {"date": "2026-07-29", "open_price": 1, "high_price": 2, "low_price": 1,
+         "close_price": 2, "volume": 10, "change_pct": 1.0},
+    ])
+    collectors.collect_prices("005930")
+
+    with get_connection() as conn:
+        row = conn.execute("SELECT updated_at FROM prices WHERE ticker='005930'").fetchone()
+    assert row["updated_at"] is not None
+
+
+def test_collect_trading_flow_stamps_updated_at(monkeypatch):
+    """매매동향 수집이 updated_at을 채운다."""
+    from app.services import collectors, naver_client
+
+    monkeypatch.setattr(naver_client, "fetch_trading_flow", lambda *a, **k: [
+        {"date": "2026-07-29", "individual_net": 1, "institutional_net": 2,
+         "foreign_net": 3, "foreign_hold_ratio": 0.5},
+    ])
+    collectors.collect_trading_flow("005930")
+
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT updated_at FROM trading_flow WHERE ticker='005930'").fetchone()
+    assert row["updated_at"] is not None

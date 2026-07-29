@@ -430,12 +430,19 @@ def reset_collected_data() -> dict:
 
 
 def last_collection_time() -> str | None:
-    """가장 최근 수집 시각(KST ISO). updated_at을 가진 테이블들의 최대값. 없으면 None."""
+    """가장 최근 수집 시각(KST ISO). updated_at을 가진 테이블들의 최대값. 없으면 None.
+
+    대시보드가 실제로 보는 값의 핵심인 시세·매매동향을 반드시 포함한다. 예전에는
+    뉴스·펀더멘털·구성종목만 봐서, 시세만 새로 수집되고 뉴스가 건너뛰어지면
+    '마지막 수집일시'가 옛날에 멈춰 있었다.
+    """
     with get_connection() as conn:
         row = conn.execute(
             """
             SELECT MAX(t) AS t FROM (
-                SELECT MAX(updated_at) AS t FROM news
+                SELECT MAX(updated_at) AS t FROM prices
+                UNION ALL SELECT MAX(updated_at) FROM trading_flow
+                UNION ALL SELECT MAX(updated_at) FROM news
                 UNION ALL SELECT MAX(updated_at) FROM stock_fundamentals
                 UNION ALL SELECT MAX(updated_at) FROM etf_fundamentals
                 UNION ALL SELECT MAX(updated_at) FROM etf_holdings

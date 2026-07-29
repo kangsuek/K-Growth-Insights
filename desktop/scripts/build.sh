@@ -41,7 +41,9 @@ echo ""
 # 5. 백엔드 의존성 확인
 echo ">>> 백엔드 의존성 확인 중..."
 cd "$PROJECT_ROOT/backend"
-uv sync 2>/dev/null || uv pip install -r requirements.txt
+# --extra dev 없이 sync하면 pytest 등 개발 의존성이 제거돼 빌드 후 테스트가 깨진다.
+# 패키징에는 tests/를 넣지 않으므로(electron-builder.yml filter) 앱 크기에는 영향 없다.
+uv sync --extra dev 2>/dev/null || uv pip install -r requirements.txt
 echo "백엔드 의존성 확인 완료."
 echo ""
 

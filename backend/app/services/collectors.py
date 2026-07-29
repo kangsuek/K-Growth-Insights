@@ -41,15 +41,16 @@ def collect_prices(ticker: str, pages: int = PRICE_PAGES, days: int | None = Non
             """
             INSERT INTO prices
                 (ticker, date, open_price, high_price, low_price,
-                 close_price, volume, change_pct)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 close_price, volume, change_pct, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(ticker, date) DO UPDATE SET
                 open_price=excluded.open_price,
                 high_price=excluded.high_price,
                 low_price=excluded.low_price,
                 close_price=excluded.close_price,
                 volume=excluded.volume,
-                change_pct=excluded.change_pct
+                change_pct=excluded.change_pct,
+                updated_at=excluded.updated_at
             """,
             params,
         )
@@ -75,13 +76,14 @@ def collect_trading_flow(ticker: str, pages: int = TRADING_FLOW_PAGES,
             """
             INSERT INTO trading_flow
                 (ticker, date, individual_net, institutional_net,
-                 foreign_net, foreign_hold_ratio)
-            VALUES (?, ?, ?, ?, ?, ?)
+                 foreign_net, foreign_hold_ratio, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(ticker, date) DO UPDATE SET
                 individual_net=excluded.individual_net,
                 institutional_net=excluded.institutional_net,
                 foreign_net=excluded.foreign_net,
-                foreign_hold_ratio=excluded.foreign_hold_ratio
+                foreign_hold_ratio=excluded.foreign_hold_ratio,
+                updated_at=excluded.updated_at
             """,
             params,
         )
