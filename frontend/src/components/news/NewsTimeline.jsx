@@ -36,7 +36,15 @@ export function openNewsWindow(url) {
     window.open(url, '_blank', `width=${width},height=${height},left=${left},top=${top}`) ||
     window.open(url, '_blank')
 
-  if (opened) opened.opener = null
+  // opener 차단은 부가 조치다. 실패해도 창 열기 자체는 살린다
+  // (Electron 등 임베디드 환경에서 프록시 객체가 대입을 막을 수 있다).
+  if (opened) {
+    try {
+      opened.opener = null
+    } catch {
+      // 무시
+    }
+  }
   return opened
 }
 
