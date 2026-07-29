@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/utils'
-import PriceTable from './PriceTable'
+import PriceTable, { changePctFrom, buildPrevCloseMap, closeChangePct } from './PriceTable'
 
 // Mock data
 const mockPriceData = [
@@ -175,8 +175,8 @@ describe('PriceTable', () => {
 
       const rows = screen.getAllByRole('row')
       const firstRow = rows[1]
-      // 가장 낮은 등락률은 -1.20%
-      expect(within(firstRow).getByText('-1.20%')).toBeInTheDocument()
+      // 가장 낮은 등락률은 -1.20% (종가 셀과 등락률 컬럼 두 곳에 표시된다)
+      expect(within(firstRow).getAllByText('-1.20%')).toHaveLength(2)
     })
 
     it('같은 컬럼을 두 번 클릭하면 정렬 방향이 반대로 바뀐다', async () => {
@@ -354,6 +354,102 @@ describe('PriceTable', () => {
       // 잘못된 날짜 형식이 그대로 표시되어야 함
       const desktopTable = container.querySelector('.hidden.md\\:block table')
       expect(within(desktopTable).getByText('invalid-date')).toBeInTheDocument()
+    })
+  })
+
+  describe('시가·고가·저가 등락률', () => {
+    it('기준가 대비 등락률을 계산한다', () => {
+      expect(changePctFrom(15100, 15000)).toBeCloseTo(0.6667, 3)
+      expect(changePctFrom(14900, 15000)).toBeCloseTo(-0.6667, 3)
+      expect(changePctFrom(15000, 15000)).toBe(0)
+    })
+
+    it('가격이나 기준가가 없으면 null을 반환한다', () => {
+      expect(changePctFrom(null, 15000)).toBeNull()
+      expect(changePctFrom(15000, undefined)).toBeNull()
+      expect(changePctFrom(15000, 0)).toBeNull()
+    })
+
+    it('전일 종가는 날짜 오름차순 직전 행의 종가를 쓴다', () => {
+      const map = buildPrevCloseMap(mockPriceData)
+
+      // 2025-11-10의 전일 종가 = 2025-11-09 종가
+      expect(map.get('2025-11-10')).toBe(15100)
+      expect(map.get('2025-11-09')).toBe(15000)
+      expect(map.get('2025-11-07')).toBe(15150)
+    })
+
+    it('가장 오래된 행은 자신의 종가·등락률로 전일 종가를 역산한다', () => {
+      const map = buildPrevCloseMap(mockPriceData)
+
+      // 2025-11-06: 종가 15150, 등락률 +0.67% → 15150 / 1.0067
+      expect(map.get('2025-11-06')).toBeCloseTo(15150 / 1.0067, 2)
+    })
+
+    it('가장 오래된 행에 등락률이 없으면 전일 종가를 만들지 않는다', () => {
+      const map = buildPrevCloseMap([
+        { date: '2025-11-06', close_price: 15150, daily_change_pct: null },
+        { date: '2025-11-07', close_price: 14950, daily_change_pct: -1.2 },
+      ])
+
+      expect(map.has('2025-11-06')).toBe(false)
+      expect(map.get('2025-11-07')).toBe(15150)
+    })
+
+    it('시가는 전일 종가 대비, 고가·저가는 시가 대비로 표시한다', () => {
+      const { container } = renderWithProviders(<PriceTable data={mockPriceData} itemsPerPage={10} />)
+
+      const desktopTable = container.querySelector('.hidden.md\\:block table')
+      const row = within(desktopTable).getByText('2025-11-08').closest('tr')
+
+      // 시가 14900 vs 전일(11-07) 종가 14950 → -0.33%
+      expect(within(row).getByText('-0.33%')).toBeInTheDocument()
+      // 고가 15100 vs 시가 14900 → +1.34%
+      expect(within(row).getByText('+1.34%')).toBeInTheDocument()
+      // 저가 14850 vs 시가 14900 → -0.34%
+      expect(within(row).getByText('-0.34%')).toBeInTheDocument()
+    })
+
+    it('상승은 빨강, 하락은 파랑으로 표시한다', () => {
+      const { container } = renderWithProviders(<PriceTable data={mockPriceData} itemsPerPage={10} />)
+
+      const desktopTable = container.querySelector('.hidden.md\\:block table')
+      const row = within(desktopTable).getByText('2025-11-08').closest('tr')
+
+      expect(within(row).getByText('+1.34%')).toHaveClass('text-red-600')
+      expect(within(row).getByText('-0.34%')).toHaveClass('text-blue-600')
+    })
+
+    it('종가는 API가 준 daily_change_pct를 그대로 쓴다', () => {
+      expect(closeChangePct({ close_price: 15250, daily_change_pct: 2.34 }, 15100)).toBe(2.34)
+    })
+
+    it('종가 등락률이 없으면 전일 종가로 계산한다', () => {
+      expect(closeChangePct({ close_price: 15250, daily_change_pct: null }, 15100)).toBeCloseTo(0.9934, 3)
+      expect(closeChangePct({ close_price: 15250 }, undefined)).toBeNull()
+    })
+
+    it('종가 셀에도 전일 종가 대비 등락률을 표시한다', () => {
+      const { container } = renderWithProviders(<PriceTable data={mockPriceData} itemsPerPage={10} />)
+
+      const desktopTable = container.querySelector('.hidden.md\\:block table')
+      const row = within(desktopTable).getByText('2025-11-08').closest('tr')
+
+      // 종가 셀과 등락률 컬럼 두 곳에 -0.50%가 표시된다
+      expect(within(row).getAllByText('-0.50%')).toHaveLength(2)
+    })
+
+    it('정렬을 바꿔도 등락률 기준가가 유지된다', async () => {
+      const user = userEvent.setup()
+      const { container } = renderWithProviders(<PriceTable data={mockPriceData} itemsPerPage={10} />)
+
+      const desktopTable = container.querySelector('.hidden.md\\:block table')
+      await user.click(within(desktopTable).getByText('종가'))
+
+      // 종가 정렬 후에도 11-08 행의 시가 등락률은 전일 종가(14950) 기준 그대로다
+      const row = within(desktopTable).getByText('2025-11-08').closest('tr')
+      expect(within(row).getByText('-0.33%')).toBeInTheDocument()
+      expect(within(row).getByText('+1.34%')).toBeInTheDocument()
     })
   })
 

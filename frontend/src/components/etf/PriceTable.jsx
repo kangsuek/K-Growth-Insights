@@ -4,11 +4,55 @@ import { format } from 'date-fns'
 import { formatPrice, formatVolume, formatPercent, getPriceChangeColor } from '../../utils/format'
 
 /**
+ * 기준가 대비 등락률(%)을 계산한다.
+ * 시가는 전일 종가를, 고가·저가는 당일 시가를 기준가로 쓴다.
+ */
+export function changePctFrom(price, basePrice) {
+  if (price === null || price === undefined) return null
+  if (basePrice === null || basePrice === undefined || basePrice === 0) return null
+  return ((price - basePrice) / basePrice) * 100
+}
+
+/**
+ * 종가의 전일 종가 대비 등락률(%). API가 준 daily_change_pct를 그대로 쓰고,
+ * 없을 때만 전일 종가로 계산한다.
+ */
+export function closeChangePct(price, prevClose) {
+  const pct = price?.daily_change_pct
+  if (pct !== null && pct !== undefined && !isNaN(pct)) return pct
+  return changePctFrom(price?.close_price, prevClose)
+}
+
+/**
+ * 일자별 전일 종가 맵(date → 전일 종가)을 만든다.
+ * 날짜 오름차순으로 훑어 직전 행의 종가를 쓰고, 이웃이 없는 가장 오래된 행만
+ * 자신의 종가·등락률로 전일 종가를 역산한다.
+ */
+export function buildPrevCloseMap(data = []) {
+  const ascending = [...data].sort((a, b) => new Date(a.date) - new Date(b.date))
+  const map = new Map()
+
+  ascending.forEach((row, index) => {
+    if (index > 0) {
+      map.set(row.date, ascending[index - 1].close_price)
+      return
+    }
+    const pct = row.daily_change_pct
+    if (pct !== null && pct !== undefined && !isNaN(pct) && pct !== -100 && row.close_price != null) {
+      map.set(row.date, row.close_price / (1 + pct / 100))
+    }
+  })
+
+  return map
+}
+
+/**
  * PriceTable 컴포넌트
  * 일자별 가격 데이터를 테이블 형태로 표시
  *
  * 기능:
  * - 일자, 시가, 고가, 저가, 종가, 거래량, 등락률 표시
+ * - 시가·종가는 전일 종가 대비, 고가·저가는 당일 시가 대비 등락률을 함께 표시
  * - 정렬 기능 (일자, 종가, 거래량, 등락률)
  * - 등락률 색상 표시 (빨강/파랑)
  * - 반응형 디자인 (모바일: 카드 형태)
@@ -68,6 +112,9 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
 
     return sorted
   }, [data, sortConfig])
+
+  // 전일 종가 맵 (정렬과 무관하게 원본 데이터의 날짜 순서로 계산)
+  const prevCloseMap = useMemo(() => buildPrevCloseMap(data), [data])
 
   // 페이지네이션된 데이터
   const paginatedData = useMemo(() => {
@@ -151,7 +198,14 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
             </tr>
           </thead>
           <tbody>
-            {paginatedData.map((price, index) => (
+            {paginatedData.map((price, index) => {
+              const prevClose = prevCloseMap.get(price.date)
+              const openPct = changePctFrom(price.open_price, prevClose)
+              const highPct = changePctFrom(price.high_price, price.open_price)
+              const lowPct = changePctFrom(price.low_price, price.open_price)
+              const closePct = closeChangePct(price, prevClose)
+
+              return (
               <tr
                 key={`${price.date}-${index}`}
                 className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -168,16 +222,28 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
                   })()}
                 </td>
                 <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                  {formatPrice(price.open_price)}
+                  <div>{formatPrice(price.open_price)}</div>
+                  <div className={`text-xs ${getPriceChangeColor(openPct)}`}>
+                    {formatPercent(openPct)}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                  {formatPrice(price.high_price)}
+                  <div>{formatPrice(price.high_price)}</div>
+                  <div className={`text-xs ${getPriceChangeColor(highPct)}`}>
+                    {formatPercent(highPct)}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                  {formatPrice(price.low_price)}
+                  <div>{formatPrice(price.low_price)}</div>
+                  <div className={`text-xs ${getPriceChangeColor(lowPct)}`}>
+                    {formatPercent(lowPct)}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900 dark:text-gray-100">
-                  {formatPrice(price.close_price)}
+                  <div>{formatPrice(price.close_price)}</div>
+                  <div className={`text-xs font-normal ${getPriceChangeColor(closePct)}`}>
+                    {formatPercent(closePct)}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
                   {formatVolume(price.volume)}
@@ -186,14 +252,22 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
                   {formatPercent(price.daily_change_pct)}
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
 
       {/* 모바일 카드 */}
       <div className="md:hidden space-y-3">
-        {paginatedData.map((price, index) => (
+        {paginatedData.map((price, index) => {
+          const prevClose = prevCloseMap.get(price.date)
+          const openPct = changePctFrom(price.open_price, prevClose)
+          const highPct = changePctFrom(price.high_price, price.open_price)
+          const lowPct = changePctFrom(price.low_price, price.open_price)
+          const closePct = closeChangePct(price, prevClose)
+
+          return (
           <div
             key={`${price.date}-${index}`}
             className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 shadow-sm"
@@ -220,11 +294,17 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">
                   {formatPrice(price.open_price)}
                 </p>
+                <p className={`text-xs ${getPriceChangeColor(openPct)}`}>
+                  {formatPercent(openPct)}
+                </p>
               </div>
               <div>
                 <span className="text-xs text-gray-500 dark:text-gray-400">고가</span>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">
                   {formatPrice(price.high_price)}
+                </p>
+                <p className={`text-xs ${getPriceChangeColor(highPct)}`}>
+                  {formatPercent(highPct)}
                 </p>
               </div>
               <div>
@@ -232,11 +312,17 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">
                   {formatPrice(price.low_price)}
                 </p>
+                <p className={`text-xs ${getPriceChangeColor(lowPct)}`}>
+                  {formatPercent(lowPct)}
+                </p>
               </div>
               <div>
                 <span className="text-xs text-gray-500 dark:text-gray-400">종가</span>
                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1">
                   {formatPrice(price.close_price)}
+                </p>
+                <p className={`text-xs ${getPriceChangeColor(closePct)}`}>
+                  {formatPercent(closePct)}
                 </p>
               </div>
               <div className="col-span-2">
@@ -247,7 +333,8 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* 페이지네이션 */}
