@@ -5,22 +5,13 @@ import { formatPrice, formatVolume, formatPercent, getPriceChangeColor } from '.
 
 /**
  * 기준가 대비 등락률(%)을 계산한다.
- * 시가는 전일 종가를, 고가·저가는 당일 시가를 기준가로 쓴다.
+ * 시가는 전일 종가를, 고가·저가·종가는 당일 시가를 기준가로 쓴다.
+ * 고가·저가·종가가 같은 기준을 써야 저가 ≤ 종가 ≤ 고가 순서가 등락률에서도 유지된다.
  */
 export function changePctFrom(price, basePrice) {
   if (price === null || price === undefined) return null
   if (basePrice === null || basePrice === undefined || basePrice === 0) return null
   return ((price - basePrice) / basePrice) * 100
-}
-
-/**
- * 종가의 전일 종가 대비 등락률(%). API가 준 daily_change_pct를 그대로 쓰고,
- * 없을 때만 전일 종가로 계산한다.
- */
-export function closeChangePct(price, prevClose) {
-  const pct = price?.daily_change_pct
-  if (pct !== null && pct !== undefined && !isNaN(pct)) return pct
-  return changePctFrom(price?.close_price, prevClose)
 }
 
 /**
@@ -52,7 +43,8 @@ export function buildPrevCloseMap(data = []) {
  *
  * 기능:
  * - 일자, 시가, 고가, 저가, 종가, 거래량, 등락률 표시
- * - 시가·종가는 전일 종가 대비, 고가·저가는 당일 시가 대비 등락률을 함께 표시
+ * - 시가는 전일 종가 대비, 고가·저가·종가는 당일 시가 대비 등락률을 함께 표시
+ *   (맨 오른쪽 등락률 컬럼이 전일 종가 대비 종가 등락률을 담당한다)
  * - 정렬 기능 (일자, 종가, 거래량, 등락률)
  * - 등락률 색상 표시 (빨강/파랑)
  * - 반응형 디자인 (모바일: 카드 형태)
@@ -203,7 +195,7 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
               const openPct = changePctFrom(price.open_price, prevClose)
               const highPct = changePctFrom(price.high_price, price.open_price)
               const lowPct = changePctFrom(price.low_price, price.open_price)
-              const closePct = closeChangePct(price, prevClose)
+              const closePct = changePctFrom(price.close_price, price.open_price)
 
               return (
               <tr
@@ -265,7 +257,7 @@ export default function PriceTable({ data = [], itemsPerPage = 20 }) {
           const openPct = changePctFrom(price.open_price, prevClose)
           const highPct = changePctFrom(price.high_price, price.open_price)
           const lowPct = changePctFrom(price.low_price, price.open_price)
-          const closePct = closeChangePct(price, prevClose)
+          const closePct = changePctFrom(price.close_price, price.open_price)
 
           return (
           <div
