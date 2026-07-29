@@ -5,6 +5,41 @@ import PropTypes from 'prop-types'
 import { newsApi } from '../../services/api'
 import { analyzeNewsList, getSentimentStyle } from '../../utils/newsAnalyzer'
 
+// 뉴스 창 최대 크기. 화면이 더 크면 이 값에서 멈춘다.
+const NEWS_WINDOW_MAX_WIDTH = 1400
+const NEWS_WINDOW_MAX_HEIGHT = 950
+// 화면 대비 창 비율
+const NEWS_WINDOW_SCREEN_RATIO = 0.8
+
+/**
+ * 뉴스 기사를 화면 크기에 맞춘 큰 창으로 연다.
+ *
+ * 설치형 앱(PWA·앱 모드) 창에서는 target="_blank" 링크가 작은 팝업으로 열려
+ * 기사를 읽기 어렵다. 크기를 직접 지정해 화면 중앙에 띄운다.
+ * 크기 지정 창이 막히면 크기 없이 한 번 더 시도한다.
+ *
+ * @returns {Window|null} 열린 창. 팝업이 차단되면 null
+ */
+export function openNewsWindow(url) {
+  if (!url) return null
+
+  const screenWidth = window.screen?.availWidth || window.innerWidth
+  const screenHeight = window.screen?.availHeight || window.innerHeight
+  const width = Math.round(Math.min(NEWS_WINDOW_MAX_WIDTH, screenWidth * NEWS_WINDOW_SCREEN_RATIO))
+  const height = Math.round(Math.min(NEWS_WINDOW_MAX_HEIGHT, screenHeight * NEWS_WINDOW_SCREEN_RATIO))
+  const left = Math.round((screenWidth - width) / 2)
+  const top = Math.round((screenHeight - height) / 2)
+
+  // noopener를 features에 넣으면 window.open이 항상 null을 반환해 차단 여부를 알 수 없다.
+  // 대신 열린 창의 opener를 직접 끊는다.
+  const opened =
+    window.open(url, '_blank', `width=${width},height=${height},left=${left},top=${top}`) ||
+    window.open(url, '_blank')
+
+  if (opened) opened.opener = null
+  return opened
+}
+
 /**
  * 센티먼트 아이콘 컴포넌트
  */
@@ -138,6 +173,16 @@ const NewsTimeline = ({ ticker, newsData, isLoading, error }) => {
     }))
   }
 
+  // 뉴스 클릭 → 크기 지정한 창으로 열기.
+  // 수식어 키를 누른 클릭(새 탭/새 창 등)은 브라우저 기본 동작을 그대로 둔다.
+  const handleNewsClick = (e) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
+
+    const opened = openNewsWindow(e.currentTarget.href)
+    // 팝업이 차단됐다면 기본 동작(링크 이동)에 맡긴다.
+    if (opened) e.preventDefault()
+  }
+
   // 관련도 점수 색상 반환
   const getRelevanceColor = (score) => {
     if (score >= 0.8) return 'bg-green-500'
@@ -234,6 +279,7 @@ const NewsTimeline = ({ ticker, newsData, isLoading, error }) => {
                         href={news.url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={handleNewsClick}
                         className="text-base font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors block"
                       >
                         {news.title}

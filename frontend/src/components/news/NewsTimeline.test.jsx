@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/utils'
-import NewsTimeline from './NewsTimeline'
+import NewsTimeline, { openNewsWindow } from './NewsTimeline'
 import * as api from '../../services/api'
 
 const mockNews = [
@@ -117,6 +117,102 @@ describe('NewsTimeline', () => {
     expect(link).toHaveAttribute('href', 'https://example.com/news/1')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  describe('뉴스 창 열기', () => {
+    const openNewsList = async (user) => {
+      vi.spyOn(api.newsApi, 'getByTicker').mockResolvedValue({ data: mockNews })
+      renderWithProviders(<NewsTimeline ticker="411060" />)
+
+      await waitFor(() => expect(screen.getByText('2024년 01월 01일')).toBeInTheDocument())
+      await user.click(screen.getByText('2024년 01월 01일'))
+
+      return screen.getByText('2차전지 ETF 투자자 관심 집중').closest('a')
+    }
+
+    it('화면 크기의 80%로, 최대 크기 안에서 창을 연다', () => {
+      const fakeWindow = { opener: {} }
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWindow)
+      vi.spyOn(window, 'screen', 'get').mockReturnValue({ availWidth: 1000, availHeight: 800 })
+
+      openNewsWindow('https://example.com/news/1')
+
+      // 1000*0.8=800, 800*0.8=640 → 최대값(1400x950)보다 작으므로 그대로
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://example.com/news/1',
+        '_blank',
+        'width=800,height=640,left=100,top=80'
+      )
+    })
+
+    it('화면이 매우 크면 최대 크기에서 멈춘다', () => {
+      vi.spyOn(window, 'open').mockReturnValue({ opener: {} })
+      vi.spyOn(window, 'screen', 'get').mockReturnValue({ availWidth: 5000, availHeight: 3000 })
+
+      openNewsWindow('https://example.com/news/1')
+
+      expect(window.open).toHaveBeenCalledWith(
+        'https://example.com/news/1',
+        '_blank',
+        'width=1400,height=950,left=1800,top=1025'
+      )
+    })
+
+    it('열린 창의 opener를 끊는다', () => {
+      const fakeWindow = { opener: {} }
+      vi.spyOn(window, 'open').mockReturnValue(fakeWindow)
+
+      openNewsWindow('https://example.com/news/1')
+
+      expect(fakeWindow.opener).toBeNull()
+    })
+
+    it('크기 지정 창이 막히면 크기 없이 다시 연다', () => {
+      const fallbackWindow = { opener: {} }
+      const openSpy = vi
+        .spyOn(window, 'open')
+        .mockReturnValueOnce(null)
+        .mockReturnValueOnce(fallbackWindow)
+
+      const opened = openNewsWindow('https://example.com/news/1')
+
+      expect(openSpy).toHaveBeenCalledTimes(2)
+      expect(openSpy).toHaveBeenLastCalledWith('https://example.com/news/1', '_blank')
+      expect(opened).toBe(fallbackWindow)
+    })
+
+    it('url이 없으면 창을 열지 않는다', () => {
+      const openSpy = vi.spyOn(window, 'open')
+
+      expect(openNewsWindow(undefined)).toBeNull()
+      expect(openSpy).not.toHaveBeenCalled()
+    })
+
+    it('뉴스를 클릭하면 크기 지정한 창으로 연다', async () => {
+      const user = userEvent.setup()
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue({ opener: {} })
+
+      const link = await openNewsList(user)
+      await user.click(link)
+
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://example.com/news/1',
+        '_blank',
+        expect.stringContaining('width=')
+      )
+    })
+
+    it('cmd/ctrl 클릭은 브라우저 기본 동작에 맡긴다', async () => {
+      const user = userEvent.setup()
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue({ opener: {} })
+
+      const link = await openNewsList(user)
+      await user.keyboard('{Meta>}')
+      await user.click(link)
+      await user.keyboard('{/Meta}')
+
+      expect(openSpy).not.toHaveBeenCalled()
+    })
   })
 })
 
