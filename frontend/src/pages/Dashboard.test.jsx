@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../test/utils'
 import { server } from '../test/mocks/server'
 import { http, HttpResponse } from 'msw'
-import Dashboard from './Dashboard'
+import Dashboard, { autoRefreshDashboard, AUTO_REFRESH_QUERY_KEYS } from './Dashboard'
 
 // Mock API data
 const mockETFsData = [
@@ -191,6 +191,65 @@ describe('Dashboard', () => {
 
     // 끄는 체크박스는 없다
     expect(screen.queryByRole('checkbox', { name: /자동 갱신/ })).not.toBeInTheDocument()
+  })
+
+  describe('자동 갱신 알림', () => {
+    const makeToast = () => ({
+      success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(),
+    })
+
+    it('성공하면 성공 알림을 띄운다', async () => {
+      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined) }
+      const toast = makeToast()
+
+      const ok = await autoRefreshDashboard(queryClient, toast)
+
+      expect(ok).toBe(true)
+      expect(toast.success).toHaveBeenCalledWith('데이터가 갱신되었습니다', expect.any(Number))
+      expect(toast.error).not.toHaveBeenCalled()
+    })
+
+    it('실패하면 사유와 함께 실패 알림을 띄운다', async () => {
+      const queryClient = {
+        refetchQueries: vi.fn().mockRejectedValue(new Error('Network Error')),
+      }
+      const toast = makeToast()
+
+      const ok = await autoRefreshDashboard(queryClient, toast)
+
+      expect(ok).toBe(false)
+      expect(toast.error).toHaveBeenCalledWith('자동 갱신 실패: Network Error', expect.any(Number))
+      expect(toast.success).not.toHaveBeenCalled()
+    })
+
+    it('실패 알림을 성공 알림보다 오래 띄운다', async () => {
+      const okToast = makeToast()
+      await autoRefreshDashboard({ refetchQueries: vi.fn().mockResolvedValue(undefined) }, okToast)
+      const failToast = makeToast()
+      await autoRefreshDashboard({ refetchQueries: vi.fn().mockRejectedValue(new Error('x')) }, failToast)
+
+      expect(failToast.error.mock.calls[0][1]).toBeGreaterThan(okToast.success.mock.calls[0][1])
+    })
+
+    it('refetchQueries에 throwOnError를 켠다 (없으면 실패가 삼켜진다)', async () => {
+      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined) }
+
+      await autoRefreshDashboard(queryClient, makeToast())
+
+      expect(queryClient.refetchQueries).toHaveBeenCalledTimes(AUTO_REFRESH_QUERY_KEYS.length)
+      for (const call of queryClient.refetchQueries.mock.calls) {
+        expect(call[1]).toEqual({ throwOnError: true })
+      }
+    })
+
+    it('네 개 쿼리를 모두 다시 읽는다', async () => {
+      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined) }
+
+      await autoRefreshDashboard(queryClient, makeToast())
+
+      expect(queryClient.refetchQueries.mock.calls.map((c) => c[0].queryKey[0]))
+        .toEqual(AUTO_REFRESH_QUERY_KEYS)
+    })
   })
 
   it('스케줄러 상태를 표시한다', async () => {

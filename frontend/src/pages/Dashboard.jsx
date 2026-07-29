@@ -15,6 +15,41 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useToast } from '../contexts/ToastContext'
 import { CACHE_STALE_TIME_STATIC, CACHE_STALE_TIME_FAST, CACHE_STALE_TIME_STATUS } from '../constants'
 
+// 자동 갱신 알림 표시 시간. 최소 30초마다 반복되므로 성공은 짧게, 실패는 놓치지
+// 않도록 길게 띄운다.
+const AUTO_REFRESH_TOAST_MS = 1500
+const AUTO_REFRESH_ERROR_TOAST_MS = 5000
+
+// 자동 갱신이 다시 읽는 쿼리들.
+export const AUTO_REFRESH_QUERY_KEYS = ['market-overview', 'etfs', 'batch-summary', 'scheduler-status']
+
+/**
+ * 자동 갱신: 수집 없이 화면 데이터만 다시 읽고 결과를 알린다.
+ *
+ * 수집(collectAll)은 종목당 6요청 × 전체 종목이라 주기 실행 시 네이버 API 호출이
+ * 폭증한다(뉴스 검색이 429로 막힌 원인). 수집은 수동 버튼·스케줄러에만 맡긴다.
+ *
+ * @returns {Promise<boolean>} 성공 여부
+ */
+export async function autoRefreshDashboard(queryClient, toast) {
+  try {
+    // throwOnError 없이는 refetchQueries가 실패를 삼켜(promise.catch(noop))
+    // catch로 오지 않는다. 실패 알림을 띄우려면 반드시 켜야 한다.
+    const opts = { throwOnError: true }
+    for (const key of AUTO_REFRESH_QUERY_KEYS) {
+      await queryClient.refetchQueries({ queryKey: [key] }, opts)
+    }
+    // 주기마다 반복되므로 성공 알림은 짧게 띄운다.
+    toast.success('데이터가 갱신되었습니다', AUTO_REFRESH_TOAST_MS)
+    return true
+  } catch (error) {
+    console.error('Auto refetch failed:', error)
+    // 실패를 조용히 넘기면 백엔드가 죽어도 화면상 알 수 없다. 더 오래 띄운다.
+    toast.error(`자동 갱신 실패: ${error.message}`, AUTO_REFRESH_ERROR_TOAST_MS)
+    return false
+  }
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient()
   const { settings, updateSettings } = useSettings()
@@ -98,20 +133,12 @@ export default function Dashboard() {
     }
   }, [queryClient, isRefreshing, toast])
 
-  // 자동 갱신용: 수집 없이 화면 데이터만 다시 읽는다.
-  // 수집(collectAll)은 종목당 6요청 × 전체 종목이라 주기 실행 시 네이버 API 호출이
-  // 폭증한다(뉴스 검색이 429로 막힌 원인). 수집은 수동 버튼·스케줄러에만 맡긴다.
+  // 자동 갱신용 (로직은 autoRefreshDashboard 참고).
   const handleRefetchOnly = useCallback(async () => {
-    try {
-      await queryClient.refetchQueries({ queryKey: ['market-overview'] })
-      await queryClient.refetchQueries({ queryKey: ['etfs'] })
-      await queryClient.refetchQueries({ queryKey: ['batch-summary'] })
-      await queryClient.refetchQueries({ queryKey: ['scheduler-status'] })
+    if (await autoRefreshDashboard(queryClient, toast)) {
       setLastUpdate(new Date())
-    } catch (error) {
-      console.error('Auto refetch failed:', error)
     }
-  }, [queryClient])
+  }, [queryClient, toast])
 
   // 전체 종목 목록 조회
   const { data: etfs, isLoading: etfsLoading, error, refetch } = useQuery({
