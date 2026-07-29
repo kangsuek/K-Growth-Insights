@@ -103,3 +103,55 @@ def test_supply_targets_selects_top_n_and_all_etf(monkeypatch):
     assert "111111" not in targets  # KOSPI 상위 N 밖
     assert "222222" not in targets  # KOSDAQ 상위 N 밖
     assert [label for label, _ in groups] == ["ETF", "코스피", "코스닥"]  # 진행률 단계 순서
+
+
+def test_search_returns_price_and_metric_timestamps_separately():
+    """시세와 지표 수집 시각을 따로 내려준다.
+
+    수익률·수급은 발굴 지표수집만 채우지만 현재가·등락률·거래량은 종목목록수집도
+    쓰므로, 한쪽만 다시 돌면 기준 시점이 어긋난다. 화면이 이를 구분해 보여줄 수
+    있도록 두 시각을 모두 노출한다.
+    """
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price, weekly_return,
+                updated_at, catalog_updated_at)
+               VALUES ('069500', 'KODEX 200', 'ETF', 'ETF', 1, 1000, 5.0,
+                       '2026-07-28 01:00:00', '2026-07-26 10:11:00')"""
+        )
+    item = client.get("/api/scanner", params={"type": "ETF"}).json()["items"][0]
+
+    # UTC로 저장된 값이 KST(+9)로 변환돼 나온다
+    assert item["price_updated_at"].startswith("2026-07-28T10:00:00")
+    assert item["catalog_updated_at"].startswith("2026-07-26T19:11:00")
+
+
+def test_search_price_timestamp_is_none_when_never_synced():
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO stock_catalog (ticker, name, type, market, is_active, updated_at) "
+            "VALUES ('069500', 'KODEX 200', 'ETF', 'ETF', 1, NULL)"
+        )
+    item = client.get("/api/scanner", params={"type": "ETF"}).json()["items"][0]
+    assert item["price_updated_at"] is None
+
+
+def test_price_timestamp_follows_metric_collect_when_it_ran_later():
+    """지표수집이 나중에 돌았으면 시세 시각도 그때다.
+
+    지표수집(_collect_one)은 수익률·수급뿐 아니라 현재가·등락률·거래량도 다시 쓴다.
+    updated_at만 보면 방금 갱신된 시세를 오래된 것으로 표시하게 된다.
+    """
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price, weekly_return,
+                updated_at, catalog_updated_at)
+               VALUES ('069500', 'KODEX 200', 'ETF', 'ETF', 1, 1000, 5.0,
+                       '2026-07-26 10:10:25', '2026-07-29 02:41:06')"""
+        )
+    item = client.get("/api/scanner", params={"type": "ETF"}).json()["items"][0]
+
+    assert item["price_updated_at"].startswith("2026-07-29T11:41:06")
+    assert item["catalog_updated_at"].startswith("2026-07-29T11:41:06")

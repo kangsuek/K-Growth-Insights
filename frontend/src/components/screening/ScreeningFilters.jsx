@@ -7,7 +7,29 @@ const MARKET_TABS = [
   { value: 'ALL', label: '전체' },
 ]
 
-export default function ScreeningFilters({ filters, onFilterChange, onReset, lastUpdated }) {
+const formatAt = (iso) => new Date(iso).toLocaleString('ko-KR')
+
+/**
+ * 데이터 갱신 시각 문구.
+ *
+ * 현재가·등락률·거래량(시세)과 수익률·수급(지표)은 서로 다른 수집 단계가 채운다.
+ * 한쪽만 다시 돌면 한 행 안에서 기준 시점이 어긋나므로, 시각이 다르면 둘을 나눠 적어
+ * 어느 쪽이 오래됐는지 드러낸다. 같은 분에 수집됐으면 한 줄로 합친다.
+ */
+export function formatDataFreshness(priceUpdatedAt, metricsUpdatedAt) {
+  if (!priceUpdatedAt && !metricsUpdatedAt) return null
+  if (!priceUpdatedAt) return `데이터 갱신: ${formatAt(metricsUpdatedAt)}`
+  if (!metricsUpdatedAt) return `데이터 갱신: ${formatAt(priceUpdatedAt)}`
+
+  // 초 단위 차이는 같은 수집으로 본다.
+  const sameMinute =
+    Math.abs(new Date(priceUpdatedAt) - new Date(metricsUpdatedAt)) < 60_000
+  if (sameMinute) return `데이터 갱신: ${formatAt(metricsUpdatedAt)}`
+
+  return `데이터 갱신: 시세 ${formatAt(priceUpdatedAt)} · 지표 ${formatAt(metricsUpdatedAt)}`
+}
+
+export default function ScreeningFilters({ filters, onFilterChange, onReset, lastUpdated, priceUpdatedAt }) {
   const [localQ, setLocalQ] = useState(filters.q || '')
   const [localMinWR, setLocalMinWR] = useState(filters.min_weekly_return ?? '')
   const [localMaxWR, setLocalMaxWR] = useState(filters.max_weekly_return ?? '')
@@ -223,9 +245,10 @@ export default function ScreeningFilters({ filters, onFilterChange, onReset, las
           <button type="button" onClick={handleReset} className="btn btn-outline btn-sm text-gray-500">
             초기화
           </button>
-          {lastUpdated && (
-            <span className="text-xs text-gray-400 dark:text-gray-500">
-              데이터 갱신: {new Date(lastUpdated).toLocaleString('ko-KR')}
+          {formatDataFreshness(priceUpdatedAt, lastUpdated) && (
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-gray-100 dark:bg-gray-700 text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100">
+              <span aria-hidden="true">🕒</span>
+              {formatDataFreshness(priceUpdatedAt, lastUpdated)}
             </span>
           )}
         </div>

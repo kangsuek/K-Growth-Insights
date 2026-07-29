@@ -248,11 +248,14 @@ export default function Screening() {
     }
   }
 
-  // 마지막 데이터 갱신 시각 (아이템 중 가장 최신 값)
-  const lastUpdated = data?.items?.reduce((latest, item) => {
-    if (!item.catalog_updated_at) return latest
-    return !latest || item.catalog_updated_at > latest ? item.catalog_updated_at : latest
+  // 마지막 데이터 갱신 시각 (아이템 중 가장 최신 값).
+  // 시세(현재가·등락률·거래량)와 지표(수익률·수급)는 수집 단계가 달라 시각을 따로 본다.
+  const latestOf = (key) => data?.items?.reduce((latest, item) => {
+    if (!item[key]) return latest
+    return !latest || item[key] > latest ? item[key] : latest
   }, null)
+  const lastUpdated = latestOf('catalog_updated_at')
+  const priceUpdatedAt = latestOf('price_updated_at')
 
   return (
     <div className="animate-fadeIn">
@@ -374,6 +377,7 @@ export default function Screening() {
             onFilterChange={handleFilterChange}
             onReset={handleReset}
             lastUpdated={lastUpdated}
+            priceUpdatedAt={priceUpdatedAt}
           />
 
           {/* 뷰 모드 토글 + 정렬 */}

@@ -1,6 +1,17 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { formatNumber, formatSignedNumber, formatPercent, getChangeColor } from '../../utils/formatters'
 
+/**
+ * YTD 기준일이 연초(1월)가 아닐 때만 true.
+ *
+ * 신규 상장처럼 올해 첫 거래일이 1월이 아닌 종목만 기준일을 덧붙이기 위한 판정이다.
+ * 기준일 표기는 '2026-01-02'·'2026.01.02' 둘 다 들어올 수 있어 구분자를 맞춰 비교한다.
+ */
+export function isLateYtdBase(baseDate, year = new Date().getFullYear()) {
+  if (!baseDate) return false
+  return !baseDate.replace(/\./g, '-').startsWith(`${year}-01`)
+}
+
 export const COLUMNS = [
   { key: 'name', label: '종목명', sortable: true },
   { key: 'close_price', label: '현재가', sortable: true, align: 'right' },
@@ -128,7 +139,7 @@ export default function ScreeningTable({ items, total, page, pageSize, sortBy, s
                 <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${getChangeColor(item.ytd_return)}`}>
                   <div className="flex flex-col items-end">
                     <span>{formatPercent(item.ytd_return)}</span>
-                    {item.ytd_base_date && !item.ytd_base_date.startsWith(`${new Date().getFullYear()}.01`) && (
+                    {isLateYtdBase(item.ytd_base_date) && (
                       <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">
                         {item.ytd_base_date.slice(5)} ~
                       </span>

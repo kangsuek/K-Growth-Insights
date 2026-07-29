@@ -294,6 +294,15 @@ def _registered_tickers() -> set:
         return {r["ticker"] for r in conn.execute("SELECT ticker FROM stocks")}
 
 
+def _latest_ts(*values) -> str | None:
+    """DB 타임스탬프 중 가장 나중 것을 KST ISO로. 모두 없으면 None.
+
+    저장 형식이 'YYYY-MM-DD HH:MM:SS'(UTC)로 같아 문자열 비교로 대소를 가린다.
+    """
+    present = [v for v in values if v]
+    return timeutil.to_kst_iso(max(present)) if present else None
+
+
 def _row_to_item(row, registered: set) -> dict:
     d = dict(row)
     return {
@@ -304,6 +313,11 @@ def _row_to_item(row, registered: set) -> dict:
         "monthly_return": d.get("monthly_return"), "ytd_return": d.get("ytd_return"),
         "ytd_base_date": d.get("ytd_base_date"),
         "foreign_net": d.get("foreign_net"), "institutional_net": d.get("institutional_net"),
+        # 한 행의 값이 두 수집 단계에서 온다. 수익률·수급은 발굴 지표수집만
+        # (catalog_updated_at) 채우지만, 현재가·등락률·거래량은 종목목록수집
+        # (updated_at)과 지표수집 **양쪽 다** 쓴다. 그래서 시세 시각은 둘 중 나중
+        # 것이다. 지표수집만 돌린 종목의 시세를 오래된 것으로 표시하지 않기 위함.
+        "price_updated_at": _latest_ts(d.get("updated_at"), d.get("catalog_updated_at")),
         "catalog_updated_at": timeutil.to_kst_iso(d.get("catalog_updated_at")),
         "is_registered": d["ticker"] in registered,
     }
