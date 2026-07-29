@@ -35,6 +35,10 @@ extraResources:
     to: .env.example
 mac:
   category: public.app-category.finance
+  # arm64·x64를 한 번에 돌리면 두 DMG가 같은 볼륨 이름(/Volumes/${productName})으로
+  # 동시에 마운트돼 `hdiutil detach`가 실패한다. 그래서 package.json의 build는
+  # arch별로 나눠 순차 실행한다(build:arm64 → build:x64). 여기 목록은 arch를
+  # 지정하지 않고 실행할 때의 기본값이다.
   target:
     - target: dmg
       arch:

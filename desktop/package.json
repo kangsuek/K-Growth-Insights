@@ -6,9 +6,11 @@
   "scripts": {
     "start": "electron .",
     "generate-icons": "node scripts/generate-icons.js",
-    "build": "electron-builder",
+    "build": "npm run build:arm64 && npm run build:x64",
+    "build:arm64": "electron-builder --mac dmg --arm64",
+    "build:x64": "electron-builder --mac dmg --x64",
     "build:dir": "electron-builder --dir",
-    "build:release": "node scripts/check-signing-env.js && electron-builder -c.mac.notarize=true",
+    "build:release": "node scripts/check-signing-env.js && electron-builder --mac dmg --arm64 -c.mac.notarize=true && electron-builder --mac dmg --x64 -c.mac.notarize=true",
     "check:signing": "node scripts/check-signing-env.js"
   },
   "author": "",
