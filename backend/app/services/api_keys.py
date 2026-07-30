@@ -1,7 +1,8 @@
 """API 키(네이버 검색 등) 저장·조회·런타임 적용.
 
-키는 backend/data/api_keys.json에 저장하고, 저장 시 os.environ과 config 모듈
-속성에 즉시 반영해 실행 중인 서비스(naver_client)가 바로 사용하도록 한다.
+키는 DB와 같은 디렉터리(config.APP_DATA_DIR)의 api_keys.json에 저장하고, 저장 시
+os.environ과 config 모듈 속성에 즉시 반영해 실행 중인 서비스(naver_client)가 바로
+사용하도록 한다.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from app import config
 
 logger = logging.getLogger(__name__)
 
-_KEYS_PATH = Path(config.DATA_DIR) / "api_keys.json"
+_KEYS_PATH = Path(config.APP_DATA_DIR) / "api_keys.json"
 _MANAGED = ("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET")
 
 

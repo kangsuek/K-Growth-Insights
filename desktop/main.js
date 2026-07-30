@@ -257,8 +257,14 @@ function loadUserEnv(env) {
   const userEnvPath = path.join(workspace, '.env');
   const userVars = parseEnvFile(userEnvPath);
 
+  // 경로 키는 무시한다. .env.example의 `DATABASE_PATH=backend/data/kgrowth.db`는
+  // 소스 체크아웃 기준 상대 경로라서, 패키징된 앱에서 그대로 쓰면 .app 번들 안을
+  // 가리킨다. 경로는 항상 Electron이 userData 기준 절대 경로로 지정한다.
+  const PATH_KEYS = new Set(['DATABASE_PATH', 'STOCKS_CONFIG_PATH']);
+
   let count = 0;
   for (const [key, value] of Object.entries(userVars)) {
+    if (PATH_KEYS.has(key)) continue;
     // Electron이 명시적으로 설정한 값은 덮어쓰지 않음
     if (!env[key]) {
       env[key] = value;
@@ -310,6 +316,21 @@ async function setupBackendWorkspace(uvPath) {
   if (!fs.existsSync(userStocks) && fs.existsSync(bundledStocks)) {
     fs.copyFileSync(bundledStocks, userStocks);
     log('INFO', 'Copied stocks.json to user config directory');
+  }
+
+  // 구버전 마이그레이션: 예전 빌드는 경로 환경변수 이름이 어긋나 DB·API 키를
+  // .app 번들 안(Resources/backend/data/)에 썼다. 아직 남아 있으면 userData로 옮긴다.
+  for (const name of ['kgrowth.db', 'api_keys.json']) {
+    const legacy = path.join(bundledBackend, 'data', name);
+    const target = path.join(dataDir, name);
+    if (fs.existsSync(target) || !fs.existsSync(legacy)) continue;
+    if (fs.statSync(legacy).size === 0) continue;
+    try {
+      fs.copyFileSync(legacy, target);
+      log('INFO', `Migrated ${name} from app bundle to ${dataDir}`);
+    } catch (err) {
+      log('WARN', `Failed to migrate ${name}: ${err.message}`);
+    }
   }
 
   // .env 복사 (없을 때만, 번들된 .env.example에서)
@@ -459,35 +480,23 @@ async function startBackend() {
     pythonCmd = venvPython;
     args = ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT), '--no-access-log'];
 
-    // 환경 변수로 경로 설정 (백엔드 코드가 읽기 전용 번들 외부에 쓸 수 있도록)
-    env.DATABASE_URL = `sqlite:///${path.join(dataDir, 'etf_data.db')}`;
-    env.STOCK_CONFIG_PATH = path.join(configDir, 'stocks.json');
+    // 환경 변수로 경로 설정 (백엔드 코드가 읽기 전용 번들 외부에 쓸 수 있도록).
+    // 이름은 backend/app/config.py가 읽는 키와 정확히 같아야 한다.
+    // (예전엔 DATABASE_URL/STOCK_CONFIG_PATH로 넘겨 무시됐고, 그 결과 DB·API 키가
+    //  .app 번들 안에 쓰여 DMG 재설치 때 통째로 지워졌다.)
+    env.DATABASE_PATH = path.join(dataDir, 'kgrowth.db');
+    env.STOCKS_CONFIG_PATH = path.join(configDir, 'stocks.json');
     env.VIRTUAL_ENV = path.join(workspace, '.venv');
     env.LOG_LEVEL = 'INFO';
 
     // userData/.env에서 Naver API 키 등 사용자 설정 로드
+    // (설정 페이지에서 저장한 API 키는 백엔드가 data/api_keys.json에서 직접 읽는다.)
     loadUserEnv(env);
-
-    // api-keys.json에서 저장된 API 키 로드 (설정 페이지에서 저장한 값)
-    const apiKeysPath = path.join(configDir, 'api-keys.json');
-    if (fs.existsSync(apiKeysPath)) {
-      try {
-        const apiKeys = JSON.parse(fs.readFileSync(apiKeysPath, 'utf-8'));
-        for (const [key, value] of Object.entries(apiKeys)) {
-          if (value && !value.startsWith('your_')) {
-            env[key] = value;
-          }
-        }
-        log('INFO', `Loaded API keys from ${apiKeysPath}`);
-      } catch (err) {
-        log('WARN', `Failed to parse api-keys.json: ${err.message}`);
-      }
-    }
 
     log('INFO', `Starting backend: ${pythonCmd} ${args.join(' ')}`);
     log('INFO', `CWD: ${backendPath}`);
-    log('INFO', `DATABASE_URL: ${env.DATABASE_URL}`);
-    log('INFO', `STOCK_CONFIG_PATH: ${env.STOCK_CONFIG_PATH}`);
+    log('INFO', `DATABASE_PATH: ${env.DATABASE_PATH}`);
+    log('INFO', `STOCKS_CONFIG_PATH: ${env.STOCKS_CONFIG_PATH}`);
   } else {
     // 개발 모드: uv run 사용
     pythonCmd = uvPath;

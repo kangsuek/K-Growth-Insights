@@ -30,6 +30,12 @@ STOCKS_CONFIG_PATH = _resolve_path(
     os.getenv("STOCKS_CONFIG_PATH", str(CONFIG_DIR / "stocks.json"))
 )
 
+# 사용자 데이터(API 키 등)를 저장할 디렉터리. 항상 DB와 같은 곳에 둔다.
+# 데스크톱 앱(Electron)은 DATABASE_PATH를 userData 아래로 지정하는데, 여기서
+# BASE_DIR/data를 쓰면 읽기 전용이어야 하는 .app 번들 안에 파일을 쓰게 되고
+# 재설치(DMG) 때 함께 지워진다.
+APP_DATA_DIR = Path(DATABASE_PATH).parent
+
 # CORS origins for the Vite dev server
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
