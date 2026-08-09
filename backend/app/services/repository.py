@@ -259,13 +259,28 @@ def get_intraday_dated(
 ) -> tuple[str | None, list[dict]]:
     """분봉을 (실제날짜, 행목록)로 반환. 시간순 정렬.
 
-    target_date(YYYY-MM-DD)가 주어지면 그 날짜만 조회한다. 없으면 가장 최근
-    거래일로 폴백하므로, 당일 분봉이 아직 없을 때 자연히 직전 거래일 데이터를
-    돌려준다. 실제 반환한 날짜를 함께 주어 화면에 표기할 수 있게 한다.
+    target_date(YYYY-MM-DD)가 주어지면 그 날짜를 우선 조회하되, 해당 날짜에
+    분봉이 없으면(휴장일 등) 그 이전 가장 최근 거래일로 폴백한다. target_date가
+    없으면 곧바로 가장 최근 거래일로 폴백하므로, 당일 분봉이 아직 없을 때
+    자연히 직전 거래일 데이터를 돌려준다. 실제 반환한 날짜를 함께 주어 화면에
+    표기할 수 있게 한다.
     """
     with get_connection() as conn:
         if target_date:
-            day = target_date
+            has_data = conn.execute(
+                "SELECT 1 FROM intraday_prices "
+                "WHERE ticker = ? AND substr(datetime, 1, 10) = ? LIMIT 1",
+                (ticker, target_date),
+            ).fetchone()
+            if has_data:
+                day = target_date
+            else:
+                fallback = conn.execute(
+                    "SELECT MAX(substr(datetime, 1, 10)) AS d FROM intraday_prices "
+                    "WHERE ticker = ? AND substr(datetime, 1, 10) < ?",
+                    (ticker, target_date),
+                ).fetchone()
+                day = fallback["d"] if fallback else None
         else:
             latest = conn.execute(
                 "SELECT MAX(substr(datetime, 1, 10)) AS d FROM intraday_prices "

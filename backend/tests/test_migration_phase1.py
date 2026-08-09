@@ -220,6 +220,26 @@ def test_etf_intraday_falls_back_to_previous_day():
     assert body["data"][0]["change_amount"] == 10.0
 
 
+def test_etf_intraday_target_date_falls_back_to_previous_day():
+    """target_date를 지정했는데 그 날짜에 분봉이 없으면(휴장일 등) 직전 거래일로 폴백한다."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    with get_connection() as conn:
+        for i, hhmm in enumerate(("09:00", "09:01", "15:30")):
+            conn.execute(
+                """INSERT INTO intraday_prices (ticker, datetime, open_price,
+                   high_price, low_price, price, volume)
+                   VALUES ('005930', ?, 110, 112, 108, ?, 500)""",
+                (f"2026-07-22T{hhmm}:00", 110 + i),
+            )
+    # 2026-07-23(예: 휴장일)을 명시했지만 데이터가 없으므로 직전 거래일(07-22)로 폴백한다.
+    body = client.get(
+        "/api/etfs/005930/intraday",
+        params={"target_date": "2026-07-23", "auto_collect": False},
+    ).json()
+    assert body["date"] == "2026-07-22"
+    assert body["count"] == 3
+
+
 def _seed_flow(ticker, dates):
     with get_connection() as conn:
         for d in dates:
