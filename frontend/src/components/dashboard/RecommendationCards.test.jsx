@@ -36,12 +36,13 @@ describe('ETF 추천 카드', () => {
 
     expect(await screen.findByText('외국인 순매수 상위')).toBeInTheDocument()
 
-    // 세 카드 모두 같은 형식(▲/▼ + %) — 단위가 같아야 나란히 비교된다
-    expect(within(cardOf('주간 수익률 상위')).getByText('▲ +69.11%')).toBeInTheDocument()
-    expect(within(cardOf('외국인 순매수 상위')).getByText('▲ +18.29%')).toBeInTheDocument()
+    // 세 카드 모두 같은 형식(부호 + %) — 단위가 같아야 나란히 비교된다.
+    // 방향은 부호와 색상이 말해 주므로 화살표(▲/▼)는 붙이지 않는다.
+    expect(within(cardOf('주간 수익률 상위')).getByText('+69.11%')).toBeInTheDocument()
+    expect(within(cardOf('외국인 순매수 상위')).getByText('+18.29%')).toBeInTheDocument()
 
     // 순매수 상위인데 주가는 빠진 종목 — 마이너스도 그대로 보여준다
-    expect(within(cardOf('기관 순매수 상위')).getByText('▼ -12.50%')).toBeInTheDocument()
+    expect(within(cardOf('기관 순매수 상위')).getByText('-12.50%')).toBeInTheDocument()
 
     // 순매수 주수는 더 이상 표시하지 않는다
     expect(screen.queryByText(/172,238,645주/)).not.toBeInTheDocument()
