@@ -1,4 +1,6 @@
 """Phase 5(비교) 테스트: 정규화 가격·통계·상관관계."""
+from datetime import date, timedelta
+
 from fastapi.testclient import TestClient
 
 from app.database import get_connection
@@ -9,15 +11,37 @@ from tests.conftest import seed_stock
 client = TestClient(app)
 
 
+def _insert_prices(conn, ticker, rows):
+    """(날짜, 종가) 목록을 prices에 넣는다."""
+    for day, close in rows:
+        conn.execute(
+            """INSERT INTO prices (ticker, date, open_price, high_price,
+               low_price, close_price, volume, change_pct)
+               VALUES (?, ?, ?, ?, ?, ?, 1000, 0)""",
+            (ticker, day, close, close, close, close),
+        )
+
+
 def _seed_prices(ticker, closes, start_day=1):
+    """2026년 7월 고정 날짜로 시드. 조회 구간을 명시하는 테스트용."""
     with get_connection() as conn:
-        for i, c in enumerate(closes):
-            conn.execute(
-                """INSERT INTO prices (ticker, date, open_price, high_price,
-                   low_price, close_price, volume, change_pct)
-                   VALUES (?, ?, ?, ?, ?, ?, 1000, 0)""",
-                (ticker, f"2026-07-{start_day + i:02d}", c, c, c, c),
-            )
+        _insert_prices(conn, ticker, [
+            (f"2026-07-{start_day + i:02d}", c) for i, c in enumerate(closes)
+        ])
+
+
+def _seed_recent_prices(ticker, closes):
+    """오늘부터 거슬러 올라가며 시드(closes는 오래된→최신).
+
+    조회 구간을 생략하면 기본이 '최근 30일'이라, 고정 날짜로 시드하면 그 구간을
+    벗어나는 날부터 테스트가 깨진다. 오늘 기준으로 넣어 날짜와 무관하게 만든다.
+    """
+    today = date.today()
+    with get_connection() as conn:
+        _insert_prices(conn, ticker, [
+            ((today - timedelta(days=i)).isoformat(), c)
+            for i, c in enumerate(reversed(closes))
+        ])
 
 
 def test_compare_normalizes_and_stats():
@@ -43,14 +67,16 @@ def test_compare_endpoint_requires_two():
 
 
 def test_compare_endpoint_shape():
+    """조회 구간을 생략하면 기본 구간(최근 30일)으로 계산한다."""
     seed_stock("005930", "삼성전자", "STOCK")
     seed_stock("000660", "SK하이닉스", "STOCK")
-    _seed_prices("005930", [100, 101, 102])
-    _seed_prices("000660", [200, 202, 204])
+    _seed_recent_prices("005930", [100, 101, 102])
+    _seed_recent_prices("000660", [200, 202, 204])
     body = client.get("/api/etfs/compare", params={"tickers": "005930,000660"}).json()
     assert "normalized_prices" in body and "statistics" in body
     assert "correlation_matrix" in body
     assert set(body["statistics"]) == {"005930", "000660"}
+    assert body["statistics"]["005930"]["period_return"] == 2.0  # 100 → 102
 
 
 def test_annualized_is_none_for_short_period():
