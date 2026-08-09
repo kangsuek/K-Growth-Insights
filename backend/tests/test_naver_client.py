@@ -145,41 +145,47 @@ def test_fetch_intraday_returns_current_session_when_available():
 
 @respx.mock
 def test_fetch_intraday_falls_back_to_previous_trading_day():
-    # 1차 /minute(당일)는 빈 응답 → 일별시세로 최근 거래일 확인 → 그 날짜로 재요청
+    """당일 세션이 비면(장 시작 전 등) 최근 10일 범위로 재요청해 그중 가장
+    최근 날짜의 분봉만 골라 돌려준다. 네이버 일별 시세 최상단이 개장 전에도
+    당일 날짜를 미리 얹어두는 경우가 있어(거래 없이 날짜만 존재), 그 날짜
+    하나로 단일일 재조회하던 이전 방식은 계속 빈 응답만 받는 문제가 있었다.
+    """
+    from datetime import date, timedelta
+
+    today = date.today()
+    older_day = (today - timedelta(days=4)).strftime("%Y%m%d")
+    prev_day = (today - timedelta(days=3)).strftime("%Y%m%d")
+
     minute = respx.get(f"{nc.CHART_BASE}/005930/minute")
     minute.side_effect = [
         httpx.Response(200, json=[]),  # 당일 세션 비어 있음
         httpx.Response(
             200,
             json=[
-                {"localDateTime": "20260721090000", "currentPrice": 245500.0},
-                {"localDateTime": "20260721153000", "currentPrice": 259000.0},
+                {"localDateTime": f"{older_day}090000", "currentPrice": 240000.0},
+                {"localDateTime": f"{prev_day}090000", "currentPrice": 245500.0},
+                {"localDateTime": f"{prev_day}153000", "currentPrice": 259000.0},
             ],
         ),
     ]
-    respx.get(f"{nc.MSTOCK_BASE}/005930/price").mock(
-        return_value=httpx.Response(
-            200, json=[{"localTradedAt": "2026-07-21", "closePrice": "259,000"}]
-        )
-    )
 
     rows = nc.fetch_intraday("005930")
 
+    # older_day(240000)는 걸러지고 가장 최근 날짜(prev_day)만 남는다
     assert len(rows) == 2
-    assert rows[0]["datetime"] == "2026-07-21T09:00:00"
+    assert rows[0]["price"] == 245500.0
     assert rows[-1]["price"] == 259000.0
-    # 폴백 재요청 시 직전 거래일 구간 파라미터가 전달되었는지 확인
+    # 폴백 재요청은 오늘 기준 최근 10일 넓은 구간으로 이뤄진다
     fallback_req = minute.calls[1].request
-    assert "startDateTime=202607210900" in str(fallback_req.url)
-    assert "endDateTime=202607211600" in str(fallback_req.url)
+    start = (today - timedelta(days=10)).strftime("%Y%m%d")
+    end = today.strftime("%Y%m%d")
+    assert f"startDateTime={start}0000" in str(fallback_req.url)
+    assert f"endDateTime={end}2359" in str(fallback_req.url)
 
 
 @respx.mock
-def test_fetch_intraday_empty_when_no_trading_date():
+def test_fetch_intraday_empty_when_fallback_range_also_empty():
     respx.get(f"{nc.CHART_BASE}/005930/minute").mock(
-        return_value=httpx.Response(200, json=[])
-    )
-    respx.get(f"{nc.MSTOCK_BASE}/005930/price").mock(
         return_value=httpx.Response(200, json=[])
     )
     assert nc.fetch_intraday("005930") == []

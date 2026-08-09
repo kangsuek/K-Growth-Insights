@@ -258,16 +258,6 @@ def _parse_minute_bars(items) -> list[dict]:
     return rows
 
 
-def _latest_trading_date(code: str) -> Optional[str]:
-    """가장 최근 거래일을 YYYYMMDD로 반환(일별 시세 최상단). 실패 시 None."""
-    prices = fetch_daily_prices(code, pages=1)
-    if not prices:
-        return None
-    # fetch_daily_prices는 최신순이므로 첫 행이 최근 거래일. date는 'YYYY-MM-DD'.
-    date = prices[0].get("date")
-    return date.replace("-", "") if date else None
-
-
 def fetch_intraday(code: str) -> list[dict]:
     """
     Minute bars for the latest trading session, chronological order.
@@ -287,19 +277,28 @@ def fetch_intraday(code: str) -> list[dict]:
             if rows:
                 return rows
 
-            # 당일 세션이 비었으면 직전 거래일 09:00~16:00 구간으로 재요청.
-            date = _latest_trading_date(code)
-            if not date:
-                return []
+            # 당일 세션이 비었으면(장 시작 전·휴장일) 최근 열흘 범위로 넓게
+            # 재요청해 그중 가장 최근 날짜의 분봉만 추린다. 네이버 일별 시세
+            # 최상단은 개장 전에도 당일 날짜를 미리 얹어두는 경우가 있어(거래는
+            # 없는데 날짜만 존재), 그 날짜 하나로 단일일 재조회하면 계속 빈
+            # 응답만 돌아온다.
+            from datetime import date, timedelta
+
+            end = date.today()
+            start = end - timedelta(days=10)
             resp = client.get(
                 url,
                 params={
-                    "startDateTime": f"{date}0900",
-                    "endDateTime": f"{date}1600",
+                    "startDateTime": f"{start.strftime('%Y%m%d')}0000",
+                    "endDateTime": f"{end.strftime('%Y%m%d')}2359",
                 },
             )
             resp.raise_for_status()
-            return _parse_minute_bars(resp.json())
+            wide_rows = _parse_minute_bars(resp.json())
+            if not wide_rows:
+                return []
+            latest_day = max(r["datetime"][:10] for r in wide_rows)
+            return [r for r in wide_rows if r["datetime"].startswith(latest_day)]
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_intraday(%s) failed: %s", code, exc)
         return []
