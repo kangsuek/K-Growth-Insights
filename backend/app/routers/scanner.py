@@ -29,6 +29,9 @@ def search_scanner(
     ytd_return_positive: Optional[bool] = Query(None),
     foreign_net_positive: Optional[bool] = Query(None),
     institutional_net_positive: Optional[bool] = Query(None),
+    # 연초 이후 추세가 꾸준했는지(R²·최대낙폭·월승률·20일선 유지). 임계값은
+    # services/scanner.SUSTAINED_UPTREND 한 곳에 있다.
+    sustained_uptrend: Optional[bool] = Query(None),
     sort_by: str = Query("weekly_return"),
     sort_dir: str = Query("desc"),
     page: int = Query(1, ge=1),
@@ -45,6 +48,7 @@ def search_scanner(
         "ytd_return_positive": ytd_return_positive,
         "foreign_net_positive": foreign_net_positive,
         "institutional_net_positive": institutional_net_positive,
+        "sustained_uptrend": sustained_uptrend,
         "sort_by": sort_by, "sort_dir": sort_dir, "page": page, "page_size": page_size,
     })
 

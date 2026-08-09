@@ -59,6 +59,8 @@ const DEFAULT_FILTERS = {
   ytd_return_positive: undefined,
   foreign_net_positive: undefined,
   institutional_net_positive: undefined,
+  // 연초 이후 추세가 꾸준했는지(R²·최대낙폭·월승률·20일선 유지) — 백엔드 임계값 적용
+  sustained_uptrend: undefined,
   sort_by: 'weekly_return',
   sort_dir: 'desc',
   page: 1,

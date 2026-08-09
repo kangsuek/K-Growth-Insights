@@ -260,6 +260,23 @@ export default function ScreeningFilters({ filters, onFilterChange, onReset, las
             >
               모두 상승
             </button>
+            <label
+              className="flex items-center gap-2 cursor-pointer"
+              title={'연초 이후 꾸준히 오른 종목만 봅니다.\n'
+                + '연초대비 수익률만 보면 폭락 후 반등도 +로 잡히므로, 추세의 직선성(R²)·'
+                + '최대 낙폭·월별 승률·20일선 유지를 함께 봅니다.\n'
+                + '연 1~2%짜리 머니마켓·단기채권 ETF는 제외됩니다.'}
+            >
+              <input
+                type="checkbox"
+                checked={!!filters.sustained_uptrend}
+                onChange={(e) => onFilterChange({ sustained_uptrend: e.target.checked ? true : undefined })}
+                className="w-4 h-4 text-primary-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500"
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                지속 상승추세
+              </span>
+            </label>
           </div>
         </div>
 

@@ -51,6 +51,7 @@ FastAPI (backend/app) ──/api──▶ React+Vite (frontend/src)
 - 수익률 기준일은 **네이버증권 표기와 동일**하게 맞춥니다 — 주간=7일 전, 월간=전월 같은 날, 연간(YTD)=전년도 마지막 거래일. 거래일 수(5·20거래일)로 잡지 않습니다.
 - 기준일까지 시세가 없으면 값을 **만들지 않고 비웁니다**(네이버도 그렇게 합니다).
 - 한 행의 시세·수익률·수급은 같은 거래일 기준이어야 합니다. 장 마감 전에는 당일 미확정 행을 쓰지 않습니다(`timeutil.is_close_confirmed`). 기준 거래일은 `stock_catalog.metrics_date`에 남습니다.
+- **추세 지속성**(`trend_r2`/`trend_mdd`/`trend_win_rate`/`trend_above_ma`)은 연초대비 수익률만으로 '꾸준한 상승'을 가릴 수 없어 함께 저장합니다(폭락 후 반등도 YTD는 +). 판정 임계값은 `scanner.SUSTAINED_UPTREND` 한 곳에 둡니다.
 - 자세한 배경은 [README.md](./README.md#수익률-기준일) 참고.
 
 ## 범위

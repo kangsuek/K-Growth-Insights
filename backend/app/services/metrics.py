@@ -130,3 +130,113 @@ def annualized_volatility(daily_returns_pct: list[float]) -> float | None:
     if sd is None:
         return None
     return sd * math.sqrt(TRADING_DAYS_PER_YEAR)
+
+
+# --- 추세 지속성 -------------------------------------------------------------
+#
+# '연초 이후 꾸준히 올랐는가'는 연초대비 수익률(ytd_return)만으로 판정할 수 없다.
+# 폭락 후 반등도 +로 잡히기 때문이다(KODEX 건설: 7/07→7/31 -12.8%, 이후 +16.6% → YTD +58%).
+# 아래 네 지표를 함께 봐야 '직선처럼 올랐는지'와 '도중에 무너진 적 있는지'가 갈린다.
+
+# 20일 이동평균 — 추세 이탈 판정 창.
+TREND_MA_WINDOW = 20
+
+# 지표를 계산할 최소 거래일. 너무 짧으면 R²가 우연히 높게 나온다.
+TREND_MIN_DAYS = 60
+
+
+def _linear_r2_and_slope(values: list[float]) -> tuple[float | None, float | None]:
+    """로그값을 시간(0,1,2...)에 회귀한 (R², 기울기). 계산 불가면 (None, None).
+
+    로그를 쓰는 이유는 수익률이 복리로 쌓이기 때문이다. 원값으로 회귀하면 가격대가
+    높은 구간의 잔차가 커져 후반부에 과도하게 끌려간다.
+    """
+    n = len(values)
+    if n < 2 or any(v is None or v <= 0 for v in values):
+        return None, None
+    ys = [math.log(v) for v in values]
+    xs = list(range(n))
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxy = sum((xs[i] - mx) * (ys[i] - my) for i in range(n))
+    sxx = sum((x - mx) ** 2 for x in xs)
+    syy = sum((y - my) ** 2 for y in ys)
+    if sxx == 0 or syy == 0:
+        return None, None
+    return (sxy ** 2) / (sxx * syy) * 100, sxy / sxx
+
+
+def max_drawdown(closes_asc: list[float]) -> float | None:
+    """기간 최대 낙폭(%). 고점 대비 가장 크게 밀린 폭이며 0 이하 값이다."""
+    closes = [c for c in closes_asc if c]
+    if len(closes) < 2:
+        return None
+    peak, mdd = closes[0], 0.0
+    for c in closes:
+        peak = max(peak, c)
+        if peak:
+            mdd = min(mdd, (c - peak) / peak * 100)
+    return mdd
+
+
+def monthly_win_rate(rows_asc: list[dict], base_price: float | None) -> float | None:
+    """월별 수익률 중 양수 비율(%). 월말 종가를 이어 비교한다.
+
+    base_price는 첫 달의 비교 기준(전년도 마지막 거래일 종가). 없으면 첫 달을 건너뛴다.
+    """
+    last_of_month: dict[str, float] = {}
+    for row in rows_asc:
+        day, close = str(row.get("date") or "")[:10], row.get("close_price")
+        if len(day) >= 7 and close:
+            last_of_month[day[:7]] = close      # 오름차순이라 마지막 값이 월말 종가
+    if not last_of_month:
+        return None
+    closes = [last_of_month[m] for m in sorted(last_of_month)]
+    prev = base_price or closes[0]
+    if not base_price:
+        closes = closes[1:]
+    if not closes:
+        return None
+    wins = 0
+    for close in closes:
+        wins += close > prev
+        prev = close
+    return wins / len(closes) * 100
+
+
+def above_ma_ratio(closes_asc: list[float], window: int = TREND_MA_WINDOW) -> float | None:
+    """종가가 window일 이동평균 위에 있던 날의 비율(%)."""
+    closes = [c for c in closes_asc if c]
+    if len(closes) <= window:
+        return None
+    hits = 0
+    for i in range(window - 1, len(closes)):
+        ma = sum(closes[i - window + 1:i + 1]) / window
+        hits += closes[i] >= ma
+    total = len(closes) - window + 1
+    return hits / total * 100
+
+
+def trend_metrics(rows_desc: list[dict], since: str, base_price: float | None = None) -> dict:
+    """since(포함) 이후 구간의 추세 지속성 지표.
+
+    rows_desc는 최신순 시세({date, close_price}). 반환 키는 stock_catalog 컬럼과 같다.
+    데이터가 짧으면 각 값은 None이 되고, 필터는 NULL을 걸러내므로 자동으로 제외된다.
+    """
+    rows_asc = [r for r in reversed(rows_desc)
+                if str(r.get("date") or "")[:10] >= since and r.get("close_price")]
+    empty = {"trend_r2": None, "trend_mdd": None,
+             "trend_win_rate": None, "trend_above_ma": None}
+    if len(rows_asc) < TREND_MIN_DAYS:
+        return empty
+
+    closes = [r["close_price"] for r in rows_asc]
+    r2, slope = _linear_r2_and_slope(closes)
+    if slope is None or slope <= 0:
+        # 추세선이 우하향이면 R²가 높아도 '상승추세'가 아니다.
+        return empty
+    return {
+        "trend_r2": r2,
+        "trend_mdd": max_drawdown(closes),
+        "trend_win_rate": monthly_win_rate(rows_asc, base_price),
+        "trend_above_ma": above_ma_ratio(closes),
+    }

@@ -126,6 +126,12 @@ CREATE TABLE IF NOT EXISTS stock_catalog (
     ytd_base_date      TEXT,      -- YTD 기준일(전년도 마지막 거래일) — 딥페이징 캐시
     ytd_base_price     REAL,      -- YTD 기준가
     metrics_date       TEXT,      -- 위 지표들의 기준 거래일(가격·수급이 같은 날인지 확인용)
+    -- 연초 이후 추세 지속성(services/metrics.py trend_metrics). ytd_return만으로는
+    -- 폭락 후 반등도 +로 잡혀 '꾸준한 상승'을 가릴 수 없어 함께 저장한다.
+    trend_r2           REAL,      -- 로그종가 회귀 설명력(%) — 직선처럼 올랐는가
+    trend_mdd          REAL,      -- 연초 이후 최대 낙폭(%) — 도중에 무너진 적 있는가
+    trend_win_rate     REAL,      -- 월별 수익률 중 양수 비율(%)
+    trend_above_ma     REAL,      -- 종가가 20일 이동평균 위였던 날 비율(%)
     foreign_net        INTEGER,   -- 최근 외국인 순매수
     institutional_net  INTEGER,   -- 최근 기관 순매수
     catalog_updated_at TEXT,      -- 지표 갱신 시각
@@ -201,6 +207,10 @@ _CATALOG_ADDED_COLUMNS = {
     "ytd_base_date": "TEXT",
     "ytd_base_price": "REAL",
     "metrics_date": "TEXT",
+    "trend_r2": "REAL",
+    "trend_mdd": "REAL",
+    "trend_win_rate": "REAL",
+    "trend_above_ma": "REAL",
     "foreign_net": "INTEGER",
     "institutional_net": "INTEGER",
     "catalog_updated_at": "TEXT",

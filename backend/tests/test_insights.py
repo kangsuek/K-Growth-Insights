@@ -163,3 +163,76 @@ def test_prev_month_day_clamps_to_month_end():
 
     assert metrics.prev_month_day(date(2026, 3, 31)) == date(2026, 2, 28)
     assert metrics.prev_month_day(date(2026, 1, 15)) == date(2025, 12, 15)
+
+
+# --- 추세 지속성 --------------------------------------------------------------
+
+def _daily(start_close, n, step, start="2026-01-02"):
+    """등차로 움직이는 일별 시세(최신순). 주말은 무시 — 계산은 날짜 간격을 쓰지 않는다."""
+    from datetime import date, timedelta
+    d0 = date.fromisoformat(start)
+    rows = [{"date": (d0 + timedelta(days=i)).isoformat(), "close_price": start_close + step * i}
+            for i in range(n)]
+    return list(reversed(rows))
+
+
+def test_trend_metrics_straight_uptrend_scores_high():
+    """곧게 오르면 R²가 높고 낙폭이 없다."""
+    from app.services import metrics
+
+    t = metrics.trend_metrics(_daily(10000, 150, 20), since="2026-01-01")
+    assert t["trend_r2"] > 95
+    assert t["trend_mdd"] == 0.0            # 고점을 계속 갱신하므로 낙폭 없음
+    assert t["trend_above_ma"] == 100.0     # 상승 중엔 늘 이동평균 위
+
+
+def test_trend_metrics_rejects_downtrend():
+    """우하향이면 R²가 높아도 상승추세가 아니므로 값을 내지 않는다."""
+    from app.services import metrics
+
+    t = metrics.trend_metrics(_daily(20000, 150, -20), since="2026-01-01")
+    assert t == {"trend_r2": None, "trend_mdd": None,
+                 "trend_win_rate": None, "trend_above_ma": None}
+
+
+def test_trend_metrics_crash_then_rebound_has_deep_drawdown():
+    """폭락 후 반등은 YTD가 +여도 낙폭으로 걸러진다.
+
+    실제 사례: KODEX 건설 YTD +58%인데 7/07~7/31 -12.8% 구간이 있었다.
+    """
+    from app.services import metrics
+
+    down = _daily(20000, 80, -150)                 # 20,000 → 8,150 까지 하락
+    rows = _daily(8000, 70, 250, start="2026-04-23")  # 이후 반등
+    combined = rows + down                          # 최신순으로 이어붙인다
+    t = metrics.trend_metrics(combined, since="2026-01-01")
+    assert t["trend_mdd"] < -50                     # 도중에 반토막
+    assert t["trend_r2"] < 60                       # 직선과 거리가 멀다
+
+
+def test_trend_metrics_needs_enough_history():
+    """거래일이 너무 짧으면 R²가 우연히 높게 나오므로 계산하지 않는다."""
+    from app.services import metrics
+
+    t = metrics.trend_metrics(_daily(10000, 30, 50), since="2026-01-01")
+    assert t["trend_r2"] is None
+
+
+def test_monthly_win_rate_counts_positive_months():
+    from app.services import metrics
+
+    rows = [
+        {"date": "2026-01-30", "close_price": 110},   # 100 → 110  +
+        {"date": "2026-02-27", "close_price": 105},   # 110 → 105  -
+        {"date": "2026-03-31", "close_price": 120},   # 105 → 120  +
+        {"date": "2026-04-30", "close_price": 130},   # 120 → 130  +
+    ]
+    assert metrics.monthly_win_rate(rows, base_price=100) == 75.0
+
+
+def test_max_drawdown_measures_peak_to_trough():
+    from app.services import metrics
+
+    assert metrics.max_drawdown([100, 120, 60, 90]) == -50.0   # 120 → 60
+    assert metrics.max_drawdown([100, 110, 120]) == 0.0
+    assert metrics.max_drawdown([100]) is None

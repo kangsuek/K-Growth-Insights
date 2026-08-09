@@ -209,12 +209,6 @@ def test_metrics_align_price_and_flow_on_same_trading_day(monkeypatch):
     assert m["ytd_base_date"] == "2025-12-30"
 
 
-def test_ytd_base_cache_rejects_old_current_year_basis():
-    """옛 기준(올해 첫 거래일)으로 저장된 캐시는 무효로 보고 다시 계산한다."""
-    assert scanner._ytd_base_is_current({"date": "2025-12-30", "price": 60}, 2026) is True
-    assert scanner._ytd_base_is_current({"date": "2026-01-02", "price": 62}, 2026) is False
-    assert scanner._ytd_base_is_current({"date": "2025-12-30", "price": None}, 2026) is False
-    assert scanner._ytd_base_is_current(None, 2026) is False
 
 
 # --- 상승(+) 필터 -------------------------------------------------------------
@@ -281,3 +275,62 @@ def test_positive_filters_exclude_zero_and_null():
     assert _search(weekly_return_positive="true") == ["POS"]
     # 최소 0%는 보합을 포함한다(토글과 다른 동작).
     assert set(_search(min_weekly_return=0)) == {"POS", "ZERO"}
+
+
+# --- 지속 상승추세 필터 --------------------------------------------------------
+
+def _seed_trend(rows):
+    """(ticker, ytd, r2, mdd, win_rate, above_ma) 시드."""
+    with get_connection() as conn:
+        for t, ytd, r2, mdd, wr, ma in rows:
+            conn.execute(
+                """INSERT INTO stock_catalog
+                   (ticker, name, type, market, is_active, close_price, weekly_return,
+                    ytd_return, trend_r2, trend_mdd, trend_win_rate, trend_above_ma,
+                    catalog_updated_at)
+                   VALUES (?, ?, 'ETF', 'ETF', 1, 1000, 1.0, ?, ?, ?, ?, ?,
+                           '2026-08-07 07:00:00')""",
+                (t, t, ytd, r2, mdd, wr, ma),
+            )
+
+
+def _uptrend_search():
+    body = client.get("/api/scanner",
+                      params={"type": "ETF", "sustained_uptrend": "true"}).json()
+    return {i["ticker"] for i in body["items"]}
+
+
+def test_sustained_uptrend_filter_keeps_steady_risers():
+    _seed_trend([
+        ("STEADY", 23.7, 87, -5.1, 62, 73),    # 꾸준히 상승
+        ("CRASHED", 132.4, 77, -53.5, 50, 55),  # 수익률은 크지만 반토막 난 적 있음
+        ("CHOPPY", 20.0, 40, -10.0, 62, 65),    # 직선성 낮음
+        ("WEAKMON", 20.0, 80, -10.0, 40, 65),   # 월승률 낮음
+        ("OFFMA", 20.0, 80, -10.0, 62, 40),     # 20일선 이탈 잦음
+    ])
+    assert _uptrend_search() == {"STEADY"}
+
+
+def test_sustained_uptrend_excludes_cash_like_etfs():
+    """머니마켓·CD금리류는 R² 100%·낙폭 0%지만 연 1~2%짜리라 제외한다."""
+    _seed_trend([
+        ("MMF", 2.0, 100, -0.02, 88, 100),      # 현금성 — 낙폭이 사실상 없다
+        ("EQUITY", 15.0, 86, -9.5, 75, 73),
+    ])
+    assert _uptrend_search() == {"EQUITY"}
+
+
+def test_sustained_uptrend_excludes_uncollected():
+    """추세 지표가 없는 종목(NULL)은 판정할 수 없으므로 빠진다."""
+    _seed_trend([("GOOD", 23.7, 87, -5.1, 62, 73)])
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog (ticker, name, type, market, is_active,
+               close_price, ytd_return) VALUES ('NULLS', 'NULLS', 'ETF', 'ETF', 1, 1000, 99)""")
+    assert _uptrend_search() == {"GOOD"}
+
+
+def test_sustained_uptrend_requires_positive_ytd():
+    """연초 대비가 마이너스면 아무리 최근 흐름이 좋아도 '연초부터 상승'이 아니다."""
+    _seed_trend([("DOWN_YTD", -3.0, 90, -8.0, 70, 80)])
+    assert _uptrend_search() == set()

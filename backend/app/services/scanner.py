@@ -39,6 +39,20 @@ _SORT_COLUMNS = {
     "close_price", "daily_change_pct", "foreign_net", "institutional_net", "name",
 }
 
+# '지속 상승추세' 판정 임계값. 연초대비 수익률만 보면 폭락 후 반등도 +로 잡혀
+# (KODEX 건설 YTD +58%인데 7월 한 달 -12.8%), 추세의 '꾸준함'을 함께 본다.
+#
+# trend_mdd 하한(-2%)은 현금성·단기채권 ETF를 걸러낸다. 머니마켓·CD금리류는 낙폭이
+# 사실상 0이라 R²가 100%로 나오지만 연 1~2%짜리여서 '상승추세'로 볼 값이 아니다.
+SUSTAINED_UPTREND = {
+    "trend_r2 >= ?": 60,          # 직선처럼 올랐는가
+    "trend_mdd >= ?": -25,        # 도중에 크게 무너지지 않았는가
+    "trend_mdd <= ?": -2,         # 현금성·단기채권 제외
+    "trend_win_rate >= ?": 60,    # 월별로 대체로 올랐는가
+    "trend_above_ma >= ?": 60,    # 20일선 위를 유지했는가
+    "ytd_return > ?": 0,          # 연초 대비 상승
+}
+
 # '+만 보기' 토글 → 대상 컬럼. 값은 컬럼명이므로 여기 없는 키는 SQL에 닿지 않는다.
 _POSITIVE_FILTERS = {
     "daily_change_positive": "daily_change_pct",
@@ -98,47 +112,35 @@ def confirmed_prices(prices: list[dict], now: datetime | None = None) -> list[di
     return [p for p in prices if str(p.get("date") or "")[:10] < today]
 
 
-def _ytd_base_is_current(cached: dict | None, year: int) -> bool:
-    """캐시된 YTD 기준일이 이번 연도용(= 전년도 마지막 거래일)인지.
+def _metrics_for(ticker: str) -> dict | None:
+    """카탈로그 종목의 수익률·수급·추세 지표 계산(시세·매매동향 기반). 시세 없으면 None.
 
-    기준을 '올해 첫 거래일'에서 '전년도 마지막 거래일'로 바꿨으므로, 옛 기준으로 저장된
-    캐시(올해 날짜)는 여기서 걸러져 자동으로 다시 계산된다.
+    수익률 기준일은 네이버증권과 동일하다(services/metrics.py 참고).
+
+    추세 지속성(R²·MDD·월승률)은 연초 이후 시세 **전체**가 있어야 계산되므로 항상 그만큼
+    딥페이징한다. 예전에는 YTD 기준가만 캐시해 1페이지로 끝냈지만, 기준가 한 점으로는
+    '도중에 무너진 적 있는지'를 알 수 없어 캐시 경로를 걷어냈다.
     """
-    if not cached or not cached.get("price") or not cached.get("date"):
-        return False
-    try:
-        return date.fromisoformat(str(cached["date"])[:10]).year == year - 1
-    except ValueError:
-        return False
-
-
-def _metrics_for(ticker: str, cached_ytd_base: dict | None = None) -> dict | None:
-    """카탈로그 종목의 수익률·수급 지표 계산(시세·매매동향 기반). 시세 없으면 None.
-
-    수익률 기준일은 네이버증권과 동일하다(services/metrics.py 참고). 캐시된 YTD 기준가가
-    이번 연도용이면 전년 12월까지 딥페이징하지 않고 캐시 기준가를 쓴다.
-    """
-    year = date.today().year
-    use_cache = _ytd_base_is_current(cached_ytd_base, year)
-    pages = 1 if use_cache else _pages_for_ytd()
-    prices = confirmed_prices(naver_client.fetch_daily_prices(ticker, pages=pages))
+    prices = confirmed_prices(
+        naver_client.fetch_daily_prices(ticker, pages=_pages_for_ytd()))
     if not prices or not prices[0].get("close_price"):
         return None
     as_of = str(prices[0].get("date") or "")[:10]
     cur = prices[0]["close_price"]
 
-    # YTD: 캐시가 유효하면 캐시 기준가, 아니면 전년도 마지막 거래일을 기준가로 잡고 캐시.
-    if use_cache:
-        base_price, base_date = cached_ytd_base["price"], cached_ytd_base["date"]
-    else:
-        base_date, base_price = metrics.ytd_base(prices)
-        if base_price is None:
-            # 연중 상장 종목은 전년도 시세가 없다. 상장 후 첫 거래일을 기준으로 대신 쓴다.
-            oldest = next((p for p in reversed(prices) if p.get("close_price")), None)
-            if oldest:
-                base_date = str(oldest.get("date") or "")[:10]
-                base_price = oldest["close_price"]
+    # YTD 기준가는 전년도 마지막 거래일.
+    base_date, base_price = metrics.ytd_base(prices)
+    ytd_base_of_year = base_price      # 연중 상장 폴백 전 값(월승률 첫 달 비교용)
+    if base_price is None:
+        # 연중 상장 종목은 전년도 시세가 없다. 상장 후 첫 거래일을 기준으로 대신 쓴다.
+        oldest = next((p for p in reversed(prices) if p.get("close_price")), None)
+        if oldest:
+            base_date = str(oldest.get("date") or "")[:10]
+            base_price = oldest["close_price"]
     ytd = (cur - base_price) / base_price * 100 if base_price else None
+
+    trend = metrics.trend_metrics(
+        prices, since=f"{date.today().year}-01-01", base_price=ytd_base_of_year)
 
     # 수급도 가격과 같은 거래일로 맞춘다(as_of 이하 가장 최근 확정분).
     flow = naver_client.fetch_trading_flow(ticker)  # 최신순
@@ -158,6 +160,7 @@ def _metrics_for(ticker: str, cached_ytd_base: dict | None = None) -> dict | Non
         "ytd_base_date": base_date,
         "ytd_base_price": base_price,
         "metrics_date": as_of,
+        **trend,
         "foreign_net": foreign_net,
         "institutional_net": inst_net,
     }
@@ -204,28 +207,17 @@ def count_missing_metrics() -> int:
         return sum(len(tickers) for _, tickers in _supply_target_groups(conn, only_missing=True))
 
 
-def _load_ytd_base_cache(conn) -> dict[str, dict]:
-    """저장된 올해 YTD 기준가 로드 → 딥페이징 생략용."""
-    cache: dict[str, dict] = {}
-    for r in conn.execute(
-        "SELECT ticker, ytd_base_date, ytd_base_price FROM stock_catalog "
-        "WHERE ytd_base_price IS NOT NULL AND ytd_base_date IS NOT NULL"
-    ):
-        cache[r["ticker"]] = {"date": r["ytd_base_date"], "price": r["ytd_base_price"]}
-    return cache
-
-
-def _collect_one(ticker: str, cached_ytd_base: dict | None = None) -> int:
+def _collect_one(ticker: str) -> int:
     if _cancel.is_set():
         return 0
-    metrics = _metrics_for(ticker, cached_ytd_base)
+    row = _metrics_for(ticker)
     with _lock:
         _progress["completed"] += 1
         _progress["message"] = (
             f"{_progress['step_label']} 지표 수집 중... "
             f"({_progress['completed']:,}/{_progress['total']:,})"
         )
-    if not metrics:
+    if not row:
         return 0
     with get_connection() as conn:
         conn.execute(
@@ -233,14 +225,16 @@ def _collect_one(ticker: str, cached_ytd_base: dict | None = None) -> int:
             UPDATE stock_catalog SET
                 close_price=?, daily_change_pct=?, volume=?, weekly_return=?,
                 monthly_return=?, ytd_return=?, ytd_base_date=?, ytd_base_price=?,
-                metrics_date=?, foreign_net=?, institutional_net=?,
+                metrics_date=?, trend_r2=?, trend_mdd=?, trend_win_rate=?,
+                trend_above_ma=?, foreign_net=?, institutional_net=?,
                 catalog_updated_at=datetime('now')
             WHERE ticker=?
             """,
-            (metrics["close_price"], metrics["daily_change_pct"], metrics["volume"],
-             metrics["weekly_return"], metrics["monthly_return"], metrics["ytd_return"],
-             metrics["ytd_base_date"], metrics["ytd_base_price"], metrics["metrics_date"],
-             metrics["foreign_net"], metrics["institutional_net"], ticker),
+            (row["close_price"], row["daily_change_pct"], row["volume"],
+             row["weekly_return"], row["monthly_return"], row["ytd_return"],
+             row["ytd_base_date"], row["ytd_base_price"], row["metrics_date"],
+             row["trend_r2"], row["trend_mdd"], row["trend_win_rate"],
+             row["trend_above_ma"], row["foreign_net"], row["institutional_net"], ticker),
         )
     with _lock:
         _progress["updated"] += 1
@@ -256,7 +250,6 @@ def collect_catalog_data(only_missing: bool = False) -> dict:
     _cancel.clear()
     with get_connection() as conn:
         groups = _supply_target_groups(conn, only_missing=only_missing)
-        ytd_cache = _load_ytd_base_cache(conn)
     total = sum(len(tickers) for _, tickers in groups)
     with _lock:
         _progress.update(status="in_progress", total=total, completed=0, updated=0,
@@ -274,7 +267,7 @@ def collect_catalog_data(only_missing: bool = False) -> dict:
                 continue
             workers = max(1, min(config.COLLECT_CONCURRENCY, len(tickers)))
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                list(pool.map(lambda t: _collect_one(t, ytd_cache.get(t)), tickers))
+                list(pool.map(_collect_one, tickers))
         status = "cancelled" if _cancel.is_set() else "completed"
         with _lock:
             updated = _progress["updated"]
@@ -372,6 +365,10 @@ def _row_to_item(row, registered: set) -> dict:
         "ytd_base_date": d.get("ytd_base_date"),
         # 수익률·수급이 어느 거래일 기준인지(장중 수집분과 확정분 구분).
         "metrics_date": d.get("metrics_date"),
+        # 연초 이후 추세 지속성 — '지속 상승추세' 필터의 판정 근거.
+        "trend_r2": d.get("trend_r2"), "trend_mdd": d.get("trend_mdd"),
+        "trend_win_rate": d.get("trend_win_rate"),
+        "trend_above_ma": d.get("trend_above_ma"),
         "foreign_net": d.get("foreign_net"), "institutional_net": d.get("institutional_net"),
         # 한 행의 값이 두 수집 단계에서 온다. 수익률·수급은 발굴 지표수집만
         # (catalog_updated_at) 채우지만, 현재가·등락률·거래량은 종목목록수집
@@ -413,6 +410,10 @@ def search(filters: dict) -> dict:
     for key, col in _POSITIVE_FILTERS.items():
         if filters.get(key):
             where.append(f"{col} > 0")
+    if filters.get("sustained_uptrend"):
+        for cond, value in SUSTAINED_UPTREND.items():
+            where.append(cond)
+            params.append(value)
 
     where_sql = " AND ".join(where)
     sort_by = filters.get("sort_by") if filters.get("sort_by") in _SORT_COLUMNS else "weekly_return"

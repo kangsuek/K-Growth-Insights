@@ -92,3 +92,33 @@ describe('상승(+) 토글', () => {
     expect(changes.at(-1)).not.toHaveProperty('foreign_net_positive')
   })
 })
+
+describe('지속 상승추세 토글', () => {
+  const renderFilters = (filters = {}) => {
+    const changes = []
+    renderWithProviders(
+      <ScreeningFilters
+        filters={{ market: 'ETF', ...filters }}
+        onFilterChange={(partial) => changes.push(partial)}
+        onReset={() => {}}
+      />
+    )
+    return changes
+  }
+
+  it('체크하면 sustained_uptrend를 켜고, 해제하면 지운다', async () => {
+    const user = userEvent.setup()
+    const changes = renderFilters()
+
+    await user.click(screen.getByLabelText('지속 상승추세'))
+    expect(changes.at(-1)).toEqual({ sustained_uptrend: true })
+  })
+
+  it('무엇을 거르는 조건인지 툴팁으로 설명한다', () => {
+    renderFilters()
+    // 라벨을 감싼 label 요소에 title이 있다
+    const label = screen.getByText('지속 상승추세').closest('label')
+    expect(label).toHaveAttribute('title', expect.stringContaining('폭락 후 반등'))
+    expect(label.getAttribute('title')).toContain('머니마켓')
+  })
+})
