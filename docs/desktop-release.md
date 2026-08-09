@@ -8,15 +8,23 @@ macOS 앱을 다른 기기에 배포하려면 **코드 서명**과 **공증(nota
 
 ## 빌드 명령
 
+일상적인 dmg 빌드는 프로젝트 루트의 **`./build-dmg.sh`**(= `just dmg`)를 쓴다. 의존성 설치 →
+테스트 → 아이콘·프론트엔드 빌드 → dmg 생성 → 체크섬 검증을 한 번에 하고, 서명 인증서가 없으면
+시작할 때 경고한다. 아래 `npm` 명령들은 `desktop/`에서 직접 쓰는 하위 단계다.
+
 | 명령 | 서명 | 공증 | 용도 |
 |---|---|---|---|
-| `npm run build` | 인증서 있으면 자동 | 안 함 | 개발·내부 확인용 |
+| `./build-dmg.sh` (루트) | 인증서 있으면 자동 | 안 함 | 개발·내부 확인용 **(권장)** |
+| `npm run build` | 인증서 있으면 자동 | 안 함 | dmg 생성만(테스트·프론트 빌드 없음) |
 | `npm run build:dir` | 안 함 | 안 함 | 패키징 확인(dmg 없음, 가장 빠름) |
 | `npm run build:release` | 필수 | 함 | 배포용 |
 | `npm run check:signing` | — | — | 자격증명만 미리 점검 |
 
 `npm run build`는 인증서가 없으면 서명을 건너뛰고 계속한다(`skipped macOS application code signing`).
 그래서 개발 중에는 아무 설정 없이 그대로 쓸 수 있다.
+
+> `npm run build`는 프론트엔드를 빌드하지 않는다. dmg에는 `frontend/dist`가 그대로 실려 가므로,
+> 프론트를 고쳤다면 `./build-dmg.sh`를 쓰거나 `just build`를 먼저 돌려야 옛 화면이 담기지 않는다.
 
 `npm run build:release`는 시작 전에 `scripts/check-signing-env.js`로 자격증명을 점검한다.
 빠진 것이 있으면 수 분간 패키징한 뒤 마지막에 실패하는 대신, 바로 무엇이 없는지 알려준다.

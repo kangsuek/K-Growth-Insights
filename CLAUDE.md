@@ -4,12 +4,13 @@
 
 ## 프로젝트
 
-한국 고성장 섹터 **ETF·주식** 분석 웹 앱. 모든 시장 데이터는 **네이버 모바일 API**(JSON)에서 수집합니다. 전체 개요는 [README.md](./README.md) 참고.
+한국 고성장 섹터 **ETF·주식** 분석 앱(웹 + macOS 데스크톱). 모든 시장 데이터는 **네이버 모바일 API**(JSON)에서 수집합니다. 전체 개요는 [README.md](./README.md) 참고.
 
 ## 스택
 
 - 백엔드: **uv** + FastAPI + **SQLite 전용** (`backend/`). 다른 DB(PostgreSQL 등)를 도입하지 않습니다.
 - 프론트엔드: **npm** + React + Vite + recharts + TanStack Query (`frontend/`)
+- 데스크톱: Electron (`desktop/`) — 셸이 백엔드를 띄우고 빌드된 프론트를 로드
 
 ## 규칙 (Conventions)
 
@@ -27,21 +28,33 @@
 
 `just --list`로 전체 확인. 주요:
 - `just setup` / `just db` — 설치 / SQLite 초기화
-- `just backend` (:8000) / `just frontend` (:5173)
+- `just backend` (:8000) / `just frontend` (:5173) — 둘 다 띄우려면 `./run.sh`, 내리려면 `./stop.sh` (로그는 `logs/`)
 - `just collect` — 카탈로그 동기화 + 전체 수집
 - `just test` / `just build`
+- `just dmg` — macOS dmg 빌드(`./build-dmg.sh`). 구현은 이 스크립트 한 곳에만 둡니다
 
 ## 아키텍처
 
 ```
 FastAPI (backend/app) ──/api──▶ React+Vite (frontend/src)
-  routers/{stocks,data} → services/{collectors,repository,naver_client,stocks_sync} → SQLite
+  routers/{etfs,scanner,data,settings,simulation,news,market}
+    → services/{naver_client,collectors,catalog,scanner,repository,metrics,...} → SQLite
 ```
 
-- 수집 계층: `naver_client`(네이버 API 정규화) → `collectors`(SQLite upsert)
+- 수집 계층: `naver_client`(네이버 API 정규화) → `collectors`·`catalog`·`scanner`(SQLite upsert)
 - 조회 계층: `repository` → `routers`
-- 추적 종목: `backend/config/stocks.json`
+- 추적 종목의 소스는 **DB(`stocks` 테이블)**. `backend/config/stocks.json`은 테이블이 비었을 때만 읽는 **최초 시딩용**입니다.
+
+## 지표 규칙
+
+- 수익률·변동성 계산은 `services/metrics.py` 한 곳에 둡니다. 화면마다 다른 값이 나오지 않게 하기 위함입니다.
+- 수익률 기준일은 **네이버증권 표기와 동일**하게 맞춥니다 — 주간=7일 전, 월간=전월 같은 날, 연간(YTD)=전년도 마지막 거래일. 거래일 수(5·20거래일)로 잡지 않습니다.
+- 기준일까지 시세가 없으면 값을 **만들지 않고 비웁니다**(네이버도 그렇게 합니다).
+- 한 행의 시세·수익률·수급은 같은 거래일 기준이어야 합니다. 장 마감 전에는 당일 미확정 행을 쓰지 않습니다(`timeutil.is_close_confirmed`). 기준 거래일은 `stock_catalog.metrics_date`에 남습니다.
+- 자세한 배경은 [README.md](./README.md#수익률-기준일) 참고.
 
 ## 범위
 
-MVP(시세·매매동향·분봉) 완료. 이후: 펀더멘털(PER/PBR/NAV/구성종목), 카탈로그 자동 확장, 뉴스, AI 인사이트, 스케줄러.
+시세·매매동향·분봉, 펀더멘털(PER/PBR/NAV/구성종목), 뉴스, 인사이트, 스케줄러, 종목 발굴, 비교·시뮬레이션·포트폴리오까지 구현 완료.
+
+남은 것: 종목 발굴의 수익률·수급 수집이 **전체 ETF + 코스피 상위 200 + 코스닥 상위 300**으로 제한돼 있어(`scanner.KOSPI_TOP_N_SUPPLY`/`KOSDAQ_TOP_N_SUPPLY`) 그 밖 종목은 값이 빕니다. 범위를 넓히려면 수집 시간(현재 1,654종목 약 21분)이 비례해 늘어납니다.

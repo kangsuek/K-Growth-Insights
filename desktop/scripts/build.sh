@@ -1,59 +1,10 @@
-#!/bin/bash
-# K-Growth Insights - macOS 데스크톱 앱 빌드 스크립트
+#!/usr/bin/env bash
+# K-Growth Insights — macOS dmg 빌드(하위 호환용 진입점).
+#
+# 실제 구현은 프로젝트 루트의 build-dmg.sh 한 곳에 있다. 빌드 스크립트가 두 벌이면
+# 한쪽만 고쳐져 서로 다른 dmg가 나오므로, 여기서는 그대로 넘기기만 한다.
+# 옵션도 그대로 전달된다: ./build.sh --arch arm64 --clean
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DESKTOP_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$DESKTOP_DIR")"
-
-echo "=== K-Growth Insights macOS App Build ==="
-echo "Project root: $PROJECT_ROOT"
-echo ""
-
-# 1. uv 확인
-if ! command -v uv &> /dev/null; then
-  echo "ERROR: uv가 설치되어 있지 않습니다."
-  echo "설치: curl -LsSf https://astral.sh/uv/install.sh | sh"
-  exit 1
-fi
-
-# 2. Node.js 확인
-if ! command -v node &> /dev/null; then
-  echo "ERROR: Node.js가 설치되어 있지 않습니다."
-  exit 1
-fi
-
-# 3. 앱 아이콘 생성
-echo ">>> 앱 아이콘 생성 중..."
-cd "$DESKTOP_DIR"
-npm run generate-icons
-echo "앱 아이콘 생성 완료."
-echo ""
-
-# 4. 프론트엔드 빌드
-echo ">>> 프론트엔드 빌드 중..."
-cd "$PROJECT_ROOT/frontend"
-npm install
-npm run build
-echo "프론트엔드 빌드 완료."
-echo ""
-
-# 5. 백엔드 의존성 확인
-echo ">>> 백엔드 의존성 확인 중..."
-cd "$PROJECT_ROOT/backend"
-# --extra dev 없이 sync하면 pytest 등 개발 의존성이 제거돼 빌드 후 테스트가 깨진다.
-# 패키징에는 tests/를 넣지 않으므로(electron-builder.yml filter) 앱 크기에는 영향 없다.
-uv sync --extra dev 2>/dev/null || uv pip install -r requirements.txt
-echo "백엔드 의존성 확인 완료."
-echo ""
-
-# 6. Electron 앱 빌드
-echo ">>> Electron 앱 빌드 중..."
-cd "$DESKTOP_DIR"
-npm install
-npm run build
-echo ""
-
-echo "=== 빌드 완료 ==="
-echo "출력 위치: $DESKTOP_DIR/release/"
-ls -la "$DESKTOP_DIR/release/" 2>/dev/null || echo "(release 디렉토리를 확인하세요)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+exec "$ROOT/build-dmg.sh" "$@"

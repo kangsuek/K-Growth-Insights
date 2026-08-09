@@ -40,6 +40,11 @@
 
 ![종목 발굴 — 시총 상위 카탈로그 전체를 대상으로 한 조건 검색](site/images/scanner.png)
 
+**종목 발굴의 수집 범위.** 현재가·등락률·거래량은 카탈로그 전 종목(약 4,300개)에 채워지지만,
+수익률·수급은 종목마다 개별 조회가 필요해 비쌉니다. 그래서 **전체 ETF + 코스피 시총 상위 200
++ 코스닥 상위 300**만 수집합니다(`scanner.KOSPI_TOP_N_SUPPLY` / `KOSDAQ_TOP_N_SUPPLY`).
+그 밖의 종목은 주간·월간·연간·외국인·기관이 비어 있고, 정렬 시 목록 맨 뒤로 갑니다.
+
 ## 아키텍처
 
 ```
@@ -65,7 +70,35 @@ FastAPI backend (backend/app)  ──/api──▶  React + Vite frontend (front
 - 데스크톱: Electron (`desktop/`) — Electron 셸이 백엔드를 띄우고 빌드된 프론트를 로드
 
 **지표 계산은 백엔드 `metrics.py`에 모읍니다.** 같은 이름의 지표가 화면마다 다른 값을 내지 않도록
-주간 수익률·연환산 변동성(표본표준편차 기준)을 한 곳에서 계산합니다.
+수익률·연환산 변동성(표본표준편차 기준)을 한 곳에서 계산합니다.
+
+### 수익률 기준일
+
+기준일은 **네이버증권 표기와 같게** 잡습니다. 거래일 수가 아니라 달력 날짜가 기준입니다.
+
+| 지표 | 기준일 |
+|---|---|
+| 주간 | 기준일의 **7일 전** |
+| 월간 | 기준일의 **전월 같은 날** |
+| 연간(YTD) | **전년도 마지막 거래일** |
+
+- 기준 날짜가 휴장이면 그 이전의 가장 최근 거래일 종가를 기준가로 씁니다.
+- 기준일까지 시세가 닿지 않으면 값을 만들지 않고 비웁니다. 신규 상장 종목의 월간이
+  비는 것은 이 때문이며, 네이버도 같은 이유로 해당 기간을 표시하지 않습니다.
+- 연간(YTD)만 예외로, 전년도 시세가 없으면 **상장 후 첫 거래일**을 기준으로 삼고
+  화면에 그 기준일을 함께 표시합니다(`07-14 ~`).
+
+### 기준 거래일 정합성
+
+한 행의 시세·수익률·수급은 **모두 같은 거래일** 기준이어야 합니다. 네이버 일별시세는
+장중에도 오늘 행을 현재가로 내려주는 반면 매매동향은 장 마감 후에야 확정되므로,
+그대로 저장하면 시세만 당일 장중이 되어 어긋납니다. 그래서 장 마감(15:40) 전에는
+당일 행을 쓰지 않고 직전 거래일을 기준으로 삼습니다(`timeutil.is_close_confirmed`).
+그 기준 거래일은 `stock_catalog.metrics_date`에 남습니다.
+
+거래량은 네이버의 두 API가 같은 날 다른 값을 줍니다(일별시세는 시간외 포함, marketValue는
+정규장 직후 스냅샷). 나중에 수집한 쪽이 이기지 않도록 **딥수집 대상은 일별시세가,
+나머지는 marketValue가** 각각 소유합니다.
 
 표시 숫자는 항상 천 단위 구분 기호를 사용합니다.
 
@@ -93,6 +126,9 @@ just collect    # 전체 데이터 수집(네이버 모바일 API)
 | `just collect` | 전체 종목 시세·매매동향 수집 |
 | `just test` | pytest + vitest |
 | `just build` | 프론트엔드 프로덕션 빌드 |
+| `just dmg` | macOS 데스크톱 앱(dmg) 빌드 — `./build-dmg.sh` |
+
+백엔드·프론트엔드를 한 번에 띄우려면 `./run.sh`(로그는 `logs/`), 내리려면 `./stop.sh`를 씁니다.
 
 ## API
 
@@ -149,10 +185,22 @@ just collect    # 전체 데이터 수집(네이버 모바일 API)
 ### 직접 빌드하기
 
 ```bash
-just build                 # 프론트엔드 빌드 (필수 — dmg에 포함된다)
+./build-dmg.sh             # dmg 생성 (arm64 + x64). just dmg 로도 실행됩니다
+./build-dmg.sh --arch x64  # 한쪽 아키텍처만 (--arch arm64 | x64 | both)
+./build-dmg.sh --clean     # release/ 를 비우고 새로 빌드
+./build-dmg.sh --skip-tests --skip-install   # 빠른 반복 빌드용
+```
+
+`build-dmg.sh`가 의존성 설치 → 테스트 → 아이콘·프론트엔드 빌드 → dmg 생성 →
+체크섬 검증까지 한 번에 합니다. 프론트엔드 `dist`는 dmg에 그대로 실려 가므로
+스크립트가 매번 새로 빌드합니다(소스만 고치고 빌드를 빼먹어 옛 화면이 담긴 dmg가
+나오는 일을 막습니다). 서명 인증서가 없으면 시작할 때 경고하고 서명 없이 진행합니다.
+
+패키징만 확인하거나(가장 빠름) 배포용 서명·공증 빌드는 `desktop/`에서 직접 실행합니다.
+
+```bash
 cd desktop
-npm run build              # dmg 생성 (arm64 + x64)
-npm run build:dir          # 패키징만 확인 (dmg 없음, 가장 빠름)
+npm run build:dir          # 패키징만 확인 (dmg 없음)
 npm run build:release      # 서명 + 공증 (배포용, 자격증명 필요)
 ```
 
@@ -185,8 +233,8 @@ Pages는 저장소 Settings → Pages → Source를 **GitHub Actions**로 한 �
 
 ```bash
 just test        # 전체
-uv run --directory backend pytest      # 백엔드 161건
-npm --prefix frontend test -- --run    # 프론트엔드 350건
+uv run --directory backend pytest      # 백엔드 187건
+npm --prefix frontend test -- --run    # 프론트엔드 384건
 ```
 
 백엔드 검증은 pytest로만 합니다. `uv run python -c "..."` 같은 raw 스크립트는 `DATABASE_PATH`가

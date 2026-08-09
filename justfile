@@ -34,3 +34,7 @@ test:
 # Build the frontend for production
 build:
     cd frontend && npm run build
+
+# Build the macOS desktop app (dmg). Pass args through, e.g. `just dmg --arch arm64`
+dmg *ARGS:
+    ./build-dmg.sh {{ARGS}}
