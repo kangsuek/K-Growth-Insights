@@ -23,32 +23,26 @@ const PRESET_ICONS = {
 }
 
 /**
- * 프리셋마다 정렬 기준이 다르므로 그 기준 지표를 보여준다.
- * 모든 카드에 주간 수익률을 띄우면 '외국인 순매수 상위' 카드에 순매수량이 아닌 값이 떠
- * 바로 위 히트맵의 일간 등락률과 충돌하는 것처럼 보인다.
+ * 카드에 함께 띄울 지표.
+ *
+ * 순매수 상위 카드도 **주간 수익률**을 보여준다. 순매수 주수를 띄우면 카드마다 단위가
+ * 달라져(％ vs 주) 세 카드를 나란히 비교할 수 없었다. 무엇을 기준으로 뽑은 목록인지는
+ * 카드 제목('외국인 순매수 상위')이 이미 말해 준다.
+ *
+ * 그래서 순매수 상위 카드에도 주간 수익률이 마이너스인 종목이 올라올 수 있다.
+ * 순매수는 많지만 주가는 빠진 종목이며, 잘못된 값이 아니다.
  */
 const getPresetMetric = (presetId, item) => {
-  switch (presetId) {
-    case 'foreign_buying':
-      return {
-        text: `${formatNumber(item.foreign_net)}주`,
-        color: getChangeColor(item.foreign_net),
-      }
-    case 'institutional_buying':
-      return {
-        text: `${formatNumber(item.institutional_net)}주`,
-        color: getChangeColor(item.institutional_net),
-      }
-    case 'high_volume':
-      return {
-        text: `${formatNumber(item.volume)}주`,
-        color: 'text-gray-600 dark:text-gray-300',
-      }
-    default:
-      return {
-        text: formatPercent(item.weekly_return),
-        color: getChangeColor(item.weekly_return),
-      }
+  if (presetId === 'high_volume') {
+    // 거래량 상위는 순위 기준 자체가 주수라 수익률로 바꾸면 뜻이 사라진다.
+    return {
+      text: `${formatNumber(item.volume)}주`,
+      color: 'text-gray-600 dark:text-gray-300',
+    }
+  }
+  return {
+    text: formatPercent(item.weekly_return),
+    color: getChangeColor(item.weekly_return),
   }
 }
 
