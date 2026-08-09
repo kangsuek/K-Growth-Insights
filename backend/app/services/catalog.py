@@ -10,6 +10,7 @@ import logging
 import re
 import threading
 
+from app import timeutil
 from app.database import get_connection
 from app.services import naver_client
 
@@ -145,33 +146,46 @@ def get_progress() -> dict:
         return dict(_progress)
 
 
-def _upsert_row(conn, row: dict) -> None:
+def _upsert_row(conn, row: dict, price_confirmed: bool = True) -> None:
     """카탈로그 종목 1건 upsert(stock_catalog).
 
     발굴 필터용 market 값은 ETF는 'ETF', 주식은 시장(KOSPI/KOSDAQ)으로 둔다.
     marketValue 응답에 들어 있는 현재가·등락률·거래량·시총 스냅샷도 함께 저장한다.
     (수익률·수급은 별도 지표수집 단계에서 채운다.)
+
+    price_confirmed=False(장중)면 시세 스냅샷(현재가·등락률·거래량)과 그 시각을 쓰지
+    않고 기존 확정값을 남긴다. marketValue는 **실시간** 값이라 그대로 저장하면 한 행
+    안에서 기준일이 어긋난다 — 시세는 당일 장중인데 같은 행의 수익률·수급(지표수집)은
+    직전 확정 거래일 기준이기 때문이다. 신규 종목은 남길 확정값이 없어 NULL로 두고,
+    마감 후 수집이나 지표수집에서 채운다.
+
+    시총(market_value)은 상위 N 선별 순위에만 쓰므로 장중 값이라도 그대로 갱신한다.
     """
     market = "ETF" if row["type"] == "ETF" else row.get("exchange")
+    # 장중이면 시세 컬럼을 UPDATE 대상에서 뺀다(updated_at은 시세 스냅샷 시각이라 함께 뺀다).
+    price_set = """,
+            close_price=excluded.close_price,
+            daily_change_pct=excluded.daily_change_pct,
+            volume=excluded.volume,
+            updated_at=excluded.updated_at""" if price_confirmed else ""
+    now_expr = "datetime('now')" if price_confirmed else "NULL"
     conn.execute(
-        """
+        f"""
         INSERT INTO stock_catalog
             (ticker, name, type, market, market_value,
              close_price, daily_change_pct, volume, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, {now_expr})
         ON CONFLICT(ticker) DO UPDATE SET
             name=excluded.name,
             type=excluded.type,
             market=excluded.market,
-            market_value=excluded.market_value,
-            close_price=excluded.close_price,
-            daily_change_pct=excluded.daily_change_pct,
-            volume=excluded.volume,
-            updated_at=excluded.updated_at
+            market_value=excluded.market_value{price_set}
         """,
         (row["ticker"], row["name"] or row["ticker"], row["type"], market,
-         row.get("market_value"), row.get("close_price"),
-         row.get("daily_change_pct"), row.get("volume")),
+         row.get("market_value"),
+         row.get("close_price") if price_confirmed else None,
+         row.get("daily_change_pct") if price_confirmed else None,
+         row.get("volume") if price_confirmed else None),
     )
 
 
@@ -184,6 +198,8 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
     per_market: dict[str, int] = {}
     etf_count = 0
     seen: set[str] = set()  # 이번 수집에서 반환된 ticker(잔존 행 정리에 사용)
+    # 수집 시작 시점으로 한 번만 판정한다(수집 도중 마감 시각을 넘겨도 한 수집은 한 기준).
+    price_confirmed = timeutil.is_close_confirmed()
     with _lock:
         _progress.update(status="in_progress", step_index=0, items_collected=0,
                          message="종목 목록 수집 시작...")
@@ -194,7 +210,7 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
                     _progress.update(step_index=_STEP[mkt], message=f"{mkt} 종목 수집 중...")
                 rows = naver_client.fetch_market_catalog(mkt, limit=limit)
                 for row in rows:
-                    _upsert_row(conn, row)
+                    _upsert_row(conn, row, price_confirmed)
                     seen.add(row["ticker"])
                     if row["type"] == "ETF":
                         etf_count += 1
@@ -228,6 +244,8 @@ def sync_catalog_detailed(limit: int | None = None) -> dict:
         "total_collected": total,
         "saved_count": total,
         "removed_count": removed,
+        # 장중이면 시세 스냅샷은 건너뛴다(종목 목록·시총만 갱신).
+        "price_snapshot_saved": price_confirmed,
     }
 
 

@@ -9,8 +9,6 @@ BackgroundScheduler를 사용한다. 서버 lifespan에서 start/shutdown 한다
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time
-from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,22 +16,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app import config
 from app.services import collectors, repository
+from app.timeutil import KST, MARKET_CLOSE, MARKET_OPEN, is_market_hours  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-KST = ZoneInfo("Asia/Seoul")
-MARKET_OPEN = time(9, 0)
-MARKET_CLOSE = time(15, 40)
-
 _scheduler: BackgroundScheduler | None = None
-
-
-def is_market_hours(now: datetime | None = None) -> bool:
-    """평일 정규장 시간(09:00~15:40 KST) 여부."""
-    now = now or datetime.now(KST)
-    if now.weekday() >= 5:  # 5=토, 6=일
-        return False
-    return MARKET_OPEN <= now.time() <= MARKET_CLOSE
 
 
 def run_collect_all(reason: str) -> dict:

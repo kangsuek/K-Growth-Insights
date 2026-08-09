@@ -189,14 +189,20 @@ export default function DataManagementPanel() {
         message += `\n수집: ${totalCollected.toLocaleString('ko-KR')}개, 저장: ${savedCount.toLocaleString('ko-KR')}개 (일부 저장 실패)`
       }
 
+      // 장중에는 실시간 시세를 종가로 저장하지 않는다(직전 확정값 유지). 백엔드가 건너뛴 사실을 알린다.
+      if (data.price_snapshot_saved === false) {
+        message += '\n장중이라 현재가·등락률·거래량은 직전 종가를 유지합니다 (종목 목록·시총만 갱신).'
+      }
+
       toast.success(message, 5000)
 
       // 캐시 무효화
       queryClient.invalidateQueries({ queryKey: ['data-stats'] })
 
       // 이어서 발굴 지표(수익률·수급) 딥수집을 백그라운드로 자동 시작한다.
-      // 현재가·등락률·거래량은 이미 위에서 저장됐고, 여기서 시총 상위+ETF의
-      // 주간/월간/YTD·외국인/기관 순매수를 채운다. 진행률은 종목 발굴 화면에서 확인.
+      // 여기서 시총 상위+ETF의 주간/월간/YTD·외국인/기관 순매수를 채운다. 딥수집은
+      // 확정 거래일 기준이라, 장중이라 위에서 건너뛴 시세도 대상 종목은 함께 채워진다.
+      // 진행률은 종목 발굴 화면에서 확인.
       scannerApi.collectData()
         .then((res) => {
           // 이미 최신이면 백엔드가 수집을 건너뛴다(fresh) — 안내도 생략한다.

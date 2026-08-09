@@ -9,12 +9,12 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, time as dtime, timedelta
+from datetime import date, datetime, timedelta
 
 from app import config, timeutil
 from app.database import get_connection
 from app.services import metrics, naver_client
-from app.timeutil import KST
+from app.timeutil import KST, MARKET_CLOSE, MARKET_OPEN
 
 logger = logging.getLogger(__name__)
 
@@ -276,10 +276,6 @@ def cancel_collect() -> None:
 # 딥수집은 종목마다 개별 조회라 비싸므로, 이미 최신이면 수집하지 않고 프론트에
 # fresh를 돌려준다(프론트가 "이미 최신입니다 → 다시 수집?"을 확인). force=true면
 # 이 가드를 건너뛴다.
-
-MARKET_OPEN = dtime(9, 0)
-MARKET_CLOSE = dtime(15, 40)   # 종가 확정 시각(scheduler와 동일)
-
 
 def _last_market_close(now: datetime) -> datetime:
     """가장 최근 장 마감(확정) 시각. 평일 15:40 이후면 오늘, 아니면 직전 거래일 15:40."""

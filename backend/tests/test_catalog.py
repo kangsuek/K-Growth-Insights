@@ -89,8 +89,10 @@ def test_sync_catalog_detailed_returns_frontend_counts():
 
 
 @respx.mock
-def test_sync_catalog_detailed_captures_price_snapshot():
+def test_sync_catalog_detailed_captures_price_snapshot(monkeypatch):
     # 종목목록수집만으로 현재가·등락률·거래량·시총 스냅샷이 채워져야 한다(재조회 불필요).
+    # 장 마감 후(종가 확정) 상황으로 고정한다 — 실행 시각에 따라 결과가 달라지면 안 된다.
+    monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: True)
     respx.get(_catalog_url("KOSPI")).mock(
         return_value=httpx.Response(200, json=_page_with_price([
             ("005930", "삼성전자", "stock", "265500", "1.92", "8707229", "1552186970424000")]))
@@ -98,15 +100,82 @@ def test_sync_catalog_detailed_captures_price_snapshot():
     respx.get(_catalog_url("KOSDAQ")).mock(
         return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
     )
-    catalog.sync_catalog_detailed(limit=None)
+    result = catalog.sync_catalog_detailed(limit=None)
+    assert result["price_snapshot_saved"] is True
     with get_connection() as conn:
         row = dict(conn.execute(
-            "SELECT close_price, daily_change_pct, volume, market_value "
+            "SELECT close_price, daily_change_pct, volume, market_value, updated_at "
             "FROM stock_catalog WHERE ticker='005930'").fetchone())
     assert row["close_price"] == 265500
     assert row["daily_change_pct"] == 1.92
     assert row["volume"] == 8707229
     assert row["market_value"] == 1552186970424000
+    assert row["updated_at"] is not None
+
+
+@respx.mock
+def test_sync_catalog_keeps_confirmed_snapshot_during_market_hours(monkeypatch):
+    """장중 수집은 시세 스냅샷을 덮어쓰지 않는다.
+
+    marketValue는 실시간 값이라 그대로 저장하면 한 행 안에서 기준일이 어긋난다 —
+    시세는 당일 장중인데 같은 행의 수익률·수급(지표수집)은 직전 확정 거래일 기준이다.
+    실제로 7/29 장중 수집분의 등락률(+29.87%)이 확정 종가 기준(+0.49%)과 달랐다.
+    """
+    # 직전 마감분(확정) 스냅샷을 미리 넣어 둔다.
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price, daily_change_pct,
+                volume, market_value, updated_at)
+               VALUES ('005930', '삼성전자', 'STOCK', 'KOSPI', 1, 100000, 0.49,
+                       1000, 500, '2026-08-07 06:40:00')""")
+
+    monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: False)
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page_with_price([
+            ("005930", "삼성전자", "stock", "129900", "29.87", "9999", "777")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    result = catalog.sync_catalog_detailed(limit=None)
+    assert result["price_snapshot_saved"] is False
+
+    with get_connection() as conn:
+        row = dict(conn.execute(
+            "SELECT close_price, daily_change_pct, volume, market_value, updated_at "
+            "FROM stock_catalog WHERE ticker='005930'").fetchone())
+    # 확정 스냅샷과 그 시각이 그대로 남는다.
+    assert row["close_price"] == 100000
+    assert row["daily_change_pct"] == 0.49
+    assert row["volume"] == 1000
+    assert row["updated_at"] == "2026-08-07 06:40:00"
+    # 시총은 상위 N 선별 순위에만 쓰므로 장중 값이라도 갱신한다.
+    assert row["market_value"] == 777
+
+
+@respx.mock
+def test_sync_catalog_leaves_new_ticker_price_null_during_market_hours(monkeypatch):
+    """장중에 처음 들어온 종목은 확정값이 없으므로 시세를 비워 둔다(틀린 값보다 낫다)."""
+    monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: False)
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page_with_price([
+            ("005930", "삼성전자", "stock", "129900", "29.87", "9999", "777")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    catalog.sync_catalog_detailed(limit=None)
+    with get_connection() as conn:
+        row = dict(conn.execute(
+            "SELECT name, close_price, daily_change_pct, volume, market_value, updated_at "
+            "FROM stock_catalog WHERE ticker='005930'").fetchone())
+    assert row["name"] == "삼성전자"      # 종목 목록 자체는 들어온다
+    assert row["market_value"] == 777
+    assert row["close_price"] is None
+    assert row["daily_change_pct"] is None
+    assert row["volume"] is None
+    assert row["updated_at"] is None
 
 
 @respx.mock
