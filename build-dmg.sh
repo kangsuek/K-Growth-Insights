@@ -9,6 +9,7 @@
 #   ./build-dmg.sh --skip-tests     # 테스트 없이 빌드(빠름, 배포용으로는 비권장)
 #   ./build-dmg.sh --skip-install   # npm install / uv sync 생략(의존성이 이미 최신일 때)
 set -euo pipefail
+trap 'echo "" >&2; echo "✘ 빌드 실패 (build-dmg.sh:${LINENO})" >&2' ERR
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP="$ROOT/desktop"
@@ -64,7 +65,12 @@ if [ "$CLEAN" -eq 1 ]; then
   rm -rf "$RELEASE"
 else
   # 이전 산출물이 남아 있으면 이번 빌드 결과와 섞여 보인다. 지우진 않고 알려만 준다.
-  old="$(ls "$RELEASE"/*.dmg 2>/dev/null | wc -l | tr -d ' ')"
+  # (release/ 가 아직 없는 최초 빌드에서는 글롭이 매치되지 않는데, ls를 그대로 쓰면
+  #  set -euo pipefail 아래에서 조용히 스크립트가 죽으므로 배열 글롭으로 안전하게 센다.)
+  shopt -s nullglob
+  existing_dmgs=("$RELEASE"/*.dmg)
+  shopt -u nullglob
+  old="${#existing_dmgs[@]}"
   if [ "$old" != "0" ]; then
     echo "▶ 기존 dmg ${old}개가 release/ 에 있습니다(같은 이름이면 덮어씁니다). --clean 으로 비울 수 있습니다."
   fi
