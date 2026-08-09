@@ -281,3 +281,66 @@ def test_match_sector_still_matches_legitimate_names():
     # 한글 사이에 붙은 AI는 정상 매칭.
     assert match_sector("TIGER 미국AI데이터센터TOP4Plus") == "AI/로봇"
     assert match_sector("KODEX AI전력핵심설비") == "AI/로봇"
+
+
+@respx.mock
+def test_sync_catalog_does_not_clobber_metric_collected_prices(monkeypatch):
+    """지표수집이 채운 시세는 종목목록수집이 덮어쓰지 않는다.
+
+    네이버의 두 API가 같은 날 다른 거래량을 준다(일별시세 8,605,755 vs marketValue
+    4,796,865 — marketValue는 정규장 직후라 시간외가 빠진다). 한 컬럼을 두 경로가
+    쓰면 나중에 돈 쪽이 이겨 값이 오락가락한다. 딥수집 대상은 일별시세가 소유한다.
+    """
+    monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: True)
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price, daily_change_pct,
+                volume, market_value, updated_at, catalog_updated_at)
+               VALUES ('000660', 'SK하이닉스', 'STOCK', 'KOSPI', 1, 1422000, -4.88,
+                       8605755, 500, '2026-08-07 07:10:00', '2026-08-07 07:10:00')""")
+
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page_with_price([
+            ("000660", "SK하이닉스", "stock", "1422000", "-4.88", "4796865", "777")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    catalog.sync_catalog_detailed(limit=None)
+
+    with get_connection() as conn:
+        row = dict(conn.execute(
+            "SELECT volume, close_price, market_value FROM stock_catalog "
+            "WHERE ticker='000660'").fetchone())
+    assert row["volume"] == 8605755      # 일별시세 값 유지
+    assert row["close_price"] == 1422000
+    assert row["market_value"] == 777    # 시총은 갱신
+
+
+@respx.mock
+def test_sync_catalog_fills_prices_for_tickers_without_metrics(monkeypatch):
+    """지표수집 대상 밖 종목은 marketValue 스냅샷으로 계속 채운다."""
+    monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: True)
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog (ticker, name, type, market, is_active, volume)
+               VALUES ('210980', 'SK디앤디', 'STOCK', 'KOSPI', 1, 1)""")
+
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page_with_price([
+            ("210980", "SK디앤디", "stock", "5230", "-11.95", "1191259", "97300000000")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    catalog.sync_catalog_detailed(limit=None)
+
+    with get_connection() as conn:
+        row = dict(conn.execute(
+            "SELECT close_price, daily_change_pct, volume, updated_at FROM stock_catalog "
+            "WHERE ticker='210980'").fetchone())
+    assert row["close_price"] == 5230
+    assert row["daily_change_pct"] == -11.95
+    assert row["volume"] == 1191259
+    assert row["updated_at"] is not None

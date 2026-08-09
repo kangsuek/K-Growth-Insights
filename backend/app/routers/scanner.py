@@ -64,17 +64,29 @@ def collect_data(
 
     force=false이고 이미 최신이면 수집하지 않고 fresh를 반환한다. 프론트는 진행률
     배너 대신 "이미 최신입니다" 안내로 재수집 여부를 확인한다.
+
+    단, 최신이어도 지표를 한 번도 못 받은 종목이 있으면 그 종목만 보강 수집한다.
+    종목목록수집이 새로 넣은 종목이 fresh 판정에 가려 영영 비어 있던 문제를 막는다.
     """
     if scanner.get_progress().get("status") == "in_progress":
         return {"message": "이미 데이터 수집이 진행 중입니다", "status": "already_running"}
     if not force:
         freshness = scanner.check_freshness()
         if freshness["fresh"]:
+            missing = freshness["missing"]
+            if not missing:
+                return {
+                    "message": "이미 최신 데이터입니다",
+                    "status": "fresh",
+                    "skipped": True,
+                    "last_updated": freshness["last_updated"],
+                }
+            background_tasks.add_task(scanner.collect_catalog_data, only_missing=True)
             return {
-                "message": "이미 최신 데이터입니다",
-                "status": "fresh",
-                "skipped": True,
-                "last_updated": freshness["last_updated"],
+                "message": f"미수집 {missing:,}개 종목의 지표를 수집합니다",
+                "status": "started",
+                "only_missing": True,
+                "missing": missing,
             }
     background_tasks.add_task(scanner.collect_catalog_data)
     return {"message": "카탈로그 데이터 수집이 시작되었습니다", "status": "started"}

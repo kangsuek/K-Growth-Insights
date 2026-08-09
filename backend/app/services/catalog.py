@@ -160,14 +160,26 @@ def _upsert_row(conn, row: dict, price_confirmed: bool = True) -> None:
     마감 후 수집이나 지표수집에서 채운다.
 
     시총(market_value)은 상위 N 선별 순위에만 쓰므로 장중 값이라도 그대로 갱신한다.
+
+    지표수집을 받은 종목(catalog_updated_at IS NOT NULL)의 시세 컬럼도 건드리지 않는다.
+    네이버의 두 API가 같은 날 다른 거래량을 준다 — 000660의 2026-08-07 거래량이 일별시세
+    8,605,755 / marketValue 4,796,865다(marketValue는 정규장 직후 스냅샷이라 시간외가
+    빠진다). 한 컬럼을 두 경로가 쓰면 나중에 돈 쪽이 이겨 값이 오락가락하므로, 딥수집
+    대상은 일별시세(지표수집)가, 나머지는 marketValue(여기)가 각각 소유한다.
     """
     market = "ETF" if row["type"] == "ETF" else row.get("exchange")
     # 장중이면 시세 컬럼을 UPDATE 대상에서 뺀다(updated_at은 시세 스냅샷 시각이라 함께 뺀다).
+    # 지표수집이 채운 행은 그쪽 값을 남긴다(CASE WHEN — 무자격 컬럼명은 기존 행을 가리킨다).
     price_set = """,
-            close_price=excluded.close_price,
-            daily_change_pct=excluded.daily_change_pct,
-            volume=excluded.volume,
-            updated_at=excluded.updated_at""" if price_confirmed else ""
+            close_price=CASE WHEN catalog_updated_at IS NULL
+                             THEN excluded.close_price ELSE close_price END,
+            daily_change_pct=CASE WHEN catalog_updated_at IS NULL
+                             THEN excluded.daily_change_pct ELSE daily_change_pct END,
+            volume=CASE WHEN catalog_updated_at IS NULL
+                             THEN excluded.volume ELSE volume END,
+            updated_at=CASE WHEN catalog_updated_at IS NULL
+                             THEN excluded.updated_at ELSE updated_at END""" \
+        if price_confirmed else ""
     now_expr = "datetime('now')" if price_confirmed else "NULL"
     conn.execute(
         f"""

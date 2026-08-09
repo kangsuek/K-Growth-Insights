@@ -225,7 +225,13 @@ export default function Screening() {
       // started / already_running: 진행률 배너 + 폴링 시작
       startingRef.current = true
       setIsCollecting(true)
-      setProgress({ status: 'in_progress', message: '수집 시작 중...' })
+      // 최신이지만 지표를 못 받은 종목만 보강하는 경우, 무엇을 하는지 알려준다.
+      setProgress({
+        status: 'in_progress',
+        message: res.data?.only_missing
+          ? `미수집 ${res.data.missing.toLocaleString('ko-KR')}개 종목 보강 중...`
+          : '수집 시작 중...',
+      })
     } catch (err) {
       toast.error(`수집 실패: ${err.message}`, 3000)
     } finally {

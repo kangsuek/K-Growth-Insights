@@ -153,15 +153,21 @@ def _metrics_for(ticker: str, cached_ytd_base: dict | None = None) -> dict | Non
     }
 
 
-def _supply_target_groups(conn) -> list[tuple[str, list[str]]]:
+def _supply_target_groups(conn, only_missing: bool = False) -> list[tuple[str, list[str]]]:
     """딥수집 대상을 단계별로 반환: 전체 ETF → KOSPI 시총 상위 N → KOSDAQ 시총 상위 N.
 
     (단계 라벨, 티커 목록) 순서가 곧 진행률 바의 단계 순서다.
+
+    only_missing=True면 아직 한 번도 지표를 못 받은 종목(catalog_updated_at IS NULL)만
+    남긴다. 종목목록수집이 새로 넣은 종목을 전체 재수집 없이 보강하는 데 쓴다. 상위 N
+    선별은 먼저 하고 그 안에서 걸러야 순위 밖 종목이 딸려 들어오지 않는다.
     """
+    gap = " AND catalog_updated_at IS NULL" if only_missing else ""
     groups: list[tuple[str, list[str]]] = [
         ("ETF", [
             r["ticker"] for r in conn.execute(
-                "SELECT ticker FROM stock_catalog WHERE is_active=1 AND type='ETF'"
+                f"SELECT ticker FROM stock_catalog "
+                f"WHERE is_active=1 AND type='ETF'{gap}"
             )
         ])
     ]
@@ -171,13 +177,21 @@ def _supply_target_groups(conn) -> list[tuple[str, list[str]]]:
     ):
         groups.append((label, [
             r["ticker"] for r in conn.execute(
-                """SELECT ticker FROM stock_catalog
-                   WHERE is_active=1 AND market=? AND type!='ETF'
-                   ORDER BY (market_value IS NULL), market_value DESC LIMIT ?""",
+                f"""SELECT ticker FROM (
+                        SELECT ticker, catalog_updated_at FROM stock_catalog
+                        WHERE is_active=1 AND market=? AND type!='ETF'
+                        ORDER BY (market_value IS NULL), market_value DESC LIMIT ?
+                    ) WHERE 1=1{gap}""",
                 (market, top_n),
             )
         ]))
     return groups
+
+
+def count_missing_metrics() -> int:
+    """딥수집 대상 중 아직 지표를 못 받은 종목 수."""
+    with get_connection() as conn:
+        return sum(len(tickers) for _, tickers in _supply_target_groups(conn, only_missing=True))
 
 
 def _load_ytd_base_cache(conn) -> dict[str, dict]:
@@ -223,14 +237,15 @@ def _collect_one(ticker: str, cached_ytd_base: dict | None = None) -> int:
     return 1
 
 
-def collect_catalog_data() -> dict:
+def collect_catalog_data(only_missing: bool = False) -> dict:
     """발굴 딥수집: 시총 상위 + 전체 ETF의 수익률·수급 지표를 병렬 수집(동기).
 
     현재가·등락률·거래량은 종목목록수집이 이미 채웠으므로 여기서는 대상만 보강한다.
+    only_missing=True면 아직 지표가 없는 종목만 채운다(종목목록수집 직후 보강용).
     """
     _cancel.clear()
     with get_connection() as conn:
-        groups = _supply_target_groups(conn)
+        groups = _supply_target_groups(conn, only_missing=only_missing)
         ytd_cache = _load_ytd_base_cache(conn)
     total = sum(len(tickers) for _, tickers in groups)
     with _lock:
@@ -288,13 +303,20 @@ def _last_market_close(now: datetime) -> datetime:
 
 
 def check_freshness(now: datetime | None = None) -> dict:
-    """발굴 지표 데이터의 최신 여부 판정. {"fresh": bool, "last_updated": ISO|None}
+    """발굴 지표 데이터의 최신 여부 판정.
+
+    반환 {"fresh": bool, "last_updated": ISO|None, "missing": int}
 
     - 장외: 최근 장 마감 확정분(catalog_updated_at >= 직전 마감)을 확보했으면 fresh.
     - 장중(평일 09:00~15:40): 가격이 계속 움직이므로 TTL(SCANNER_COLLECT_TTL_HOURS)
       이내 수집분만 fresh로 본다.
     - 수집 이력 없음(NULL): stale.
+
+    missing은 딥수집 대상 중 아직 지표를 못 받은 종목 수다. fresh와 별개로 센다 —
+    종목목록수집이 새 종목을 넣어도 기존 종목이 최신이면 fresh로 판정돼, 새 종목의
+    수익률·수급이 영영 비어 있었다. 호출부는 fresh여도 missing이 있으면 보강 수집한다.
     """
+    missing = count_missing_metrics()
     with get_connection() as conn:
         row = conn.execute(
             "SELECT MAX(catalog_updated_at) AS last FROM stock_catalog "
@@ -302,7 +324,7 @@ def check_freshness(now: datetime | None = None) -> dict:
         ).fetchone()
     last = timeutil.parse_db_timestamp(row["last"] if row else None)
     if last is None:
-        return {"fresh": False, "last_updated": None}
+        return {"fresh": False, "last_updated": None, "missing": missing}
 
     now = (now or datetime.now(KST)).astimezone(KST)
     if now.weekday() < 5 and MARKET_OPEN <= now.time() <= MARKET_CLOSE:
@@ -310,7 +332,7 @@ def check_freshness(now: datetime | None = None) -> dict:
     else:
         fresh = last >= _last_market_close(now)
 
-    return {"fresh": fresh, "last_updated": timeutil.to_kst_iso(last)}
+    return {"fresh": fresh, "last_updated": timeutil.to_kst_iso(last), "missing": missing}
 
 
 # --- 검색 / 테마 / 추천 -------------------------------------------------------
