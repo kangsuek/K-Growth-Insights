@@ -215,3 +215,69 @@ def test_ytd_base_cache_rejects_old_current_year_basis():
     assert scanner._ytd_base_is_current({"date": "2026-01-02", "price": 62}, 2026) is False
     assert scanner._ytd_base_is_current({"date": "2025-12-30", "price": None}, 2026) is False
     assert scanner._ytd_base_is_current(None, 2026) is False
+
+
+# --- 상승(+) 필터 -------------------------------------------------------------
+
+def _seed_returns(rows):
+    """(ticker, 등락률, 주간, 월간, 연간) 시드 — 상승 필터 검증용."""
+    with get_connection() as conn:
+        for t, dc, wr, mr, yr in rows:
+            conn.execute(
+                """INSERT INTO stock_catalog
+                   (ticker, name, type, market, is_active, close_price,
+                    daily_change_pct, weekly_return, monthly_return, ytd_return,
+                    catalog_updated_at)
+                   VALUES (?, ?, 'ETF', 'ETF', 1, 1000, ?, ?, ?, ?,
+                           '2026-08-07 07:00:00')""",
+                (t, t, dc, wr, mr, yr),
+            )
+
+
+def _search(**params):
+    body = client.get("/api/scanner", params={"type": "ETF", **params}).json()
+    return [i["ticker"] for i in body["items"]]
+
+
+def test_positive_filters_each_column():
+    """등락률·주간·월간·연간 각각의 '+만 보기' 토글."""
+    _seed_returns([
+        ("AAA", 1.0, 1.0, 1.0, 1.0),      # 전부 +
+        ("BBB", -1.0, 2.0, 2.0, 2.0),     # 등락률만 -
+        ("CCC", 1.0, -2.0, 2.0, 2.0),     # 주간만 -
+        ("DDD", 1.0, 2.0, -2.0, 2.0),     # 월간만 -
+        ("EEE", 1.0, 2.0, 2.0, -2.0),     # 연간만 -
+    ])
+    assert set(_search(daily_change_positive="true")) == {"AAA", "CCC", "DDD", "EEE"}
+    assert set(_search(weekly_return_positive="true")) == {"AAA", "BBB", "DDD", "EEE"}
+    assert set(_search(monthly_return_positive="true")) == {"AAA", "BBB", "CCC", "EEE"}
+    assert set(_search(ytd_return_positive="true")) == {"AAA", "BBB", "CCC", "DDD"}
+
+
+def test_positive_filters_combine_and_sort_by_weekly_desc():
+    """네 조건을 모두 켜면 전부 +인 종목만 남고, 기본 정렬은 주간수익률 내림차순."""
+    _seed_returns([
+        ("AAA", 1.0, 5.0, 1.0, 1.0),
+        ("BBB", 1.0, 9.0, 1.0, 1.0),
+        ("CCC", 1.0, 7.0, 1.0, 1.0),
+        ("XXX", 1.0, 9.9, 1.0, -1.0),     # 연간이 - 라 빠진다
+    ])
+    assert _search(daily_change_positive="true", weekly_return_positive="true",
+                   monthly_return_positive="true", ytd_return_positive="true") == \
+        ["BBB", "CCC", "AAA"]
+
+
+def test_positive_filters_exclude_zero_and_null():
+    """보합(0)과 미수집(NULL)은 '+'가 아니다.
+
+    최소%(min_*) 입력은 `>= 0`이라 보합도 걸린다. 그래서 토글을 따로 뒀다.
+    """
+    _seed_returns([
+        ("POS", 1.0, 1.0, 1.0, 1.0),
+        ("ZERO", 0.0, 0.0, 0.0, 0.0),
+        ("NULLS", None, None, None, None),
+    ])
+    assert _search(daily_change_positive="true") == ["POS"]
+    assert _search(weekly_return_positive="true") == ["POS"]
+    # 최소 0%는 보합을 포함한다(토글과 다른 동작).
+    assert set(_search(min_weekly_return=0)) == {"POS", "ZERO"}

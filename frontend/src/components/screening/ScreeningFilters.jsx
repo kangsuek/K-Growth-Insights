@@ -7,6 +7,29 @@ const MARKET_TABS = [
   { value: 'ALL', label: '전체' },
 ]
 
+/**
+ * '+만 보기' 토글 목록. 각 항목은 해당 값이 0보다 큰 종목만 남긴다.
+ *
+ * 최소%(min_*) 입력은 `>= 0`이라 보합(0)도 걸리므로 토글을 따로 둔다.
+ * 값이 없는(미수집) 종목도 제외된다.
+ */
+export const POSITIVE_TOGGLES = [
+  { key: 'daily_change_positive', label: '등락률 +' },
+  { key: 'weekly_return_positive', label: '주간 +' },
+  { key: 'monthly_return_positive', label: '월간 +' },
+  { key: 'ytd_return_positive', label: '연간 +' },
+  { key: 'foreign_net_positive', label: '외국인 순매수' },
+  { key: 'institutional_net_positive', label: '기관 순매수' },
+]
+
+// '모두 상승' 버튼: 등락률·주간·월간·연간을 한 번에 켠다(수급 토글은 건드리지 않는다).
+export const ALL_RISING_FILTER = {
+  daily_change_positive: true,
+  weekly_return_positive: true,
+  monthly_return_positive: true,
+  ytd_return_positive: true,
+}
+
 const formatAt = (iso) => new Date(iso).toLocaleString('ko-KR')
 
 /**
@@ -218,25 +241,25 @@ export default function ScreeningFilters({ filters, onFilterChange, onReset, las
           </div>
 
           {/* 토글 행 (별도 div로 분리하여 한 줄에 표시) */}
-          <div className="lg:col-span-6 flex gap-4 mt-1">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!!filters.foreign_net_positive}
-                onChange={(e) => onFilterChange({ foreign_net_positive: e.target.checked ? true : undefined })}
-                className="w-4 h-4 text-primary-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">외국인 순매수</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!!filters.institutional_net_positive}
-                onChange={(e) => onFilterChange({ institutional_net_positive: e.target.checked ? true : undefined })}
-                className="w-4 h-4 text-primary-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">기관 순매수</span>
-            </label>
+          <div className="lg:col-span-6 flex flex-wrap items-center gap-x-4 gap-y-2 mt-1">
+            {POSITIVE_TOGGLES.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!filters[key]}
+                  onChange={(e) => onFilterChange({ [key]: e.target.checked ? true : undefined })}
+                  className="w-4 h-4 text-primary-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+              </label>
+            ))}
+            <button
+              type="button"
+              onClick={() => onFilterChange(ALL_RISING_FILTER)}
+              className="btn btn-outline btn-sm text-primary-600 dark:text-primary-400"
+            >
+              모두 상승
+            </button>
           </div>
         </div>
 

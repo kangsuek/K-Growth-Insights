@@ -39,6 +39,16 @@ _SORT_COLUMNS = {
     "close_price", "daily_change_pct", "foreign_net", "institutional_net", "name",
 }
 
+# '+만 보기' 토글 → 대상 컬럼. 값은 컬럼명이므로 여기 없는 키는 SQL에 닿지 않는다.
+_POSITIVE_FILTERS = {
+    "daily_change_positive": "daily_change_pct",
+    "weekly_return_positive": "weekly_return",
+    "monthly_return_positive": "monthly_return",
+    "ytd_return_positive": "ytd_return",
+    "foreign_net_positive": "foreign_net",
+    "institutional_net_positive": "institutional_net",
+}
+
 
 def get_progress() -> dict:
     """진행 상태 + 프론트 진행률 바가 쓰는 파생 필드(percent·items_collected)."""
@@ -398,10 +408,11 @@ def search(filters: dict) -> dict:
         if filters.get(f"max_{key}_return") is not None:
             where.append(f"{col} <= ?")
             params.append(filters[f"max_{key}_return"])
-    if filters.get("foreign_net_positive"):
-        where.append("foreign_net > 0")
-    if filters.get("institutional_net_positive"):
-        where.append("institutional_net > 0")
+    # 상승 필터: 값이 0보다 큰 종목만. 0(보합)과 NULL(미수집)은 제외된다.
+    # 최소%(min_*) 입력은 `>= 0`이라 보합도 걸리므로 별도로 둔다.
+    for key, col in _POSITIVE_FILTERS.items():
+        if filters.get(key):
+            where.append(f"{col} > 0")
 
     where_sql = " AND ".join(where)
     sort_by = filters.get("sort_by") if filters.get("sort_by") in _SORT_COLUMNS else "weekly_return"
