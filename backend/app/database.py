@@ -123,8 +123,9 @@ CREATE TABLE IF NOT EXISTS stock_catalog (
     weekly_return      REAL,      -- 주간 수익률
     monthly_return     REAL,      -- 월간 수익률
     ytd_return         REAL,      -- 연초대비 수익률
-    ytd_base_date      TEXT,      -- YTD 기준일(올해 첫 거래일) — 딥페이징 캐시
+    ytd_base_date      TEXT,      -- YTD 기준일(전년도 마지막 거래일) — 딥페이징 캐시
     ytd_base_price     REAL,      -- YTD 기준가
+    metrics_date       TEXT,      -- 위 지표들의 기준 거래일(가격·수급이 같은 날인지 확인용)
     foreign_net        INTEGER,   -- 최근 외국인 순매수
     institutional_net  INTEGER,   -- 최근 기관 순매수
     catalog_updated_at TEXT,      -- 지표 갱신 시각
@@ -199,6 +200,7 @@ _CATALOG_ADDED_COLUMNS = {
     "ytd_return": "REAL",
     "ytd_base_date": "TEXT",
     "ytd_base_price": "REAL",
+    "metrics_date": "TEXT",
     "foreign_net": "INTEGER",
     "institutional_net": "INTEGER",
     "catalog_updated_at": "TEXT",

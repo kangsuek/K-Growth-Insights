@@ -1,9 +1,12 @@
 """Phase 4(종목 발굴) 테스트: 검색·필터·정렬·테마·추천 — stock_catalog 기반."""
+from datetime import datetime
+
 from fastapi.testclient import TestClient
 
 from app.database import get_connection
 from app.main import app
-from app.services import scanner
+from app.services import naver_client, scanner
+from app.timeutil import KST
 from tests.conftest import seed_stock
 
 client = TestClient(app)
@@ -155,3 +158,60 @@ def test_price_timestamp_follows_metric_collect_when_it_ran_later():
 
     assert item["price_updated_at"].startswith("2026-07-29T11:41:06")
     assert item["catalog_updated_at"].startswith("2026-07-29T11:41:06")
+
+
+# --- 기준 거래일 정합성 -------------------------------------------------------
+
+def _price(day, close):
+    return {"date": day, "close_price": close, "change_pct": 1.0, "volume": 100}
+
+
+def test_confirmed_prices_drops_intraday_row_before_market_close():
+    """장 마감 전에는 당일(미확정) 행을 버린다.
+
+    네이버 일별시세는 장중에도 오늘 행을 현재가로 내려준다. 그걸 종가로 저장하면
+    가격은 당일 장중, 수급은 전일 확정치가 되어 한 행 안에서 기준일이 어긋났다.
+    """
+    rows = [_price("2026-07-30", 110), _price("2026-07-29", 100)]
+    intraday = datetime(2026, 7, 30, 10, 6, tzinfo=KST)   # 장중
+    assert [r["date"] for r in scanner.confirmed_prices(rows, intraday)] == ["2026-07-29"]
+
+    after_close = datetime(2026, 7, 30, 15, 40, tzinfo=KST)
+    assert [r["date"] for r in scanner.confirmed_prices(rows, after_close)] == \
+        ["2026-07-30", "2026-07-29"]
+
+
+def test_metrics_align_price_and_flow_on_same_trading_day(monkeypatch):
+    """장중 수집이라도 가격·수급·수익률이 같은 거래일 기준으로 저장된다."""
+    monkeypatch.setattr(
+        scanner, "confirmed_prices",
+        lambda prices, now=None: [p for p in prices if p["date"] < "2026-07-30"])
+    monkeypatch.setattr(naver_client, "fetch_daily_prices", lambda code, pages=1: [
+        _price("2026-07-30", 999),    # 장중 미확정 → 버려져야 한다
+        _price("2026-07-29", 120),
+        _price("2026-07-22", 100),    # 7일 전 — 주간 기준일
+        _price("2026-06-29", 80),     # 전월 같은 날 — 월간 기준일
+        _price("2025-12-30", 60),     # 전년 마지막 거래일 — YTD 기준일
+    ])
+    monkeypatch.setattr(naver_client, "fetch_trading_flow", lambda code, **kw: [
+        {"date": "2026-07-30", "foreign_net": 777, "institutional_net": 888},
+        {"date": "2026-07-29", "foreign_net": 111, "institutional_net": 222},
+    ])
+
+    m = scanner._metrics_for("069500")
+    assert m["metrics_date"] == "2026-07-29"
+    assert m["close_price"] == 120                      # 확정 종가
+    assert m["foreign_net"] == 111                      # 같은 날 수급
+    assert m["institutional_net"] == 222
+    assert round(m["weekly_return"], 4) == round((120 / 100 - 1) * 100, 4)
+    assert round(m["monthly_return"], 4) == round((120 / 80 - 1) * 100, 4)
+    assert round(m["ytd_return"], 4) == round((120 / 60 - 1) * 100, 4)
+    assert m["ytd_base_date"] == "2025-12-30"
+
+
+def test_ytd_base_cache_rejects_old_current_year_basis():
+    """옛 기준(올해 첫 거래일)으로 저장된 캐시는 무효로 보고 다시 계산한다."""
+    assert scanner._ytd_base_is_current({"date": "2025-12-30", "price": 60}, 2026) is True
+    assert scanner._ytd_base_is_current({"date": "2026-01-02", "price": 62}, 2026) is False
+    assert scanner._ytd_base_is_current({"date": "2025-12-30", "price": None}, 2026) is False
+    assert scanner._ytd_base_is_current(None, 2026) is False

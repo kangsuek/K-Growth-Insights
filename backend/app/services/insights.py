@@ -21,25 +21,15 @@ RISK_KEYWORDS = ["규제", "관세", "금리", "환율", "경기", "리스크"]
 # --- 지표(수익률·변동성) -----------------------------------------------------
 
 def _compute_metrics(prices_desc: list[dict]) -> tuple[dict, float | None]:
-    """최신순 시세로 returns(1w/1m/ytd)·연환산 변동성 계산(원본 get_etf_metrics 동일)."""
-    n = len(prices_desc)
-    returns: dict[str, float | None] = {"1w": None, "1m": None, "ytd": None}
+    """최신순 시세로 returns(1w/1m/ytd)·연환산 변동성 계산.
 
-    def _ret(base_idx: int) -> float | None:
-        cur = prices_desc[0]["close_price"]
-        base = prices_desc[base_idx]["close_price"]
-        if cur and base:
-            return (cur - base) / base * 100
-        return None
-
-    returns["1w"] = metrics.weekly_return([p["close_price"] for p in prices_desc])
-    if n >= 20:
-        returns["1m"] = _ret(min(19, n - 1))
-
-    year_start = date(date.today().year, 1, 1).isoformat()
-    ytd = [p for p in prices_desc if (p.get("date") or "") >= year_start]
-    if len(ytd) >= 2 and ytd[0]["close_price"] and ytd[-1]["close_price"]:
-        returns["ytd"] = (ytd[0]["close_price"] - ytd[-1]["close_price"]) / ytd[-1]["close_price"] * 100
+    수익률 기준일은 발굴·대시보드와 같은 공용 함수(네이버증권 기준)를 쓴다.
+    """
+    returns: dict[str, float | None] = {
+        "1w": metrics.weekly_return(prices_desc),
+        "1m": metrics.monthly_return(prices_desc),
+        "ytd": metrics.ytd_return(prices_desc),
+    }
 
     # 연환산 변동성은 비교 화면과 같은 식(표본표준편차 기준)을 쓴다.
     changes = [p["change_pct"] for p in prices_desc if p.get("change_pct") is not None]

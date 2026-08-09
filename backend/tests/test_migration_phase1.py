@@ -77,18 +77,17 @@ def test_list_etfs_shape():
 
 def test_batch_summary_computes_weekly_return():
     seed_stock("005930", "삼성전자", "STOCK")
-    # 최신이 100, 6거래일 전이 100 → 주간수익률 계산 가능
-    _seed_prices("005930", [95, 96, 97, 98, 99, 100, 110])  # 오래된→최신
+    # 2026-07-01~07-10 연속 시세(오래된→최신). 최신은 07-10.
+    _seed_prices("005930", [95, 96, 97, 98, 99, 100, 101, 102, 103, 110])
     r = client.post(
         "/api/etfs/batch-summary",
         json={"tickers": ["005930"], "price_days": 14, "news_limit": 3},
     ).json()
     s = r["data"]["005930"]
     assert s["latest_price"]["close_price"] == 110  # 최신
-    # prices는 최신→오래된 순: [110,100,99,98,97,96,95]
-    assert s["prices"][0]["close_price"] == 110
-    # weekly_return = 최신 / 5거래일 전(prices_desc[4]=97).
-    # 발굴(scanner)·인사이트와 같은 기준을 쓴다 — metrics.weekly_return 참조.
+    assert s["prices"][0]["close_price"] == 110     # prices는 최신→오래된 순
+    # weekly_return = 최신(07-10) / 7일 전(07-03=97). 네이버 W1과 같은 기준이며
+    # 발굴(scanner)·인사이트와도 같다 — metrics.weekly_return 참조.
     assert round(s["weekly_return"], 1) == round((110 / 97 - 1) * 100, 1)
 
 

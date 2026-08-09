@@ -10,12 +10,12 @@ const baseItem = {
 }
 
 describe('YTD 기준일 표기', () => {
-  it('연초 기준일은 감추고, 늦은 기준일만 표시한다', () => {
+  it('전년말 기준일은 감추고, 연중 상장 기준일만 표시한다', () => {
     const year = new Date().getFullYear()
     renderWithProviders(
       <ScreeningTable
         items={[
-          { ...baseItem, ticker: '069500', name: '연초종목', ytd_base_date: `${year}-01-02` },
+          { ...baseItem, ticker: '069500', name: '정상종목', ytd_base_date: `${year - 1}-12-30` },
           { ...baseItem, ticker: '0221V0', name: '신규상장', ytd_base_date: `${year}-07-21` },
         ]}
         total={2} page={1} pageSize={20}
@@ -23,34 +23,30 @@ describe('YTD 기준일 표기', () => {
       />
     )
 
-    const janRow = screen.getByText('연초종목').closest('tr')
+    const normalRow = screen.getByText('정상종목').closest('tr')
     const julRow = screen.getByText('신규상장').closest('tr')
 
-    expect(within(janRow).queryByText('01-02 ~')).not.toBeInTheDocument()
+    expect(within(normalRow).queryByText('12-30 ~')).not.toBeInTheDocument()
     expect(within(julRow).getByText('07-21 ~')).toBeInTheDocument()
   })
 })
 
 describe('isLateYtdBase', () => {
-  it('연초(1월) 기준일이면 false — 기준일을 덧붙이지 않는다', () => {
-    // 하이픈·점 표기 모두 연초로 인식해야 한다 (백엔드는 하이픈으로 저장한다)
-    expect(isLateYtdBase('2026-01-02', 2026)).toBe(false)
-    expect(isLateYtdBase('2026.01.02', 2026)).toBe(false)
-    expect(isLateYtdBase('2026-01-31', 2026)).toBe(false)
+  it('전년도 기준일이면 false — 네이버와 같은 정상 기준이라 덧붙이지 않는다', () => {
+    // 하이픈·점 표기 모두 인식해야 한다 (백엔드는 하이픈으로 저장한다)
+    expect(isLateYtdBase('2025-12-30', 2026)).toBe(false)
+    expect(isLateYtdBase('2025.12.30', 2026)).toBe(false)
   })
 
-  it('1월이 아닌 기준일이면 true — 신규 상장 등은 기준일을 보여준다', () => {
-    expect(isLateYtdBase('2026-02-03', 2026)).toBe(true)
+  it('올해 기준일이면 true — 연중 상장 등은 기준일을 보여준다', () => {
+    expect(isLateYtdBase('2026-01-02', 2026)).toBe(true)
     expect(isLateYtdBase('2026.03.15', 2026)).toBe(true)
+    expect(isLateYtdBase('2026-07-21', 2026)).toBe(true)
   })
 
   it('기준일이 없으면 false', () => {
     expect(isLateYtdBase(null, 2026)).toBe(false)
     expect(isLateYtdBase(undefined, 2026)).toBe(false)
     expect(isLateYtdBase('', 2026)).toBe(false)
-  })
-
-  it('다른 해의 기준일이면 true', () => {
-    expect(isLateYtdBase('2025-01-02', 2026)).toBe(true)
   })
 })

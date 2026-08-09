@@ -63,62 +63,91 @@ _MAX_METRIC_PAGES = 8   # YTD 딥페이징 상한(약 2년치 안전장치)
 
 
 def _pages_for_ytd() -> int:
-    """올해 첫 거래일까지 닿는 데 필요한 일별시세 페이지 수(경과일 기반 추정)."""
+    """전년도 마지막 거래일까지 닿는 데 필요한 일별시세 페이지 수(경과일 기반 추정).
+
+    YTD 기준가가 전년 12월 종가이므로 올해 경과분에 1페이지를 더해 여유를 둔다.
+    """
     doy = date.today().timetuple().tm_yday
     trading_days = int(doy * 5 / 7)          # 경과 거래일 ≈ 경과일 × 5/7
-    pages = trading_days // naver_client.MAX_PAGE_SIZE + 2  # 1페이지 여유
+    pages = trading_days // naver_client.MAX_PAGE_SIZE + 2  # 전년 12월까지 1페이지 여유
     return max(1, min(pages, _MAX_METRIC_PAGES))
+
+
+def confirmed_prices(prices: list[dict], now: datetime | None = None) -> list[dict]:
+    """장중 미확정 행을 걷어낸 최신순 시세.
+
+    네이버 일별시세는 장중에도 '오늘' 행을 **현재가**로 내려준다. 그 값을 종가로 저장하면
+    한 행 안에서 기준일이 어긋난다 — 가격은 당일 장중인데 매매동향(외국인·기관)은 장
+    마감 후에야 확정되므로 전일 값이 들어오기 때문이다. 마감(15:40) 전이면 오늘 행을
+    버리고 직전 거래일을 기준일로 삼아 가격·수급·수익률을 한 날짜로 맞춘다.
+    """
+    now = (now or datetime.now(KST)).astimezone(KST)
+    if now.time() >= MARKET_CLOSE:
+        return prices
+    today = now.date().isoformat()
+    return [p for p in prices if str(p.get("date") or "")[:10] < today]
+
+
+def _ytd_base_is_current(cached: dict | None, year: int) -> bool:
+    """캐시된 YTD 기준일이 이번 연도용(= 전년도 마지막 거래일)인지.
+
+    기준을 '올해 첫 거래일'에서 '전년도 마지막 거래일'로 바꿨으므로, 옛 기준으로 저장된
+    캐시(올해 날짜)는 여기서 걸러져 자동으로 다시 계산된다.
+    """
+    if not cached or not cached.get("price") or not cached.get("date"):
+        return False
+    try:
+        return date.fromisoformat(str(cached["date"])[:10]).year == year - 1
+    except ValueError:
+        return False
 
 
 def _metrics_for(ticker: str, cached_ytd_base: dict | None = None) -> dict | None:
     """카탈로그 종목의 수익률·수급 지표 계산(시세·매매동향 기반). 시세 없으면 None.
 
-    cached_ytd_base가 올해 것이면 1월까지 딥페이징하지 않고 캐시 기준가로 YTD를 계산한다.
+    수익률 기준일은 네이버증권과 동일하다(services/metrics.py 참고). 캐시된 YTD 기준가가
+    이번 연도용이면 전년 12월까지 딥페이징하지 않고 캐시 기준가를 쓴다.
     """
     year = date.today().year
-    year_start = f"{year}-01-01"
-    use_cache = bool(
-        cached_ytd_base and cached_ytd_base.get("price")
-        and str(cached_ytd_base.get("date", "")).startswith(str(year))
-    )
+    use_cache = _ytd_base_is_current(cached_ytd_base, year)
     pages = 1 if use_cache else _pages_for_ytd()
-    prices = naver_client.fetch_daily_prices(ticker, pages=pages)  # 최신순
+    prices = confirmed_prices(naver_client.fetch_daily_prices(ticker, pages=pages))
     if not prices or not prices[0].get("close_price"):
         return None
-    n = len(prices)
+    as_of = str(prices[0].get("date") or "")[:10]
     cur = prices[0]["close_price"]
 
-    def _ret(idx):
-        base = prices[idx].get("close_price")
-        return (cur - base) / base * 100 if base else None
-
-    weekly = metrics.weekly_return([p.get("close_price") for p in prices])
-    monthly = _ret(min(19, n - 1)) if n >= 20 else None
-
-    # YTD: 캐시가 유효하면 캐시 기준가, 아니면 올해 가장 오래된 거래일을 기준가로 잡고 캐시.
+    # YTD: 캐시가 유효하면 캐시 기준가, 아니면 전년도 마지막 거래일을 기준가로 잡고 캐시.
     if use_cache:
         base_price, base_date = cached_ytd_base["price"], cached_ytd_base["date"]
     else:
-        ytd_rows = [p for p in prices if (p.get("date") or "") >= year_start]
-        if ytd_rows and ytd_rows[-1].get("close_price"):
-            base_price, base_date = ytd_rows[-1]["close_price"], ytd_rows[-1]["date"]
-        else:
-            base_price = base_date = None
+        base_date, base_price = metrics.ytd_base(prices)
+        if base_price is None:
+            # 연중 상장 종목은 전년도 시세가 없다. 상장 후 첫 거래일을 기준으로 대신 쓴다.
+            oldest = next((p for p in reversed(prices) if p.get("close_price")), None)
+            if oldest:
+                base_date = str(oldest.get("date") or "")[:10]
+                base_price = oldest["close_price"]
     ytd = (cur - base_price) / base_price * 100 if base_price else None
 
+    # 수급도 가격과 같은 거래일로 맞춘다(as_of 이하 가장 최근 확정분).
     flow = naver_client.fetch_trading_flow(ticker)  # 최신순
-    foreign_net = flow[0].get("foreign_net") if flow else None
-    inst_net = flow[0].get("institutional_net") if flow else None
+    foreign_net = inst_net = None
+    for row in flow or []:
+        if str(row.get("date") or "")[:10] <= as_of:
+            foreign_net, inst_net = row.get("foreign_net"), row.get("institutional_net")
+            break
 
     return {
         "close_price": cur,
         "daily_change_pct": prices[0].get("change_pct"),
         "volume": prices[0].get("volume"),
-        "weekly_return": weekly,
-        "monthly_return": monthly,
+        "weekly_return": metrics.weekly_return(prices),
+        "monthly_return": metrics.monthly_return(prices),
         "ytd_return": ytd,
         "ytd_base_date": base_date,
         "ytd_base_price": base_price,
+        "metrics_date": as_of,
         "foreign_net": foreign_net,
         "institutional_net": inst_net,
     }
@@ -180,12 +209,13 @@ def _collect_one(ticker: str, cached_ytd_base: dict | None = None) -> int:
             UPDATE stock_catalog SET
                 close_price=?, daily_change_pct=?, volume=?, weekly_return=?,
                 monthly_return=?, ytd_return=?, ytd_base_date=?, ytd_base_price=?,
-                foreign_net=?, institutional_net=?, catalog_updated_at=datetime('now')
+                metrics_date=?, foreign_net=?, institutional_net=?,
+                catalog_updated_at=datetime('now')
             WHERE ticker=?
             """,
             (metrics["close_price"], metrics["daily_change_pct"], metrics["volume"],
              metrics["weekly_return"], metrics["monthly_return"], metrics["ytd_return"],
-             metrics["ytd_base_date"], metrics["ytd_base_price"],
+             metrics["ytd_base_date"], metrics["ytd_base_price"], metrics["metrics_date"],
              metrics["foreign_net"], metrics["institutional_net"], ticker),
         )
     with _lock:
@@ -312,6 +342,8 @@ def _row_to_item(row, registered: set) -> dict:
         "volume": d.get("volume"), "weekly_return": d.get("weekly_return"),
         "monthly_return": d.get("monthly_return"), "ytd_return": d.get("ytd_return"),
         "ytd_base_date": d.get("ytd_base_date"),
+        # 수익률·수급이 어느 거래일 기준인지(장중 수집분과 확정분 구분).
+        "metrics_date": d.get("metrics_date"),
         "foreign_net": d.get("foreign_net"), "institutional_net": d.get("institutional_net"),
         # 한 행의 값이 두 수집 단계에서 온다. 수익률·수급은 발굴 지표수집만
         # (catalog_updated_at) 채우지만, 현재가·등락률·거래량은 종목목록수집

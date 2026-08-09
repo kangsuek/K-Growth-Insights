@@ -53,13 +53,21 @@ def test_foreign_net_threshold_scales_with_volume():
 # --- 지표 계산 ---------------------------------------------------------------
 
 def test_compute_metrics_returns_and_volatility():
-    # 최신순: 상승 추세, 변동성 데이터 충분
+    # 최신순: 상승 추세, 변동성 데이터 충분(25거래일)
     prices_desc = [{"date": f"2026-07-{30 - i:02d}", "close_price": 100 - i, "change_pct": 1.0,
                     "volume": 1000} for i in range(25)]
+    # 월간·연초대비 기준일(전월 같은 날, 전년 마지막 거래일)까지 시세를 잇는다.
+    prices_desc += [
+        {"date": "2026-06-30", "close_price": 70, "change_pct": 1.0, "volume": 1000},
+        {"date": "2025-12-30", "close_price": 50, "change_pct": 1.0, "volume": 1000},
+    ]
     returns, vol = insights._compute_metrics(prices_desc)
-    # 1주(5거래일): 최신 100 / index4(96) → (100-96)/96*100
-    assert round(returns["1w"], 2) == round((100 - 96) / 96 * 100, 2)
-    assert returns["1m"] is not None  # 20거래일 이상
+    # 1주: 최신(07-30, 100) / 7일 전(07-23, 93) — 네이버 W1과 같은 기준
+    assert round(returns["1w"], 2) == round((100 - 93) / 93 * 100, 2)
+    # 1달: 전월 같은 날(06-30, 70)
+    assert round(returns["1m"], 2) == round((100 - 70) / 70 * 100, 2)
+    # 연초대비: 전년 마지막 거래일(2025-12-30, 50)
+    assert round(returns["ytd"], 2) == round((100 - 50) / 50 * 100, 2)
     assert vol is not None            # 10개 이상 변화율
 
 
@@ -97,18 +105,61 @@ def test_insights_endpoint_404():
     assert client.get("/api/etfs/999999/insights").status_code == 404
 
 
-def test_weekly_return_is_shared_across_screens():
-    """대시보드·발굴·인사이트가 같은 기준일(5거래일 전)을 쓰는지 고정한다.
+def _rows(pairs):
+    """(날짜, 종가) 목록 → 최신순 시세 행."""
+    return [{"date": d, "close_price": c} for d, c in pairs]
 
-    과거 batch-summary만 6거래일 전을 써서 같은 종목의 '주간 수익률'이 화면마다
-    다르게 보였다.
+
+def test_return_base_dates_match_naver():
+    """수익률 기준일이 네이버증권과 같은지 고정한다.
+
+    거래일 수(5·20거래일)로 잡으면 휴장·급등락일이 낀 주에 네이버 표기와 크게 어긋난다.
+    네이버 기준은 달력 날짜다 — 주간 7일 전, 월간 전월 같은 날, YTD 전년 마지막 거래일.
     """
     from app.services import metrics
 
-    closes_desc = [110, 100, 99, 98, 97, 96, 95]  # 최신 → 오래된
-    assert round(metrics.weekly_return(closes_desc), 4) == round((110 / 97 - 1) * 100, 4)
+    rows = _rows([
+        ("2026-03-10", 110),
+        ("2026-03-09", 108),
+        ("2026-03-03", 100),   # 7일 전(03-03) — 주간 기준일
+        ("2026-02-10", 90),    # 전월 같은 날 — 월간 기준일
+        ("2026-01-02", 80),
+        ("2025-12-30", 50),    # 전년 마지막 거래일 — YTD 기준일
+        ("2025-12-29", 45),
+    ])
+    assert round(metrics.weekly_return(rows), 4) == round((110 / 100 - 1) * 100, 4)
+    assert round(metrics.monthly_return(rows), 4) == round((110 / 90 - 1) * 100, 4)
+    assert round(metrics.ytd_return(rows), 4) == round((110 / 50 - 1) * 100, 4)
+    assert metrics.ytd_base(rows) == ("2025-12-30", 50)
 
-    # 데이터가 5건 미만이면 계산하지 않는다.
-    assert metrics.weekly_return([110, 100, 99, 98]) is None
-    # 기준일 종가가 없으면 계산하지 않는다.
-    assert metrics.weekly_return([110, 100, 99, 98, None]) is None
+
+def test_return_base_falls_back_to_previous_trading_day():
+    """기준 날짜가 휴장이면 그 이전 거래일 종가를 기준가로 쓴다."""
+    from app.services import metrics
+
+    # 03-03이 없으므로 그 이전 거래일 03-02가 주간 기준일이 된다.
+    rows = _rows([("2026-03-10", 110), ("2026-03-05", 105), ("2026-03-02", 100)])
+    assert round(metrics.weekly_return(rows), 4) == round((110 / 100 - 1) * 100, 4)
+
+
+def test_return_is_none_when_history_too_short():
+    """기준일까지 시세가 없으면 값을 만들지 않는다."""
+    from app.services import metrics
+
+    rows = _rows([("2026-03-10", 110), ("2026-03-09", 108)])
+    assert metrics.weekly_return(rows) is None
+    assert metrics.monthly_return(rows) is None
+    assert metrics.ytd_return(rows) is None
+    assert metrics.weekly_return([]) is None
+    # 기준일 종가가 비어 있으면 그 행은 기준가로 쓰지 않는다.
+    assert metrics.weekly_return(_rows([("2026-03-10", 110), ("2026-03-03", None)])) is None
+
+
+def test_prev_month_day_clamps_to_month_end():
+    """전월에 없는 날짜(3/31 → 2/28)는 말일로 맞춘다."""
+    from datetime import date
+
+    from app.services import metrics
+
+    assert metrics.prev_month_day(date(2026, 3, 31)) == date(2026, 2, 28)
+    assert metrics.prev_month_day(date(2026, 1, 15)) == date(2025, 12, 15)

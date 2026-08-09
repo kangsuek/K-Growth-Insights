@@ -158,8 +158,8 @@ def batch_summary(req: BatchSummaryRequest):
     for ticker in req.tickers:
         prices_asc = repository.get_prices(ticker, days=req.price_days)  # 오래된→최신
         prices_desc = [_price_out(p) for p in reversed(prices_asc)]      # 최신→오래된
-        # 주간 수익률: 발굴·인사이트와 같은 기준(5거래일 전)을 쓰도록 공용 함수 사용.
-        weekly_return = metrics.weekly_return([p["close_price"] for p in prices_desc])
+        # 주간 수익률: 발굴·인사이트와 같은 기준(네이버 W1 = 7일 전)을 쓰도록 공용 함수 사용.
+        weekly_return = metrics.weekly_return(prices_desc)
 
         flow = repository.get_trading_flow(ticker, days=1)
         latest_flow = None

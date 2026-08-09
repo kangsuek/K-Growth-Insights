@@ -2,14 +2,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import { formatNumber, formatSignedNumber, formatPercent, getChangeColor } from '../../utils/formatters'
 
 /**
- * YTD 기준일이 연초(1월)가 아닐 때만 true.
+ * YTD 기준일이 전년도 마지막 거래일이 아닐 때만 true.
  *
- * 신규 상장처럼 올해 첫 거래일이 1월이 아닌 종목만 기준일을 덧붙이기 위한 판정이다.
- * 기준일 표기는 '2026-01-02'·'2026.01.02' 둘 다 들어올 수 있어 구분자를 맞춰 비교한다.
+ * 네이버증권과 같은 기준이라 정상 종목의 YTD 기준일은 전년도 날짜(예: 2025-12-30)다.
+ * 연중 상장처럼 전년도 시세가 없어 기준일이 **올해**로 잡힌 종목만 기준일을 덧붙인다.
+ * 기준일 표기는 '2026-07-21'·'2026.07.21' 둘 다 들어올 수 있어 구분자를 맞춰 비교한다.
  */
 export function isLateYtdBase(baseDate, year = new Date().getFullYear()) {
   if (!baseDate) return false
-  return !baseDate.replace(/\./g, '-').startsWith(`${year}-01`)
+  return baseDate.replace(/\./g, '-').startsWith(`${year}-`)
 }
 
 export const COLUMNS = [
