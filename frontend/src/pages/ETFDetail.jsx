@@ -1,9 +1,10 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { etfApi, newsApi, settingsApi } from '../services/api'
 import { useSettings } from '../contexts/SettingsContext'
+import { useToast } from '../contexts/ToastContext'
 import PageHeader from '../components/common/PageHeader'
 import Spinner from '../components/common/Spinner'
 import ErrorFallback from '../components/common/ErrorFallback'
@@ -34,6 +35,37 @@ function convertDateRangeFormat(settingRange) {
   return mapping[settingRange] || '7d'
 }
 
+// 대시보드와 동일하게, 주기 반복되는 알림이라 성공은 짧게·실패는 오래 띄운다.
+const AUTO_REFRESH_TOAST_MS = 1500
+const AUTO_REFRESH_ERROR_TOAST_MS = 5000
+
+// 상세 페이지 자동 갱신이 다시 읽는 쿼리들. 모두 DB만 읽어 네이버 API를 호출하지
+// 않으므로(분봉의 auto_collect는 데이터가 없을 때만 수집 트리거) 주기 실행에 안전하다.
+const DETAIL_AUTO_REFRESH_QUERY_KEYS = [
+  'etf', 'prices', 'prices-extended', 'tradingFlow', 'insights', 'news', 'fundamentals', 'intraday',
+]
+
+/**
+ * 상세 페이지 자동 갱신: 수집 없이 화면 데이터만 다시 읽고 결과를 알린다.
+ * (Dashboard.autoRefreshDashboard와 동일한 패턴)
+ *
+ * @returns {Promise<boolean>} 성공 여부
+ */
+async function autoRefreshDetail(queryClient, toast, keys) {
+  try {
+    const opts = { throwOnError: true }
+    for (const key of keys) {
+      await queryClient.refetchQueries({ queryKey: [key] }, opts)
+    }
+    toast.success('데이터가 갱신되었습니다', AUTO_REFRESH_TOAST_MS)
+    return true
+  } catch (error) {
+    console.error('Detail auto refetch failed:', error)
+    toast.error(`자동 갱신 실패: ${error.message}`, AUTO_REFRESH_ERROR_TOAST_MS)
+    return false
+  }
+}
+
 /**
  * ETFDetail 페이지
  * ETF 상세 정보, 차트, 뉴스를 통합한 완전한 Detail 페이지
@@ -42,6 +74,8 @@ export default function ETFDetail() {
   const { ticker } = useParams()
   const navigate = useNavigate()
   const { settings } = useSettings()
+  const toast = useToast()
+  const queryClient = useQueryClient()
 
   // 종목관리에 등록된 종목 목록 (구성종목 클릭 시 등록 여부 판단에 사용)
   const { data: registeredStocks } = useQuery({
@@ -234,10 +268,10 @@ export default function ETFDetail() {
     },
     enabled: !!ticker && !!etf,
     staleTime: isMarketHours ? 10 * 1000 : CACHE_STALE_TIME_FAST, // 장중: 10초, 장외: 30초
+    // 장중 주기 갱신은 아래 페이지 공통 자동 갱신 effect가 담당한다(중복 요청 방지).
     refetchInterval: (query) => {
       if (query.state.data?.background_collect_started) return 3000   // 수집 중: 3초 (장중/장외 무관)
-      if (isMarketHours) return settings.autoRefresh.interval          // 장중: 설정한 자동 새로고침 간격
-      return false                                                     // 장외: 자동 갱신 끔
+      return false
     },
     refetchOnMount: true,
     retry: 1,
@@ -249,6 +283,18 @@ export default function ETFDetail() {
     forceRefreshRef.current = true
     refetchIntraday()
   }, [refetchIntraday])
+
+  // 상세 페이지 자동 갱신: 설정한 주기마다 화면 데이터만 다시 읽고 토스트로 알린다.
+  // 분봉은 장중에만 의미가 있어 장외에는 갱신 대상에서 뺀다.
+  useEffect(() => {
+    const keys = isMarketHours
+      ? DETAIL_AUTO_REFRESH_QUERY_KEYS
+      : DETAIL_AUTO_REFRESH_QUERY_KEYS.filter((key) => key !== 'intraday')
+    const interval = setInterval(() => {
+      autoRefreshDetail(queryClient, toast, keys)
+    }, settings.autoRefresh.interval)
+    return () => clearInterval(interval)
+  }, [settings.autoRefresh.interval, isMarketHours, queryClient, toast])
 
   // 새로고침 아이콘 회전 조건: 요청 중이거나 백그라운드 수집이 진행 중일 때.
   // 강제 새로고침 시 백엔드가 즉시 응답하고 수집은 백그라운드에서 계속되므로,
