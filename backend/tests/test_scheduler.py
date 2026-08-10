@@ -155,3 +155,26 @@ def test_intraday_job_uses_cron_trigger_aligned_to_clock(monkeypatch):
         assert first_run == datetime(2026, 8, 10, 9, 0, 10, tzinfo=KST)
     finally:
         scheduler.shutdown()
+
+
+def test_update_intraday_interval_reschedules_running_job(monkeypatch):
+    """실행 중 스케줄러가 있으면 분봉 잡을 새 주기로 즉시 재등록해야 한다."""
+    monkeypatch.setattr(config, "SCHEDULER_ENABLED", True)
+    monkeypatch.setattr(config, "INTRADAY_COLLECT_INTERVAL_MINUTES", 1)
+    sched = scheduler.start()
+    try:
+        scheduler.update_intraday_interval(5)
+        assert config.INTRADAY_COLLECT_INTERVAL_MINUTES == 5
+        job = sched.get_job("intraday_collect")
+        now = datetime(2026, 8, 10, 9, 1, 0, tzinfo=KST)
+        next_run = job.trigger.get_next_fire_time(None, now)
+        assert next_run == datetime(2026, 8, 10, 9, 5, 10, tzinfo=KST)
+    finally:
+        scheduler.shutdown()
+
+
+def test_update_intraday_interval_without_running_scheduler_updates_config_only(monkeypatch):
+    monkeypatch.setattr(config, "INTRADAY_COLLECT_INTERVAL_MINUTES", 1)
+    assert scheduler._scheduler is None
+    scheduler.update_intraday_interval(7)
+    assert config.INTRADAY_COLLECT_INTERVAL_MINUTES == 7

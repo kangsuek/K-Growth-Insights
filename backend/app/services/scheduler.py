@@ -124,6 +124,27 @@ def start() -> BackgroundScheduler | None:
     return scheduler
 
 
+def update_intraday_interval(minutes: int) -> None:
+    """분봉 수집 주기를 변경한다. 실행 중인 스케줄러가 있으면 해당 잡을 즉시 재등록한다.
+
+    스케줄러가 아직 기동 전(설정 로드 시점)이면 config 값만 갱신되고,
+    이후 start()가 이 값으로 잡을 등록한다.
+    """
+    config.INTRADAY_COLLECT_INTERVAL_MINUTES = minutes
+    if _scheduler and _scheduler.running:
+        _scheduler.reschedule_job(
+            "intraday_collect",
+            trigger=CronTrigger(
+                day_of_week="mon-fri",
+                hour="9-15",
+                minute=f"*/{minutes}",
+                second=10,
+                timezone=KST,
+            ),
+        )
+        logger.info("분봉 수집 잡 재등록: %d분 간격", minutes)
+
+
 def shutdown() -> None:
     """스케줄러를 정리한다(진행 중 작업은 대기하지 않음)."""
     global _scheduler

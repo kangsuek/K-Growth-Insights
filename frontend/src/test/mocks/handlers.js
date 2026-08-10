@@ -221,6 +221,25 @@ export const handlers = [
     })
   }),
 
+  // GET /api/settings/scheduler - 분봉 자동 수집 주기 설정
+  http.get(`${BASE_URL}/settings/scheduler`, () => {
+    return HttpResponse.json({
+      intraday_collect_interval_minutes: 1,
+      min_minutes: 1,
+      max_minutes: 30,
+    })
+  }),
+
+  // PUT /api/settings/scheduler - 분봉 자동 수집 주기 변경
+  http.put(`${BASE_URL}/settings/scheduler`, async ({ request }) => {
+    const body = await request.json()
+    return HttpResponse.json({
+      intraday_collect_interval_minutes: body.intraday_collect_interval_minutes,
+      min_minutes: 1,
+      max_minutes: 30,
+    })
+  }),
+
   // GET /api/data/stats - 데이터 통계
   http.get(`${BASE_URL}/data/stats`, () => {
     return HttpResponse.json({

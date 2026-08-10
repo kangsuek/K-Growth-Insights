@@ -254,6 +254,12 @@ export const settingsApi = {
 
   // API 키 저장
   updateApiKeys: (data) => api.put('/settings/api-keys', data, { timeout: NORMAL_API_TIMEOUT }),
+
+  // 스케줄러 설정(분봉 수집 주기) 조회
+  getSchedulerSettings: () => api.get('/settings/scheduler', { timeout: FAST_API_TIMEOUT }),
+
+  // 스케줄러 설정(분봉 수집 주기) 변경
+  updateSchedulerSettings: (data) => api.put('/settings/scheduler', data, { timeout: NORMAL_API_TIMEOUT }),
 }
 
 // Alert (목표가/알림) API 서비스

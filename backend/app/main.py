@@ -12,7 +12,7 @@ from app.database import init_db
 from app.routers import (
     data, etfs, market, news, scanner, settings, simulation,
 )
-from app.services import api_keys, scheduler, stocks_sync
+from app.services import api_keys, app_settings, scheduler, stocks_sync
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +23,8 @@ async def lifespan(app: FastAPI):
     init_db()
     # 저장된 API 키를 런타임에 적용(네이버 검색 등).
     api_keys.load_to_runtime()
+    # 저장된 스케줄러 설정(분봉 수집 주기 등)을 런타임에 적용.
+    app_settings.load_to_runtime()
     try:
         # 추적 종목이 하나도 없을 때(최초 실행)만 stocks.json으로 시딩한다.
         # 매번 동기화하면 사용자가 삭제한 종목이 재시작 때 되살아난다.

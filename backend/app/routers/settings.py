@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.services import api_keys, catalog, naver_client, repository
+from app.services import api_keys, app_settings, catalog, naver_client, repository
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -69,6 +69,10 @@ class StockUpdate(BaseModel):
 class ApiKeysUpdate(BaseModel):
     NAVER_CLIENT_ID: Optional[str] = None
     NAVER_CLIENT_SECRET: Optional[str] = None
+
+
+class SchedulerSettingsUpdate(BaseModel):
+    intraday_collect_interval_minutes: int
 
 
 # --- 종목 관리 ---------------------------------------------------------------
@@ -178,3 +182,18 @@ def get_api_keys(raw: bool = Query(False)):
 @router.put("/api-keys")
 def update_api_keys(data: ApiKeysUpdate):
     return api_keys.update_keys(data.model_dump(exclude_unset=True))
+
+
+# --- 스케줄러 설정 (분봉 수집 주기) -------------------------------------------
+
+@router.get("/scheduler")
+def get_scheduler_settings():
+    return app_settings.get_scheduler_settings()
+
+
+@router.put("/scheduler")
+def update_scheduler_settings(data: SchedulerSettingsUpdate):
+    try:
+        return app_settings.update_scheduler_settings(data.intraday_collect_interval_minutes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
