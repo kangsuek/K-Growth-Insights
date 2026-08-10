@@ -12,10 +12,9 @@ export default function GeneralSettingsPanel() {
 
   // 새로고침 간격 옵션
   const refreshIntervals = [
+    { label: '10초', value: 10000 },
     { label: '30초', value: 30000 },
     { label: '1분', value: 60000 },
-    { label: '5분', value: 300000 },
-    { label: '10분', value: 600000 },
   ]
 
   // 날짜 범위 옵션
@@ -103,7 +102,7 @@ export default function GeneralSettingsPanel() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                 대시보드 데이터를 선택한 주기마다 자동으로 갱신합니다
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {refreshIntervals.map((option) => (
                   <button
                     key={option.value}

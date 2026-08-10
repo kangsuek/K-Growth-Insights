@@ -162,11 +162,11 @@ describe('SettingsContext', () => {
       // 설정 변경
       act(() => {
         result.current.updateSettings('defaultDateRange', '7D')
-        result.current.updateSettings('autoRefresh.interval', 600000)
+        result.current.updateSettings('autoRefresh.interval', 60000)
       })
 
       expect(result.current.settings.defaultDateRange).toBe('7D')
-      expect(result.current.settings.autoRefresh.interval).toBe(600000)
+      expect(result.current.settings.autoRefresh.interval).toBe(60000)
 
       // 초기화
       act(() => {
@@ -207,7 +207,7 @@ describe('SettingsContext', () => {
       })
 
       // 유효한 값들
-      const validIntervals = [30000, 60000, 300000, 600000]
+      const validIntervals = [10000, 30000, 60000]
 
       validIntervals.forEach((interval) => {
         act(() => {

@@ -32,7 +32,7 @@ function validateSettings(settings) {
   if (settings.autoRefresh && typeof settings.autoRefresh === 'object') {
     // enabled는 설정에서 제거했다. 예전 설정에 남아 있어도 걸러내 저장하지 않는다.
     validated.autoRefresh = {
-      interval: [30000, 60000, 300000, 600000].includes(settings.autoRefresh.interval)
+      interval: [10000, 30000, 60000].includes(settings.autoRefresh.interval)
         ? settings.autoRefresh.interval
         : DEFAULT_SETTINGS.autoRefresh.interval,
     }
