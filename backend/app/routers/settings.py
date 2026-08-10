@@ -72,7 +72,8 @@ class ApiKeysUpdate(BaseModel):
 
 
 class SchedulerSettingsUpdate(BaseModel):
-    intraday_collect_interval_minutes: int
+    intraday_collect_interval_minutes: Optional[int] = None
+    collect_interval_minutes: Optional[int] = None
 
 
 # --- 종목 관리 ---------------------------------------------------------------
@@ -184,7 +185,7 @@ def update_api_keys(data: ApiKeysUpdate):
     return api_keys.update_keys(data.model_dump(exclude_unset=True))
 
 
-# --- 스케줄러 설정 (분봉 수집 주기) -------------------------------------------
+# --- 스케줄러 설정 (분봉·데이터 자동 수집 주기) -------------------------------
 
 @router.get("/scheduler")
 def get_scheduler_settings():
@@ -194,6 +195,9 @@ def get_scheduler_settings():
 @router.put("/scheduler")
 def update_scheduler_settings(data: SchedulerSettingsUpdate):
     try:
-        return app_settings.update_scheduler_settings(data.intraday_collect_interval_minutes)
+        return app_settings.update_scheduler_settings(
+            intraday_collect_interval_minutes=data.intraday_collect_interval_minutes,
+            collect_interval_minutes=data.collect_interval_minutes,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

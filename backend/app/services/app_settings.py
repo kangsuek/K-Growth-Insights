@@ -20,6 +20,9 @@ _SETTINGS_PATH = Path(config.APP_DATA_DIR) / "app_settings.json"
 MIN_INTRADAY_MINUTES = 1
 MAX_INTRADAY_MINUTES = 30
 
+MIN_COLLECT_MINUTES = 1
+MAX_COLLECT_MINUTES = 60
+
 
 def _load() -> dict:
     if not _SETTINGS_PATH.exists():
@@ -39,28 +42,59 @@ def _save(data: dict) -> None:
 
 def load_to_runtime() -> None:
     """저장된 설정을 기동 시 config에 반영한다(스케줄러 시작 전에 호출)."""
-    minutes = _load().get("intraday_collect_interval_minutes")
-    if isinstance(minutes, int) and MIN_INTRADAY_MINUTES <= minutes <= MAX_INTRADAY_MINUTES:
-        config.INTRADAY_COLLECT_INTERVAL_MINUTES = minutes
+    data = _load()
+    intraday = data.get("intraday_collect_interval_minutes")
+    if isinstance(intraday, int) and MIN_INTRADAY_MINUTES <= intraday <= MAX_INTRADAY_MINUTES:
+        config.INTRADAY_COLLECT_INTERVAL_MINUTES = intraday
+    collect = data.get("collect_interval_minutes")
+    if isinstance(collect, int) and MIN_COLLECT_MINUTES <= collect <= MAX_COLLECT_MINUTES:
+        config.COLLECT_INTERVAL_MINUTES = collect
 
 
 def get_scheduler_settings() -> dict:
     return {
         "intraday_collect_interval_minutes": config.INTRADAY_COLLECT_INTERVAL_MINUTES,
-        "min_minutes": MIN_INTRADAY_MINUTES,
-        "max_minutes": MAX_INTRADAY_MINUTES,
+        "intraday_min_minutes": MIN_INTRADAY_MINUTES,
+        "intraday_max_minutes": MAX_INTRADAY_MINUTES,
+        "collect_interval_minutes": config.COLLECT_INTERVAL_MINUTES,
+        "collect_min_minutes": MIN_COLLECT_MINUTES,
+        "collect_max_minutes": MAX_COLLECT_MINUTES,
     }
 
 
-def update_scheduler_settings(intraday_collect_interval_minutes: int) -> dict:
-    """분봉 수집 주기를 저장·런타임 반영하고, 실행 중인 스케줄러 잡을 즉시 재등록한다."""
-    if not (MIN_INTRADAY_MINUTES <= intraday_collect_interval_minutes <= MAX_INTRADAY_MINUTES):
+def update_scheduler_settings(
+    intraday_collect_interval_minutes: int | None = None,
+    collect_interval_minutes: int | None = None,
+) -> dict:
+    """스케줄러 주기를 저장·런타임 반영하고, 실행 중인 잡을 즉시 재등록한다.
+
+    제공된 값만 갱신한다(둘 다 줘도 되고, 하나만 줘도 된다).
+    """
+    if intraday_collect_interval_minutes is not None and not (
+        MIN_INTRADAY_MINUTES <= intraday_collect_interval_minutes <= MAX_INTRADAY_MINUTES
+    ):
         raise ValueError(
             f"분봉 수집 주기는 {MIN_INTRADAY_MINUTES}~{MAX_INTRADAY_MINUTES}분 사이여야 합니다"
         )
+    if collect_interval_minutes is not None and not (
+        MIN_COLLECT_MINUTES <= collect_interval_minutes <= MAX_COLLECT_MINUTES
+    ):
+        raise ValueError(
+            f"데이터 자동 수집 주기는 {MIN_COLLECT_MINUTES}~{MAX_COLLECT_MINUTES}분 사이여야 합니다"
+        )
+
     data = _load()
-    data["intraday_collect_interval_minutes"] = intraday_collect_interval_minutes
+    if intraday_collect_interval_minutes is not None:
+        data["intraday_collect_interval_minutes"] = intraday_collect_interval_minutes
+    if collect_interval_minutes is not None:
+        data["collect_interval_minutes"] = collect_interval_minutes
     _save(data)
-    scheduler.update_intraday_interval(intraday_collect_interval_minutes)
-    logger.info("분봉 수집 주기 변경: %d분", intraday_collect_interval_minutes)
+
+    if intraday_collect_interval_minutes is not None:
+        scheduler.update_intraday_interval(intraday_collect_interval_minutes)
+        logger.info("분봉 수집 주기 변경: %d분", intraday_collect_interval_minutes)
+    if collect_interval_minutes is not None:
+        scheduler.update_collect_interval(collect_interval_minutes)
+        logger.info("데이터 자동 수집 주기 변경: %d분", collect_interval_minutes)
+
     return get_scheduler_settings()

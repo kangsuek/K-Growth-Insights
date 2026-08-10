@@ -221,22 +221,28 @@ export const handlers = [
     })
   }),
 
-  // GET /api/settings/scheduler - 분봉 자동 수집 주기 설정
+  // GET /api/settings/scheduler - 분봉·데이터 자동 수집 주기 설정
   http.get(`${BASE_URL}/settings/scheduler`, () => {
     return HttpResponse.json({
       intraday_collect_interval_minutes: 1,
-      min_minutes: 1,
-      max_minutes: 30,
+      intraday_min_minutes: 1,
+      intraday_max_minutes: 30,
+      collect_interval_minutes: 10,
+      collect_min_minutes: 1,
+      collect_max_minutes: 60,
     })
   }),
 
-  // PUT /api/settings/scheduler - 분봉 자동 수집 주기 변경
+  // PUT /api/settings/scheduler - 분봉·데이터 자동 수집 주기 변경
   http.put(`${BASE_URL}/settings/scheduler`, async ({ request }) => {
     const body = await request.json()
     return HttpResponse.json({
-      intraday_collect_interval_minutes: body.intraday_collect_interval_minutes,
-      min_minutes: 1,
-      max_minutes: 30,
+      intraday_collect_interval_minutes: body.intraday_collect_interval_minutes ?? 1,
+      intraday_min_minutes: 1,
+      intraday_max_minutes: 30,
+      collect_interval_minutes: body.collect_interval_minutes ?? 10,
+      collect_min_minutes: 1,
+      collect_max_minutes: 60,
     })
   }),
 

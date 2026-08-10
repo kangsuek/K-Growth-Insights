@@ -213,3 +213,27 @@ def test_update_intraday_interval_without_running_scheduler_updates_config_only(
     assert scheduler._scheduler is None
     scheduler.update_intraday_interval(7)
     assert config.INTRADAY_COLLECT_INTERVAL_MINUTES == 7
+
+
+def test_update_collect_interval_reschedules_running_job(monkeypatch):
+    """실행 중 스케줄러가 있으면 일별 수집 잡을 새 주기로 즉시 재등록해야 한다."""
+    from apscheduler.triggers.interval import IntervalTrigger
+
+    monkeypatch.setattr(config, "SCHEDULER_ENABLED", True)
+    monkeypatch.setattr(config, "COLLECT_INTERVAL_MINUTES", 10)
+    sched = scheduler.start()
+    try:
+        scheduler.update_collect_interval(5)
+        assert config.COLLECT_INTERVAL_MINUTES == 5
+        job = sched.get_job("interval_collect")
+        assert isinstance(job.trigger, IntervalTrigger)
+        assert job.trigger.interval.total_seconds() == 5 * 60
+    finally:
+        scheduler.shutdown()
+
+
+def test_update_collect_interval_without_running_scheduler_updates_config_only(monkeypatch):
+    monkeypatch.setattr(config, "COLLECT_INTERVAL_MINUTES", 10)
+    assert scheduler._scheduler is None
+    scheduler.update_collect_interval(1)
+    assert config.COLLECT_INTERVAL_MINUTES == 1

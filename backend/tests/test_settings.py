@@ -136,6 +136,35 @@ def test_scheduler_settings_update_out_of_range_400(monkeypatch, tmp_path):
     assert r.status_code == 400
 
 
+def test_collect_interval_settings_get_and_update(monkeypatch, tmp_path):
+    from app import config
+    from app.services import app_settings
+
+    monkeypatch.setattr(app_settings, "_SETTINGS_PATH", tmp_path / "app_settings.json")
+    monkeypatch.setattr(config, "COLLECT_INTERVAL_MINUTES", 10)
+
+    body = client.get("/api/settings/scheduler").json()
+    assert body["collect_interval_minutes"] == 10
+
+    r = client.put("/api/settings/scheduler", json={"collect_interval_minutes": 5})
+    assert r.status_code == 200
+    assert r.json()["collect_interval_minutes"] == 5
+    assert config.COLLECT_INTERVAL_MINUTES == 5
+    # 분봉 주기는 함께 보내지 않았으니 그대로 유지된다.
+    assert r.json()["intraday_collect_interval_minutes"] == config.INTRADAY_COLLECT_INTERVAL_MINUTES
+
+    saved = app_settings._load()
+    assert saved["collect_interval_minutes"] == 5
+
+
+def test_collect_interval_settings_update_out_of_range_400(monkeypatch, tmp_path):
+    from app.services import app_settings
+
+    monkeypatch.setattr(app_settings, "_SETTINGS_PATH", tmp_path / "app_settings.json")
+    r = client.put("/api/settings/scheduler", json={"collect_interval_minutes": 999})
+    assert r.status_code == 400
+
+
 def test_update_stock_clears_optional_fields():
     """빈 값(null)으로 수정하면 선택 필드가 실제로 지워져야 한다.
 

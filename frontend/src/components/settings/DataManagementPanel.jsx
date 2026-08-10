@@ -49,7 +49,7 @@ export default function DataManagementPanel() {
   const collectAllPollingRef = useRef(null)
   const tickerCatalogPollingRef = useRef(null)
 
-  // 분봉 자동 수집 주기 조회
+  // 분봉·데이터 자동 수집 주기 조회
   const { data: schedulerSettings } = useQuery({
     queryKey: ['scheduler-settings'],
     queryFn: async () => {
@@ -72,6 +72,23 @@ export default function DataManagementPanel() {
     },
     onError: (error) => {
       toast.error(`분봉 수집 주기 변경 실패: ${error.message}`)
+    },
+  })
+
+  // 데이터 자동 수집 주기(일별 시세·수급·펀더멘털) 변경 Mutation
+  const updateCollectIntervalMutation = useMutation({
+    mutationFn: async (minutes) => {
+      const response = await settingsApi.updateSchedulerSettings({
+        collect_interval_minutes: minutes,
+      })
+      return response.data
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['scheduler-settings'], data)
+      toast.success(`데이터 자동 수집 주기를 ${data.collect_interval_minutes}분으로 변경했습니다`, 3000)
+    },
+    onError: (error) => {
+      toast.error(`데이터 자동 수집 주기 변경 실패: ${error.message}`)
     },
   })
 
@@ -499,6 +516,34 @@ export default function DataManagementPanel() {
                 aria-label="분봉 자동 수집 주기 선택"
               >
                 {[1, 2, 3, 5, 10, 15, 30].map((m) => (
+                  <option key={m} value={m}>{m}분마다</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 데이터 자동 수집 주기 */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">데이터 자동 수집 주기</h4>
+                {schedulerSettings ? (
+                  <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                    현재 {schedulerSettings.collect_interval_minutes}분마다
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">로딩 중...</span>
+                )}
+              </div>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                장중(평일 09:00~15:40)에 추적 종목의 일별 시세·매매동향·펀더멘털을 이 주기로 자동 재수집합니다. 짧을수록 화면이 더 자주 갱신되지만 네이버 API 호출이 늘어납니다.
+              </p>
+              <select
+                value={schedulerSettings?.collect_interval_minutes ?? ''}
+                onChange={(e) => updateCollectIntervalMutation.mutate(Number(e.target.value))}
+                disabled={!schedulerSettings || updateCollectIntervalMutation.isPending}
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+                aria-label="데이터 자동 수집 주기 선택"
+              >
+                {[1, 5, 10].map((m) => (
                   <option key={m} value={m}>{m}분마다</option>
                 ))}
               </select>
