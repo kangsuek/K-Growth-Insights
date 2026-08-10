@@ -16,6 +16,14 @@ FOREIGN_NET_AVG_VOLUME_WINDOW = 20
 FOREIGN_NET_SUSTAINED_VOLUME_RATIO = 0.05
 FOREIGN_NET_SUSTAINED_FALLBACK_THRESHOLD = 1000
 RISK_KEYWORDS = ["규제", "관세", "금리", "환율", "경기", "리스크"]
+RISK_KEYWORD_MESSAGES = {
+    "규제": "규제 리스크: 정부 규제 강화 가능성",
+    "관세": "관세 리스크: 무역 분쟁 확대 우려",
+    "금리": "금리 리스크: 금리 변동성 확대",
+    "환율": "환율 리스크: 원/달러 환율 변동성 확대",
+    "경기": "경기 리스크: 경기 둔화·침체 우려",
+    "리스크": "리스크 신호: 관련 뉴스에 위험 요인 언급 증가",
+}
 
 
 # --- 지표(수익률·변동성) -----------------------------------------------------
@@ -139,14 +147,7 @@ def _analyze_risks(returns, volatility, news) -> list[str]:
     titles = [n.get("title", "") for n in news]
     for keyword in RISK_KEYWORDS:
         if any(keyword in t for t in titles):
-            if keyword == "규제":
-                risks.append("규제 리스크: 정부 규제 강화 가능성")
-            elif keyword == "관세":
-                risks.append("관세 리스크: 무역 분쟁 확대 우려")
-            elif keyword == "금리":
-                risks.append("금리 리스크: 금리 변동성 확대")
-            elif keyword == "환율":
-                risks.append("환율 리스크: 원/달러 환율 변동성 확대")
+            risks.append(RISK_KEYWORD_MESSAGES[keyword])
             break
     if not risks:
         risks.append("시장 전반의 변동성 리스크 존재")

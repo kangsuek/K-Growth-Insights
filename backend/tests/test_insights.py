@@ -236,3 +236,24 @@ def test_max_drawdown_measures_peak_to_trough():
     assert metrics.max_drawdown([100, 120, 60, 90]) == -50.0   # 120 → 60
     assert metrics.max_drawdown([100, 110, 120]) == 0.0
     assert metrics.max_drawdown([100]) is None
+
+
+# --- 리스크 키워드 -------------------------------------------------------------
+
+def test_analyze_risks_covers_every_declared_keyword():
+    """RISK_KEYWORDS에 선언된 키워드는 모두 고유한 리스크 문구를 내야 한다.
+
+    이전에는 '경기'·'리스크' 키워드가 매칭돼도 대응하는 분기가 없어 아무 문구도
+    추가되지 않고 break로 빠져나가, 뉴스에 실제 신호가 있어도 버려졌다.
+    """
+    returns = {"1m": 0}
+    for keyword in insights.RISK_KEYWORDS:
+        news = [{"title": f"{keyword} 관련 뉴스입니다"}]
+        risks = insights._analyze_risks(returns, volatility=None, news=news)
+        assert insights.RISK_KEYWORD_MESSAGES[keyword] in risks
+
+
+def test_analyze_risks_falls_back_when_no_keyword_matches():
+    returns = {"1m": 0}
+    risks = insights._analyze_risks(returns, volatility=None, news=[{"title": "무관한 뉴스"}])
+    assert risks == ["시장 전반의 변동성 리스크 존재"]
