@@ -1,15 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { dataApi } from '../../services/api'
+import { useSettings } from '../../contexts/SettingsContext'
 
 export default function Footer() {
-  // 스케줄러 상태 조회 (마지막 수집 시각)
+  const { settings } = useSettings()
+
+  // 스케줄러 상태 조회 (마지막 수집 시각). 대시보드가 떠 있지 않은 페이지에서도
+  // 보이므로, 설정한 자동 새로고침 간격으로 직접 폴링한다.
   const { data: schedulerStatus } = useQuery({
     queryKey: ['scheduler-status'],
     queryFn: async () => {
       const response = await dataApi.getSchedulerStatus()
       return response.data.scheduler
     },
-    refetchInterval: 30000, // 30초마다 스케줄러 상태 갱신
+    refetchInterval: settings.autoRefresh.interval,
     retry: 1,
   })
 

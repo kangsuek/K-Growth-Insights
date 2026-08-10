@@ -236,7 +236,7 @@ export default function ETFDetail() {
     staleTime: isMarketHours ? 10 * 1000 : CACHE_STALE_TIME_FAST, // 장중: 10초, 장외: 30초
     refetchInterval: (query) => {
       if (query.state.data?.background_collect_started) return 3000   // 수집 중: 3초 (장중/장외 무관)
-      if (isMarketHours) return 20 * 1000                             // 장중: 20초
+      if (isMarketHours) return settings.autoRefresh.interval          // 장중: 설정한 자동 새로고침 간격
       return false                                                     // 장외: 자동 갱신 끔
     },
     refetchOnMount: true,

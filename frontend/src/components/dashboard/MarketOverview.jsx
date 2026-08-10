@@ -57,6 +57,8 @@ const IndexCard = ({ index, onClick }) => {
 export default function MarketOverview() {
   const [selectedIndex, setSelectedIndex] = useState(null)
 
+  // 'market-overview'는 Dashboard의 자동 갱신 루프(AUTO_REFRESH_QUERY_KEYS)가 설정한
+  // 간격마다 다시 읽어준다(별도 refetchInterval 불필요).
   const { data, isLoading, isError } = useQuery({
     queryKey: ['market-overview'],
     queryFn: async () => {
@@ -64,7 +66,6 @@ export default function MarketOverview() {
       return response.data
     },
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
     retry: 1,
   })
 

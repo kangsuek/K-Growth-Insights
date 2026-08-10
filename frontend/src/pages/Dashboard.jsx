@@ -135,14 +135,14 @@ export default function Dashboard() {
     },
   })
 
-  // 스케줄러 상태 조회 (마지막 수집 시각)
+  // 스케줄러 상태 조회 (마지막 수집 시각). 'scheduler-status'는 AUTO_REFRESH_QUERY_KEYS에
+  // 포함돼 아래 자동 갱신 루프가 설정한 간격마다 다시 읽어준다(별도 refetchInterval 불필요).
   const { data: schedulerStatus } = useQuery({
     queryKey: ['scheduler-status'],
     queryFn: async () => {
       const response = await dataApi.getSchedulerStatus()
       return response.data.scheduler
     },
-    refetchInterval: 30000, // 30초마다 스케줄러 상태 갱신
     retry: 1,
     staleTime: CACHE_STALE_TIME_STATUS, // 10초 (상태 정보)
   })
