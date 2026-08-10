@@ -14,7 +14,6 @@ class CollectResult(BaseModel):
     ticker: str
     prices: int = 0
     trading_flow: int = 0
-    intraday: int = 0
     fundamentals: int = 0  # 주식/ETF 펀더멘털 스냅샷(0 또는 1)
     holdings: int = 0  # ETF 구성종목 행 수
     news: int = 0  # 수집한 뉴스 건수

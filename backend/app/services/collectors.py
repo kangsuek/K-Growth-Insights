@@ -242,12 +242,16 @@ def collect_stock(ticker: str, days: int | None = None) -> CollectResult:
     """Collect all datasets for a single ticker (STOCK/ETF에 따라 펀더멘털 분기).
 
     days가 주어지면 그 일수만큼 일별 시세를 수집한다(원본 collect-all과 동일).
+
+    분봉은 여기서 수집하지 않는다. scheduler의 전용 intraday_collect 잡(기본 1분
+    주기)만 분봉을 수집한다 — 이 함수가 쓰이는 interval_collect(10분)·
+    daily_close_collect(15:40)에서도 같이 수집하면 같은 분봉을 여러 잡이 중복
+    호출해 네이버 API를 불필요하게 낭비한다.
     """
     result = CollectResult(ticker=ticker)
     try:
         result.prices = collect_prices(ticker, days=days)
         result.trading_flow = collect_trading_flow(ticker, days=days)
-        result.intraday = collect_intraday(ticker)
 
         # 이미 동기화된 stocks.type으로 주식/ETF 펀더멘털을 분기 수집한다.
         stock = repository.get_stock(ticker)

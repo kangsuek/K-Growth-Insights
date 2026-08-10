@@ -132,3 +132,24 @@ def test_collect_prices_empty_returns_zero():
         return_value=httpx.Response(200, json=[])
     )
     assert collectors.collect_prices("005930") == 0
+
+
+def test_collect_stock_does_not_collect_intraday(monkeypatch):
+    """분봉은 scheduler의 전용 intraday_collect 잡만 수집한다.
+
+    collect_stock은 interval_collect(10분)·daily_close_collect(15:40)에서도
+    쓰이므로, 여기서 분봉까지 같이 수집하면 같은 분봉을 여러 잡이 중복
+    호출해 네이버 API를 낭비한다.
+    """
+    seed_stock("005930", "삼성전자", "STOCK")
+    monkeypatch.setattr(collectors, "collect_prices", lambda *a, **k: 0)
+    monkeypatch.setattr(collectors, "collect_trading_flow", lambda *a, **k: 0)
+    monkeypatch.setattr(collectors, "collect_stock_fundamentals", lambda *a, **k: 0)
+    monkeypatch.setattr(collectors, "collect_news", lambda *a, **k: 0)
+
+    called = {"n": 0}
+    monkeypatch.setattr(
+        collectors, "collect_intraday", lambda *a, **k: called.__setitem__("n", called["n"] + 1)
+    )
+    collectors.collect_stock("005930")
+    assert called["n"] == 0

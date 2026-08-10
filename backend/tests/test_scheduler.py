@@ -113,6 +113,41 @@ def test_intraday_interval_job_runs_during_market_hours(monkeypatch):
     assert called["n"] == 1
 
 
+def _freeze_now(monkeypatch, fixed):
+    """scheduler.datetime.now(KST)가 fixed를 반환하도록 고정한다."""
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed
+
+    monkeypatch.setattr(scheduler, "datetime", _FixedDatetime)
+
+
+def test_intraday_interval_job_still_collects_at_close_second_10(monkeypatch):
+    """CronTrigger는 매 분 10초에 실행된다. 장 마감 정각(15:40)에도 실제 실행
+    시각은 15:40:10이라, 초 단위를 자르지 않고 is_market_hours()에 그대로
+    넘기면 15:40:00보다 늦어 마지막 15:40 분봉을 놓친다.
+    """
+    _freeze_now(monkeypatch, datetime(2026, 7, 22, 15, 40, 10, tzinfo=KST))  # 수요일
+    called = {"n": 0}
+    monkeypatch.setattr(
+        scheduler, "run_collect_intraday_all", lambda reason: called.__setitem__("n", called["n"] + 1)
+    )
+    scheduler._intraday_interval_job()
+    assert called["n"] == 1
+
+
+def test_intraday_interval_job_stops_right_after_close(monkeypatch):
+    """15:41(장 마감 다음 분)부터는 실행되지 않는다."""
+    _freeze_now(monkeypatch, datetime(2026, 7, 22, 15, 41, 10, tzinfo=KST))
+    called = {"n": 0}
+    monkeypatch.setattr(
+        scheduler, "run_collect_intraday_all", lambda reason: called.__setitem__("n", called["n"] + 1)
+    )
+    scheduler._intraday_interval_job()
+    assert called["n"] == 0
+
+
 # --- 기동/정리 ---------------------------------------------------------------
 
 def test_start_disabled_returns_none(monkeypatch):

@@ -1,10 +1,12 @@
 """APScheduler 기반 자동 수집 스케줄러.
 
 - 정기 수집: 장중(평일 09:00~15:40 KST)에 N분마다 전체 종목의 일별 시세·수급·펀더멘털 수집
-- 분봉 수집: 평일 09:00:10부터 별도 주기(기본 1분)로 분봉만 수집
-  (분봉은 일별 데이터보다 훨씬 자주 바뀌므로 COLLECT_INTERVAL_MINUTES와 분리하며,
-  서버 기동 시각이 아니라 CronTrigger로 정각+10초에 정렬한다)
-- 마감 수집: 평일 15:40 KST 종가 확정 시점 전체 수집
+  (분봉은 여기서 수집하지 않는다 — collectors.collect_stock이 분봉을 호출하지 않으므로)
+- 분봉 수집: 평일 09:00:10~15:40 KST, 별도 주기(기본 1분)로 분봉만 수집하는
+  intraday_collect 잡이 전담한다. 다른 잡과 중복 수집하지 않는다(분봉은 일별
+  데이터보다 훨씬 자주 바뀌므로 COLLECT_INTERVAL_MINUTES와 분리하며, 서버 기동
+  시각이 아니라 CronTrigger로 정각+10초에 정렬한다)
+- 마감 수집: 평일 15:40 KST 종가 확정 시점 전체 수집(분봉 제외)
 
 collectors가 동기(httpx.Client)이므로 이벤트 루프를 막지 않도록 스레드 기반
 BackgroundScheduler를 사용한다. 서버 lifespan에서 start/shutdown 한다.
@@ -12,6 +14,7 @@ BackgroundScheduler를 사용한다. 서버 lifespan에서 start/shutdown 한다
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -62,7 +65,11 @@ def _interval_job() -> None:
 
 
 def _intraday_interval_job() -> None:
-    if not is_market_hours():
+    # CronTrigger가 매 분 10초에 실행되므로, is_market_hours()에 그대로 넘기면
+    # 장 마감 정각(15:40:00)과 10초 차이로 마지막 15:40 분봉이 걸러진다. 초 단위를
+    # 잘라 비교해 15:40 분봉까지는 수집되고, 15:41부터는 멈추게 한다.
+    now = datetime.now(KST).replace(second=0, microsecond=0)
+    if not is_market_hours(now):
         return
     run_collect_intraday_all("intraday-interval")
 
