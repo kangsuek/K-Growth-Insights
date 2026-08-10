@@ -477,11 +477,20 @@ export default function DataManagementPanel() {
 
           <div className="space-y-6">
             {/* 분봉 자동 수집 주기 */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">분봉 자동 수집 주기</h4>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                장중 분봉 재수집 간격
-              </label>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">분봉 자동 수집 주기</h4>
+                {schedulerSettings ? (
+                  <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                    현재 {schedulerSettings.intraday_collect_interval_minutes}분마다
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">로딩 중...</span>
+                )}
+              </div>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                장중(평일 09:00~15:40)에 추적 종목의 분봉을 이 주기로 자동 재수집합니다. 짧을수록 화면이 더 자주 갱신되지만 네이버 API 호출이 늘어납니다.
+              </p>
               <select
                 value={schedulerSettings?.intraday_collect_interval_minutes ?? ''}
                 onChange={(e) => updateSchedulerSettingsMutation.mutate(Number(e.target.value))}
@@ -493,9 +502,6 @@ export default function DataManagementPanel() {
                   <option key={m} value={m}>{m}분마다</option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                장중(평일 09:00~15:40)에 추적 종목의 분봉을 이 주기로 자동 재수집합니다. 짧을수록 화면이 더 자주 갱신되지만 네이버 API 호출이 늘어납니다.
-              </p>
             </div>
 
             {/* 종목 목록 수집 */}
@@ -565,66 +571,78 @@ export default function DataManagementPanel() {
             </div>
 
             {/* 가격/뉴스 데이터 수집 */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">가격/뉴스 데이터 수집</h4>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">가격/뉴스 데이터 수집</h4>
+                {stats && 'prices' in stats && stats.prices != null ? (
+                  <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                    현재 {formatNumber(stats.prices)}건
+                  </span>
+                ) : statsLoading ? (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">로딩 중...</span>
+                ) : null}
+              </div>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                모든 종목의 가격, 매매 동향, 뉴스 데이터를 수집합니다.
+              </p>
 
               {/* 수집 일수 선택 */}
               <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                수집 기간 (일)
-              </label>
-              <select
-                value={collectionDays}
-                onChange={(e) => setCollectionDays(Number(e.target.value))}
-                className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  수집 기간 (일)
+                </label>
+                <select
+                  value={collectionDays}
+                  onChange={(e) => setCollectionDays(Number(e.target.value))}
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  disabled={collectMutation.isPending}
+                >
+                  <option value={1}>1일 (당일)</option>
+                  <option value={7}>7일 (1주)</option>
+                  <option value={10}>10일</option>
+                  <option value={30}>30일 (1개월)</option>
+                  <option value={90}>90일 (3개월)</option>
+                  <option value={180}>180일 (6개월)</option>
+                  <option value={365}>365일 (1년)</option>
+                </select>
+              </div>
+
+              {/* 전체 데이터 수집 버튼 */}
+              <button
+                onClick={handleCollectAll}
                 disabled={collectMutation.isPending}
+                className="w-full sm:w-auto px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base font-medium"
               >
-                <option value={1}>1일 (당일)</option>
-                <option value={7}>7일 (1주)</option>
-                <option value={10}>10일</option>
-                <option value={30}>30일 (1개월)</option>
-                <option value={90}>90일 (3개월)</option>
-                <option value={180}>180일 (6개월)</option>
-                <option value={365}>365일 (1년)</option>
-              </select>
-            </div>
+                {collectMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>데이터 수집 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>전체 데이터 수집</span>
+                  </>
+                )}
+              </button>
 
-            {/* 전체 데이터 수집 버튼 */}
-            <button
-              onClick={handleCollectAll}
-              disabled={collectMutation.isPending}
-              className="w-full sm:w-auto px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base font-medium"
-            >
-              {collectMutation.isPending ? (
-                <>
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>데이터 수집 중...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  <span>전체 데이터 수집</span>
-                </>
+              {/* 전체 데이터 수집 진행률 */}
+              {collectMutation.isPending && collectAllProgress && collectAllProgress.status === 'in_progress' && (
+                <ProgressBar
+                  current={collectAllProgress.current || 0}
+                  total={collectAllProgress.total || 1}
+                  message={collectAllProgress.message || '수집 중...'}
+                />
               )}
-            </button>
 
-            {/* 전체 데이터 수집 진행률 */}
-            {collectMutation.isPending && collectAllProgress && collectAllProgress.status === 'in_progress' && (
-              <ProgressBar
-                current={collectAllProgress.current || 0}
-                total={collectAllProgress.total || 1}
-                message={collectAllProgress.message || '수집 중...'}
-              />
-            )}
-
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              모든 종목의 가격, 매매 동향 데이터를 수집합니다. 소요 시간: {formatCollectionDuration(collectionDays * 6)}
-            </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                소요 시간: {formatCollectionDuration(collectionDays * 6)}
+              </p>
             </div>
           </div>
         </section>
