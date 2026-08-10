@@ -73,6 +73,46 @@ def test_interval_job_runs_during_market_hours(monkeypatch):
     assert called["n"] == 1
 
 
+# --- 분봉 전용 수집 -----------------------------------------------------------
+
+def test_run_collect_intraday_all_counts_success(monkeypatch):
+    seed_stock("005930", "삼성전자", "STOCK")
+    seed_stock("000660", "SK하이닉스", "STOCK")
+
+    calls = []
+
+    def fake_collect_intraday(ticker):
+        calls.append(ticker)
+        if ticker == "000660":
+            raise RuntimeError("boom")
+        return 1
+
+    monkeypatch.setattr(scheduler.collectors, "collect_intraday", fake_collect_intraday)
+    summary = scheduler.run_collect_intraday_all("test")
+    assert summary == {"total": 2, "succeeded": 1}
+    assert set(calls) == {"005930", "000660"}
+
+
+def test_intraday_interval_job_skips_outside_market_hours(monkeypatch):
+    called = {"n": 0}
+    monkeypatch.setattr(scheduler, "is_market_hours", lambda now=None: False)
+    monkeypatch.setattr(
+        scheduler, "run_collect_intraday_all", lambda reason: called.__setitem__("n", called["n"] + 1)
+    )
+    scheduler._intraday_interval_job()
+    assert called["n"] == 0
+
+
+def test_intraday_interval_job_runs_during_market_hours(monkeypatch):
+    called = {"n": 0}
+    monkeypatch.setattr(scheduler, "is_market_hours", lambda now=None: True)
+    monkeypatch.setattr(
+        scheduler, "run_collect_intraday_all", lambda reason: called.__setitem__("n", called["n"] + 1)
+    )
+    scheduler._intraday_interval_job()
+    assert called["n"] == 1
+
+
 # --- 기동/정리 ---------------------------------------------------------------
 
 def test_start_disabled_returns_none(monkeypatch):
@@ -87,7 +127,31 @@ def test_start_registers_jobs_and_shutdown(monkeypatch):
     try:
         assert sched is not None
         job_ids = {j.id for j in sched.get_jobs()}
-        assert job_ids == {"interval_collect", "daily_close_collect"}
+        assert job_ids == {"interval_collect", "intraday_collect", "daily_close_collect"}
     finally:
         scheduler.shutdown()
     assert scheduler._scheduler is None
+
+
+def test_intraday_job_uses_cron_trigger_aligned_to_clock(monkeypatch):
+    """서버 기동 시각이 아니라 정각+10초(09:00:10 등) 기준으로 정렬돼야 한다."""
+    from apscheduler.triggers.cron import CronTrigger
+
+    monkeypatch.setattr(config, "SCHEDULER_ENABLED", True)
+    monkeypatch.setattr(config, "INTRADAY_COLLECT_INTERVAL_MINUTES", 1)
+    sched = scheduler.start()
+    try:
+        job = sched.get_job("intraday_collect")
+        assert isinstance(job.trigger, CronTrigger)
+
+        # 서버가 09:07:23에 떴다고 가정해도 다음 실행은 09:08:10처럼 정각+10초에 걸려야 한다.
+        now = datetime(2026, 8, 10, 9, 7, 23, tzinfo=KST)
+        next_run = job.trigger.get_next_fire_time(None, now)
+        assert next_run.second == 10 and next_run.microsecond == 0
+
+        # 장 시작 직전(08:59:50)이면 첫 실행은 09:00:10이어야 한다.
+        before_open = datetime(2026, 8, 10, 8, 59, 50, tzinfo=KST)
+        first_run = job.trigger.get_next_fire_time(None, before_open)
+        assert first_run == datetime(2026, 8, 10, 9, 0, 10, tzinfo=KST)
+    finally:
+        scheduler.shutdown()
