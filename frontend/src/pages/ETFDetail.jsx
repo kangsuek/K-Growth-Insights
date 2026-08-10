@@ -223,12 +223,13 @@ export default function ETFDetail() {
     { data: fundamentalsData },
   ] = queries
 
-  // 장중 여부 판단 (09:00~15:30, 평일) - 분봉 자동 갱신 주기에 사용
+  // 장중 여부 판단 (09:00~15:40, 평일) - 분봉 자동 갱신 주기에 사용.
+  // 백엔드 장 마감 기준(timeutil.MARKET_CLOSE=15:40)과 맞춘다.
   const [isMarketHours, setIsMarketHours] = useState(() => {
     const now = new Date()
     const day = now.getDay()
     const timeInMinutes = now.getHours() * 60 + now.getMinutes()
-    return day >= 1 && day <= 5 && timeInMinutes >= 540 && timeInMinutes <= 930
+    return day >= 1 && day <= 5 && timeInMinutes >= 540 && timeInMinutes <= 940
   })
 
   useEffect(() => {
@@ -236,7 +237,7 @@ export default function ETFDetail() {
       const now = new Date()
       const day = now.getDay()
       const timeInMinutes = now.getHours() * 60 + now.getMinutes()
-      setIsMarketHours(day >= 1 && day <= 5 && timeInMinutes >= 540 && timeInMinutes <= 930)
+      setIsMarketHours(day >= 1 && day <= 5 && timeInMinutes >= 540 && timeInMinutes <= 940)
     }
     const interval = setInterval(checkMarketHours, 60_000) // 1분마다 재확인
     return () => clearInterval(interval)
