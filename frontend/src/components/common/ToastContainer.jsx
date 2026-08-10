@@ -1,8 +1,8 @@
-import { useToast } from '../../contexts/ToastContext'
+import { useToastState } from '../../contexts/ToastContext'
 import Toast from './Toast'
 
 const ToastContainer = () => {
-  const { toasts } = useToast()
+  const { toasts } = useToastState()
 
   if (toasts.length === 0) return null
 

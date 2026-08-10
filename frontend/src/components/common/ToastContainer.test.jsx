@@ -11,13 +11,13 @@ vi.mock('./Toast', () => ({
   )
 }))
 
-// Mock useToast
+// Mock useToastState
 const mockToasts = []
 vi.mock('../../contexts/ToastContext', async () => {
   const actual = await vi.importActual('../../contexts/ToastContext')
   return {
     ...actual,
-    useToast: () => ({
+    useToastState: () => ({
       toasts: mockToasts
     })
   }
