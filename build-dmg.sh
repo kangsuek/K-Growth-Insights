@@ -93,6 +93,22 @@ if [ "$RUN_TESTS" -eq 1 ]; then
   (cd "$ROOT/frontend" && npx vitest run --silent)
 fi
 
+# ── 2.5. 웹 앱 DB를 최초 실행 시드로 준비 ─────────────────────────────────
+# desktop/seed/kgrowth.db가 있으면 첫 실행 시 electron이 그대로 사용자 DB로
+# 복사한다(main.js setupBackendWorkspace, 기존 설치 데이터가 있으면 건드리지 않음).
+# 웹 앱 DB(backend/data/kgrowth.db)가 없으면(최초 체크아웃 등) 조용히 건너뛴다 —
+# electron-builder.yml의 seed 매핑은 디렉터리 기반이라 파일이 없어도 빌드가 깨지지 않는다.
+echo "▶ 웹 앱 DB를 최초 실행 시드로 준비"
+mkdir -p "$DESKTOP/seed"
+rm -f "$DESKTOP/seed/kgrowth.db"
+WEBAPP_DB="$ROOT/backend/data/kgrowth.db"
+if [ -f "$WEBAPP_DB" ]; then
+  cp "$WEBAPP_DB" "$DESKTOP/seed/kgrowth.db"
+  echo "  ✔ $(du -h "$WEBAPP_DB" | cut -f1 | tr -d ' ') 시드 DB 준비 완료"
+else
+  echo "  ⚠ backend/data/kgrowth.db가 없어 시드 없이 빌드합니다(최초 실행 시 빈 DB로 시작)."
+fi
+
 # ── 3. 아이콘 + 프론트엔드 빌드 ───────────────────────────────────────────
 # 프론트엔드 dist는 dmg에 그대로 실려 간다(electron-builder.yml extraResources).
 # 소스만 고치고 빌드를 빼먹으면 옛 화면이 담긴 dmg가 나오므로 항상 새로 빌드한다.

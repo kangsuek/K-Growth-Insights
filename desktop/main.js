@@ -318,6 +318,16 @@ async function setupBackendWorkspace(uvPath) {
     log('INFO', 'Copied stocks.json to user config directory');
   }
 
+  // kgrowth.db 시드 복사 (사용자 DB가 아직 없을 때만 — 기존 설치 데이터는 건드리지 않음).
+  // build-dmg.sh가 빌드 시점의 웹 앱 DB를 resources/seed/kgrowth.db로 담아 두면,
+  // 최초 실행 시 빈 DB 대신 그 데이터로 시작한다(desktop/electron-builder.yml seed 매핑).
+  const seedDb = path.join(process.resourcesPath, 'seed', 'kgrowth.db');
+  const userDb = path.join(dataDir, 'kgrowth.db');
+  if (!fs.existsSync(userDb) && fs.existsSync(seedDb)) {
+    fs.copyFileSync(seedDb, userDb);
+    log('INFO', 'Seeded kgrowth.db from bundled web app data');
+  }
+
   // 구버전 마이그레이션: 예전 빌드는 경로 환경변수 이름이 어긋나 DB·API 키를
   // .app 번들 안(Resources/backend/data/)에 썼다. 아직 남아 있으면 userData로 옮긴다.
   for (const name of ['kgrowth.db', 'api_keys.json']) {
