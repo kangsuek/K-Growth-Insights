@@ -79,6 +79,7 @@ export default function Screening() {
   const pollingRef = useRef(null)
   const startingRef = useRef(false) // collectData() 요청이 아직 서버에 반영되기 전 구간
   const requestingRef = useRef(false) // collectData() 요청 in-flight (중복 클릭 방지)
+  const autoTriggeredRef = useRef(false) // 진입 시 자동 수집은 마운트당 1회만
 
   // 히트맵 모드에서는 50개씩, 테이블은 기존 page_size
   const effectivePageSize = viewMode === 'heatmap' ? 50 : filters.page_size
@@ -197,6 +198,16 @@ export default function Screening() {
     return () => clearInterval(id)
   }, [isCollecting])
 
+  // 종목 발굴 메뉴 진입 시 데이터를 자동으로 수집한다. 이미 최신이면 서버가
+  // 즉시 fresh를 반환하므로(스캐너 collect-data는 자체 최신성 가드가 있다)
+  // 매번 21분짜리 전체 재수집이 도는 게 아니라, 실제로 오래됐을 때만 돈다.
+  useEffect(() => {
+    if (autoTriggeredRef.current) return
+    autoTriggeredRef.current = true
+    handleCollectData(false, { silent: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleFilterChange = useCallback((partial) => {
     setFilters((prev) => ({ ...prev, ...partial, page: partial.page ?? 1 }))
   }, [])
@@ -223,14 +234,15 @@ export default function Screening() {
     setFilters({ ...DEFAULT_FILTERS, sector, market: 'ALL' })
   }, [])
 
-  const handleCollectData = async (force = false) => {
+  const handleCollectData = async (force = false, { silent = false } = {}) => {
     if (isCollecting || requestingRef.current) return
     requestingRef.current = true
     try {
       const res = await scannerApi.collectData(force)
       // 이미 최신: 진행률 배너 없이 재수집 여부 확인창만 표시
+      // (자동 진입 트리거는 최신이면 사용자에게 물어보지 않고 조용히 넘어간다)
       if (res.data?.status === 'fresh') {
-        setFreshInfo({ lastUpdated: res.data.last_updated })
+        if (!silent) setFreshInfo({ lastUpdated: res.data.last_updated })
         return
       }
       // started / already_running: 진행률 배너 + 폴링 시작
