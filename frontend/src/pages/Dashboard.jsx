@@ -57,7 +57,7 @@ export async function collectAndRefreshDashboard(queryClient, toast) {
       toast.warning(`${total}개 중 ${failed}개 종목 수집 실패, 나머지는 갱신했습니다`, 4000)
       return false
     }
-    toast.success('데이터가 갱신되었습니다', 2000)
+    toast.info('데이터가 수집되었습니다', 2000)
     return true
   } catch (error) {
     console.error('Refresh failed:', error)
@@ -77,6 +77,9 @@ export async function collectAndRefreshDashboard(queryClient, toast) {
  * @returns {Promise<boolean>} 성공 여부
  */
 export async function autoRefreshDashboard(queryClient, toast) {
+  // 백엔드 스케줄러가 실제로 새 수집을 끝냈는지는 scheduler-status의
+  // last_collection_time이 바뀌었는지로 판단한다(재조회 전 값과 비교).
+  const prevCollectedAt = queryClient.getQueryData(['scheduler-status'])?.last_collection_time
   try {
     // throwOnError 없이는 refetchQueries가 실패를 삼켜(promise.catch(noop))
     // catch로 오지 않는다. 실패 알림을 띄우려면 반드시 켜야 한다.
@@ -86,6 +89,13 @@ export async function autoRefreshDashboard(queryClient, toast) {
     }
     // 주기마다 반복되므로 성공 알림은 짧게 띄운다.
     toast.success('데이터가 새로고침 되었습니다.', AUTO_REFRESH_TOAST_MS)
+
+    // 스케줄러의 자동 수집이 이번 주기 사이에 끝났으면 별도로 알린다
+    // (새로고침 알림과 달리, 실제로 새 데이터가 수집됐을 때만 뜬다).
+    const newCollectedAt = queryClient.getQueryData(['scheduler-status'])?.last_collection_time
+    if (prevCollectedAt && newCollectedAt && newCollectedAt !== prevCollectedAt) {
+      toast.info('데이터가 수집되었습니다', AUTO_REFRESH_TOAST_MS)
+    }
     return true
   } catch (error) {
     console.error('Auto refetch failed:', error)

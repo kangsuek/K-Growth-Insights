@@ -199,8 +199,15 @@ describe('Dashboard', () => {
       success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(),
     })
 
+    // getQueryData는 scheduler-status의 last_collection_time을 반환한다.
+    // collectedAt을 매번 같은 값으로 두면(기본 동작) '수집됨' 알림은 안 뜬다.
+    const makeQueryClient = ({ refetch = vi.fn().mockResolvedValue(undefined), collectedAt = '2026-08-11T09:00:05+09:00' } = {}) => ({
+      refetchQueries: refetch,
+      getQueryData: vi.fn().mockReturnValue({ last_collection_time: collectedAt }),
+    })
+
     it('성공하면 성공 알림을 띄운다', async () => {
-      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined) }
+      const queryClient = makeQueryClient()
       const toast = makeToast()
 
       const ok = await autoRefreshDashboard(queryClient, toast)
@@ -211,9 +218,7 @@ describe('Dashboard', () => {
     })
 
     it('실패하면 사유와 함께 실패 알림을 띄운다', async () => {
-      const queryClient = {
-        refetchQueries: vi.fn().mockRejectedValue(new Error('Network Error')),
-      }
+      const queryClient = makeQueryClient({ refetch: vi.fn().mockRejectedValue(new Error('Network Error')) })
       const toast = makeToast()
 
       const ok = await autoRefreshDashboard(queryClient, toast)
@@ -225,15 +230,15 @@ describe('Dashboard', () => {
 
     it('실패 알림을 성공 알림보다 오래 띄운다', async () => {
       const okToast = makeToast()
-      await autoRefreshDashboard({ refetchQueries: vi.fn().mockResolvedValue(undefined) }, okToast)
+      await autoRefreshDashboard(makeQueryClient(), okToast)
       const failToast = makeToast()
-      await autoRefreshDashboard({ refetchQueries: vi.fn().mockRejectedValue(new Error('x')) }, failToast)
+      await autoRefreshDashboard(makeQueryClient({ refetch: vi.fn().mockRejectedValue(new Error('x')) }), failToast)
 
       expect(failToast.error.mock.calls[0][1]).toBeGreaterThan(okToast.success.mock.calls[0][1])
     })
 
     it('refetchQueries에 throwOnError를 켠다 (없으면 실패가 삼켜진다)', async () => {
-      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined) }
+      const queryClient = makeQueryClient()
 
       await autoRefreshDashboard(queryClient, makeToast())
 
@@ -244,12 +249,34 @@ describe('Dashboard', () => {
     })
 
     it('네 개 쿼리를 모두 다시 읽는다', async () => {
-      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined) }
+      const queryClient = makeQueryClient()
 
       await autoRefreshDashboard(queryClient, makeToast())
 
       expect(queryClient.refetchQueries.mock.calls.map((c) => c[0].queryKey[0]))
         .toEqual(AUTO_REFRESH_QUERY_KEYS)
+    })
+
+    it('스케줄러의 마지막 수집 시각이 바뀌면 수집 완료 알림을 별도로 띄운다', async () => {
+      const queryClient = { refetchQueries: vi.fn().mockResolvedValue(undefined), getQueryData: vi.fn() }
+      // 재조회 전(구값) → 재조회 후(신값)로 바뀌도록 순서대로 반환
+      queryClient.getQueryData
+        .mockReturnValueOnce({ last_collection_time: '2026-08-11T09:00:05+09:00' })
+        .mockReturnValueOnce({ last_collection_time: '2026-08-11T09:01:05+09:00' })
+      const toast = makeToast()
+
+      await autoRefreshDashboard(queryClient, toast)
+
+      expect(toast.info).toHaveBeenCalledWith('데이터가 수집되었습니다', expect.any(Number))
+    })
+
+    it('마지막 수집 시각이 그대로면 수집 완료 알림을 띄우지 않는다', async () => {
+      const queryClient = makeQueryClient() // 항상 같은 collectedAt 반환
+      const toast = makeToast()
+
+      await autoRefreshDashboard(queryClient, toast)
+
+      expect(toast.info).not.toHaveBeenCalled()
     })
   })
 
