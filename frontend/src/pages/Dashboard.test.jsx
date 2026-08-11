@@ -206,7 +206,7 @@ describe('Dashboard', () => {
       const ok = await autoRefreshDashboard(queryClient, toast)
 
       expect(ok).toBe(true)
-      expect(toast.success).toHaveBeenCalledWith('데이터가 갱신되었습니다', expect.any(Number))
+      expect(toast.success).toHaveBeenCalledWith('데이터가 새로고침 되었습니다.', expect.any(Number))
       expect(toast.error).not.toHaveBeenCalled()
     })
 

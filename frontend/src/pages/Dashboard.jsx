@@ -85,7 +85,7 @@ export async function autoRefreshDashboard(queryClient, toast) {
       await queryClient.refetchQueries({ queryKey: [key] }, opts)
     }
     // 주기마다 반복되므로 성공 알림은 짧게 띄운다.
-    toast.success('데이터가 갱신되었습니다', AUTO_REFRESH_TOAST_MS)
+    toast.success('데이터가 새로고침 되었습니다.', AUTO_REFRESH_TOAST_MS)
     return true
   } catch (error) {
     console.error('Auto refetch failed:', error)

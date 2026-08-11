@@ -57,7 +57,7 @@ async function autoRefreshDetail(queryClient, toast, keys) {
     for (const key of keys) {
       await queryClient.refetchQueries({ queryKey: [key] }, opts)
     }
-    toast.success('데이터가 갱신되었습니다', AUTO_REFRESH_TOAST_MS)
+    toast.success('데이터가 새로고침 되었습니다.', AUTO_REFRESH_TOAST_MS)
     return true
   } catch (error) {
     console.error('Detail auto refetch failed:', error)
