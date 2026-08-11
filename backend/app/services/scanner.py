@@ -36,7 +36,7 @@ _progress: dict = {
 # 검색 정렬 허용 컬럼(인젝션 방지).
 _SORT_COLUMNS = {
     "weekly_return", "monthly_return", "ytd_return", "volume",
-    "close_price", "daily_change_pct", "foreign_net", "institutional_net", "name",
+    "close_price", "daily_change_pct", "live_change_pct", "foreign_net", "institutional_net", "name",
 }
 
 # '지속 상승추세' 판정 임계값. 연초대비 수익률만 보면 폭락 후 반등도 +로 잡혀
@@ -360,6 +360,7 @@ def _row_to_item(row, registered: set) -> dict:
         "ticker": d["ticker"], "name": d["name"], "type": d["type"],
         "market": d.get("market"), "sector": d.get("sector"),
         "close_price": d.get("close_price"), "daily_change_pct": d.get("daily_change_pct"),
+        "live_change_pct": d.get("live_change_pct"),
         "volume": d.get("volume"), "weekly_return": d.get("weekly_return"),
         "monthly_return": d.get("monthly_return"), "ytd_return": d.get("ytd_return"),
         "ytd_base_date": d.get("ytd_base_date"),

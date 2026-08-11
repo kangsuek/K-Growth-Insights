@@ -159,7 +159,9 @@ def _upsert_row(conn, row: dict, price_confirmed: bool = True) -> None:
     직전 확정 거래일 기준이기 때문이다. 신규 종목은 남길 확정값이 없어 NULL로 두고,
     마감 후 수집이나 지표수집에서 채운다.
 
-    시총(market_value)은 상위 N 선별 순위에만 쓰므로 장중 값이라도 그대로 갱신한다.
+    시총(market_value)·live_change_pct(금일 실시간 등락률)는 상위 N 선별·실시간 표시용이라
+    장중 값이라도, 지표수집이 시세 컬럼을 소유한 종목이라도 그대로 매번 갱신한다.
+    daily_change_pct(종가 기준)와 달리 "확정 거래일 기준" 제약이 없어서다.
 
     지표수집을 받은 종목(catalog_updated_at IS NOT NULL)의 시세 컬럼도 건드리지 않는다.
     네이버의 두 API가 같은 날 다른 거래량을 준다 — 000660의 2026-08-07 거래량이 일별시세
@@ -184,17 +186,18 @@ def _upsert_row(conn, row: dict, price_confirmed: bool = True) -> None:
     conn.execute(
         f"""
         INSERT INTO stock_catalog
-            (ticker, name, type, market, market_value,
+            (ticker, name, type, market, market_value, live_change_pct,
              close_price, daily_change_pct, volume, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, {now_expr})
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, {now_expr})
         ON CONFLICT(ticker) DO UPDATE SET
             name=excluded.name,
             type=excluded.type,
             market=excluded.market,
-            market_value=excluded.market_value{price_set}
+            market_value=excluded.market_value,
+            live_change_pct=excluded.live_change_pct{price_set}
         """,
         (row["ticker"], row["name"] or row["ticker"], row["type"], market,
-         row.get("market_value"),
+         row.get("market_value"), row.get("daily_change_pct"),
          row.get("close_price") if price_confirmed else None,
          row.get("daily_change_pct") if price_confirmed else None,
          row.get("volume") if price_confirmed else None),

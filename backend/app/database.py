@@ -117,8 +117,9 @@ CREATE TABLE IF NOT EXISTS stock_catalog (
     sector             TEXT,      -- 섹터/테마(발굴 그룹핑)
     is_active          INTEGER DEFAULT 1,
     market_value       INTEGER,   -- 시가총액(상위 N 선별용, 종목목록수집 시 스냅샷)
-    close_price        REAL,      -- 최신 종가(스크리닝용 스냅샷)
-    daily_change_pct   REAL,
+    close_price        REAL,      -- 최신 종가(스크리닝용 스냅샷, 장중엔 직전 확정 거래일 값 유지)
+    daily_change_pct   REAL,      -- 종가 기준 등락률(위와 동일하게 장중엔 확정값만 갱신)
+    live_change_pct    REAL,      -- 금일(실시간) 등락률 — 장중에도 매 수집마다 그대로 갱신
     volume             INTEGER,
     weekly_return      REAL,      -- 주간 수익률
     monthly_return     REAL,      -- 월간 수익률
@@ -200,6 +201,7 @@ _CATALOG_ADDED_COLUMNS = {
     "market_value": "INTEGER",
     "close_price": "REAL",
     "daily_change_pct": "REAL",
+    "live_change_pct": "REAL",
     "volume": "INTEGER",
     "weekly_return": "REAL",
     "monthly_return": "REAL",

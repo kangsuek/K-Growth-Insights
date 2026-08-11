@@ -15,7 +15,7 @@ export function isLateYtdBase(baseDate, year = new Date().getFullYear()) {
 
 export const COLUMNS = [
   { key: 'name', label: '종목명', sortable: true },
-  { key: 'close_price', label: '현재가', sortable: true, align: 'right' },
+  { key: 'live_change_pct', label: '금일 등락률', sortable: true, align: 'right' },
   { key: 'daily_change_pct', label: '종가 기준 등락률', sortable: true, align: 'right' },
   { key: 'volume', label: '거래량', sortable: true, align: 'right' },
   { key: 'weekly_return', label: '주간', sortable: true, align: 'right' },
@@ -116,11 +116,11 @@ export default function ScreeningTable({ items, total, page, pageSize, sortBy, s
                     <p className="text-xs text-gray-400 dark:text-gray-500">{item.ticker}</p>
                   </div>
                 </td>
-                {/* 현재가 */}
-                <td className="px-3 py-2.5 text-right font-medium text-gray-900 dark:text-gray-100 tabular-nums">
-                  {formatNumber(item.close_price)}
+                {/* 금일(실시간) 등락률 */}
+                <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${getChangeColor(item.live_change_pct)}`}>
+                  {formatPercent(item.live_change_pct)}
                 </td>
-                {/* 등락률 */}
+                {/* 종가 기준 등락률 */}
                 <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${getChangeColor(item.daily_change_pct)}`}>
                   {formatPercent(item.daily_change_pct)}
                 </td>

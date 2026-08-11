@@ -155,6 +155,38 @@ def test_sync_catalog_keeps_confirmed_snapshot_during_market_hours(monkeypatch):
 
 
 @respx.mock
+def test_sync_catalog_updates_live_change_pct_during_market_hours(monkeypatch):
+    """확정 등락률(daily_change_pct)은 장중에도 유지되지만, 금일 실시간
+    등락률(live_change_pct)은 시총과 마찬가지로 매 수집마다 그대로 갱신된다.
+    """
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price, daily_change_pct,
+                live_change_pct, volume, market_value, updated_at)
+               VALUES ('005930', '삼성전자', 'STOCK', 'KOSPI', 1, 100000, 0.49,
+                       0.49, 1000, 500, '2026-08-07 06:40:00')""")
+
+    monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: False)
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page_with_price([
+            ("005930", "삼성전자", "stock", "129900", "29.87", "9999", "777")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    catalog.sync_catalog_detailed(limit=None)
+
+    with get_connection() as conn:
+        row = dict(conn.execute(
+            "SELECT close_price, daily_change_pct, live_change_pct "
+            "FROM stock_catalog WHERE ticker='005930'").fetchone())
+    assert row["close_price"] == 100000       # 확정값 유지
+    assert row["daily_change_pct"] == 0.49    # 확정값 유지
+    assert row["live_change_pct"] == 29.87    # 실시간 값으로 갱신
+
+
+@respx.mock
 def test_sync_catalog_leaves_new_ticker_price_null_during_market_hours(monkeypatch):
     """장중에 처음 들어온 종목은 확정값이 없으므로 시세를 비워 둔다(틀린 값보다 낫다)."""
     monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: False)
@@ -316,6 +348,35 @@ def test_sync_catalog_does_not_clobber_metric_collected_prices(monkeypatch):
     assert row["volume"] == 8605755      # 일별시세 값 유지
     assert row["close_price"] == 1422000
     assert row["market_value"] == 777    # 시총은 갱신
+
+
+@respx.mock
+def test_sync_catalog_updates_live_change_pct_even_for_metric_collected_tickers(monkeypatch):
+    """딥수집(지표수집)이 시세를 소유한 종목이라도 live_change_pct는 갱신된다."""
+    monkeypatch.setattr(catalog.timeutil, "is_close_confirmed", lambda now=None: True)
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price, daily_change_pct,
+                live_change_pct, volume, market_value, updated_at, catalog_updated_at)
+               VALUES ('000660', 'SK하이닉스', 'STOCK', 'KOSPI', 1, 1422000, -4.88,
+                       -4.88, 8605755, 500, '2026-08-07 07:10:00', '2026-08-07 07:10:00')""")
+
+    respx.get(_catalog_url("KOSPI")).mock(
+        return_value=httpx.Response(200, json=_page_with_price([
+            ("000660", "SK하이닉스", "stock", "1422000", "-3.10", "4796865", "777")]))
+    )
+    respx.get(_catalog_url("KOSDAQ")).mock(
+        return_value=httpx.Response(200, json=_page([("196170", "알테오젠", "stock")]))
+    )
+    catalog.sync_catalog_detailed(limit=None)
+
+    with get_connection() as conn:
+        row = dict(conn.execute(
+            "SELECT daily_change_pct, live_change_pct FROM stock_catalog "
+            "WHERE ticker='000660'").fetchone())
+    assert row["daily_change_pct"] == -4.88   # 지표수집 소유 값 유지
+    assert row["live_change_pct"] == -3.10    # 실시간 값으로 갱신
 
 
 @respx.mock
