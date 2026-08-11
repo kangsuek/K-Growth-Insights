@@ -148,6 +148,27 @@ def test_intraday_interval_job_stops_right_after_close(monkeypatch):
     assert called["n"] == 0
 
 
+def test_interval_job_still_collects_at_close_second_5(monkeypatch):
+    """CronTrigger는 매 분 5초에 실행된다. 장 마감 정각(15:40)에도 실제 실행
+    시각은 15:40:05라, 초 단위를 자르지 않고 is_market_hours()에 그대로
+    넘기면 15:40:00보다 늦어 마지막 15:40 수집을 놓친다.
+    """
+    _freeze_now(monkeypatch, datetime(2026, 7, 22, 15, 40, 5, tzinfo=KST))  # 수요일
+    called = {"n": 0}
+    monkeypatch.setattr(scheduler, "run_collect_all", lambda reason: called.__setitem__("n", called["n"] + 1))
+    scheduler._interval_job()
+    assert called["n"] == 1
+
+
+def test_interval_job_stops_right_after_close(monkeypatch):
+    """15:41(장 마감 다음 분)부터는 실행되지 않는다."""
+    _freeze_now(monkeypatch, datetime(2026, 7, 22, 15, 41, 5, tzinfo=KST))
+    called = {"n": 0}
+    monkeypatch.setattr(scheduler, "run_collect_all", lambda reason: called.__setitem__("n", called["n"] + 1))
+    scheduler._interval_job()
+    assert called["n"] == 0
+
+
 # --- 기동/정리 ---------------------------------------------------------------
 
 def test_start_disabled_returns_none(monkeypatch):
@@ -215,10 +236,27 @@ def test_update_intraday_interval_without_running_scheduler_updates_config_only(
     assert config.INTRADAY_COLLECT_INTERVAL_MINUTES == 7
 
 
+def test_interval_job_uses_cron_trigger_aligned_to_clock(monkeypatch):
+    """서버 기동 시각이 아니라 정각+5초(09:00:05 등) 기준으로 정렬돼야 한다."""
+    from apscheduler.triggers.cron import CronTrigger
+
+    monkeypatch.setattr(config, "SCHEDULER_ENABLED", True)
+    monkeypatch.setattr(config, "COLLECT_INTERVAL_MINUTES", 10)
+    sched = scheduler.start()
+    try:
+        job = sched.get_job("interval_collect")
+        assert isinstance(job.trigger, CronTrigger)
+
+        # 장 시작 직전(08:59:50)이면 첫 실행은 09:00:05여야 한다.
+        before_open = datetime(2026, 8, 10, 8, 59, 50, tzinfo=KST)
+        first_run = job.trigger.get_next_fire_time(None, before_open)
+        assert first_run == datetime(2026, 8, 10, 9, 0, 5, tzinfo=KST)
+    finally:
+        scheduler.shutdown()
+
+
 def test_update_collect_interval_reschedules_running_job(monkeypatch):
     """실행 중 스케줄러가 있으면 일별 수집 잡을 새 주기로 즉시 재등록해야 한다."""
-    from apscheduler.triggers.interval import IntervalTrigger
-
     monkeypatch.setattr(config, "SCHEDULER_ENABLED", True)
     monkeypatch.setattr(config, "COLLECT_INTERVAL_MINUTES", 10)
     sched = scheduler.start()
@@ -226,8 +264,9 @@ def test_update_collect_interval_reschedules_running_job(monkeypatch):
         scheduler.update_collect_interval(5)
         assert config.COLLECT_INTERVAL_MINUTES == 5
         job = sched.get_job("interval_collect")
-        assert isinstance(job.trigger, IntervalTrigger)
-        assert job.trigger.interval.total_seconds() == 5 * 60
+        now = datetime(2026, 8, 10, 9, 1, 0, tzinfo=KST)
+        next_run = job.trigger.get_next_fire_time(None, now)
+        assert next_run == datetime(2026, 8, 10, 9, 5, 5, tzinfo=KST)
     finally:
         scheduler.shutdown()
 
