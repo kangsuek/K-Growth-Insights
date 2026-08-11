@@ -16,7 +16,7 @@ export function isLateYtdBase(baseDate, year = new Date().getFullYear()) {
 export const COLUMNS = [
   { key: 'name', label: '종목명', sortable: true },
   { key: 'close_price', label: '현재가', sortable: true, align: 'right' },
-  { key: 'daily_change_pct', label: '등락률', sortable: true, align: 'right' },
+  { key: 'daily_change_pct', label: '종가 기준 등락률', sortable: true, align: 'right' },
   { key: 'volume', label: '거래량', sortable: true, align: 'right' },
   { key: 'weekly_return', label: '주간', sortable: true, align: 'right' },
   { key: 'monthly_return', label: '월간', sortable: true, align: 'right' },
