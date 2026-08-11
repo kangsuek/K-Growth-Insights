@@ -30,6 +30,7 @@ MSTOCK_BASE = "https://m.stock.naver.com/api/stock"
 MSTOCKS_BASE = "https://m.stock.naver.com/api/stocks"
 MINDEX_BASE = "https://m.stock.naver.com/api/index"
 CHART_BASE = "https://api.stock.naver.com/chart/domestic/item"
+CHART_BASE_INDEX = "https://api.stock.naver.com/chart/domestic/index"
 # 뉴스는 시장 데이터가 아니라 네이버 공식 검색 API(JSON)를 사용한다.
 SEARCH_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
 
@@ -268,7 +269,17 @@ def fetch_intraday(code: str) -> list[dict]:
 
     Each row: {datetime, open_price, high_price, low_price, price, volume}
     """
-    url = f"{CHART_BASE}/{code}/minute"
+    return _fetch_minute_bars(f"{CHART_BASE}/{code}/minute", code)
+
+
+def fetch_index_intraday(code: str) -> list[dict]:
+    """시장 지수(KOSPI/KOSDAQ) 분봉. fetch_intraday와 동일한 행 형태·폴백 로직을 쓴다."""
+    if code not in INDEX_NAMES:
+        raise ValueError(f"지원하지 않는 지수: {code}")
+    return _fetch_minute_bars(f"{CHART_BASE_INDEX}/{code}/minute", code)
+
+
+def _fetch_minute_bars(url: str, code: str) -> list[dict]:
     try:
         with _client() as client:
             resp = client.get(url)
@@ -300,7 +311,7 @@ def fetch_intraday(code: str) -> list[dict]:
             latest_day = max(r["datetime"][:10] for r in wide_rows)
             return [r for r in wide_rows if r["datetime"].startswith(latest_day)]
     except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("fetch_intraday(%s) failed: %s", code, exc)
+        logger.warning("_fetch_minute_bars(%s) failed: %s", code, exc)
         return []
 
 

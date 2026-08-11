@@ -12,8 +12,10 @@ import {
 } from 'recharts'
 import { marketApi } from '../../services/api'
 import { format } from 'date-fns'
+import IntradayChart from '../charts/IntradayChart'
 
 const PERIODS = [
+  { value: '1D', label: '분봉' },
   { value: '1M', label: '1개월' },
   { value: '3M', label: '3개월' },
   { value: '6M', label: '6개월' },
@@ -43,14 +45,31 @@ export default function MarketIndexModal({ index, onClose }) {
   const isPositive = index.change >= 0
   const lineColor = isPositive ? '#ef4444' : '#3b82f6'
 
+  const isIntraday = period === '1D'
+
   const { data, isLoading } = useQuery({
     queryKey: ['market-index-chart', index.code, period],
     queryFn: async () => {
       const res = await marketApi.getIndexChart(index.code, period)
       return res.data
     },
+    enabled: !isIntraday,
     staleTime: 5 * 60 * 1000,
   })
+
+  const { data: intradayData, isLoading: intradayLoading } = useQuery({
+    queryKey: ['market-index-intraday', index.code],
+    queryFn: async () => {
+      const res = await marketApi.getIndexIntraday(index.code)
+      return res.data
+    },
+    enabled: isIntraday,
+    staleTime: 10 * 1000,
+    refetchInterval: 20 * 1000,
+  })
+
+  // 분봉 캔들 색 기준선(전일 종가) — 지수 개요에 이미 있는 값으로 계산한다.
+  const previousClose = index.close_price - index.change
 
   // ESC 닫기
   useEffect(() => {
@@ -140,7 +159,21 @@ export default function MarketIndexModal({ index, onClose }) {
 
         {/* 차트 */}
         <div className="px-2 pb-5" style={{ height: 280 }}>
-          {isLoading ? (
+          {isIntraday ? (
+            intradayLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" />
+              </div>
+            ) : (
+              <IntradayChart
+                data={intradayData?.data || []}
+                ticker={index.code}
+                height={280}
+                previousClose={previousClose}
+                fitToWidth
+              />
+            )
+          ) : isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" />
             </div>

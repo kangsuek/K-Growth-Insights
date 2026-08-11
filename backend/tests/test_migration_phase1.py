@@ -65,6 +65,38 @@ def test_index_chart_unknown_code_empty():
     assert body["data"] == []
 
 
+@respx.mock
+def test_index_intraday_shape_with_change_computed_from_basic():
+    respx.get(f"{naver_client.MINDEX_BASE}/KOSPI/basic").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "closePrice": "2,650.00",
+                "compareToPreviousClosePrice": "50.00",
+                "fluctuationsRatio": "1.92",
+            },
+        )
+    )
+    respx.get(f"{naver_client.CHART_BASE_INDEX}/KOSPI/minute").mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"localDateTime": "20260722090000", "currentPrice": 2610.0}],
+        )
+    )
+    body = client.get("/api/market/index/KOSPI/intraday").json()
+    assert body["code"] == "KOSPI"
+    assert body["count"] == 1
+    row = body["data"][0]
+    assert row["price"] == 2610.0
+    # 전일종가 = 2650 - 50 = 2600 → 2610 - 2600 = +10
+    assert row["change_amount"] == 10.0
+
+
+def test_index_intraday_unknown_code_empty():
+    body = client.get("/api/market/index/NASDAQ/intraday").json()
+    assert body["data"] == []
+
+
 # --- etfs --------------------------------------------------------------------
 
 def test_list_etfs_shape():

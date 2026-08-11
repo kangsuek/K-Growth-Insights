@@ -189,3 +189,22 @@ def test_fetch_intraday_empty_when_fallback_range_also_empty():
         return_value=httpx.Response(200, json=[])
     )
     assert nc.fetch_intraday("005930") == []
+
+
+@respx.mock
+def test_fetch_index_intraday_returns_current_session_when_available():
+    respx.get(f"{nc.CHART_BASE_INDEX}/KOSPI/minute").mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"localDateTime": "20260722090000", "currentPrice": 2600.5}],
+        )
+    )
+    rows = nc.fetch_index_intraday("KOSPI")
+    assert len(rows) == 1
+    assert rows[0]["datetime"] == "2026-07-22T09:00:00"
+    assert rows[0]["price"] == 2600.5
+
+
+def test_fetch_index_intraday_rejects_unknown_index():
+    with pytest.raises(ValueError):
+        nc.fetch_index_intraday("NASDAQ")

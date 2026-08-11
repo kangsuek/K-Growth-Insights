@@ -305,6 +305,8 @@ export const marketApi = {
   getOverview: () => api.get('/market/overview', { timeout: 8000 }),
   // 지수 일별 차트 데이터 조회
   getIndexChart: (code, period = '3M') => api.get(`/market/index/${code}/chart`, { params: { period }, timeout: 10000 }),
+  // 지수 분봉 조회
+  getIndexIntraday: (code) => api.get(`/market/index/${code}/intraday`, { timeout: 10000 }),
 }
 
 // 단순화된 API 인터페이스
