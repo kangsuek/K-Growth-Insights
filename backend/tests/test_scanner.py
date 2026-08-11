@@ -334,3 +334,25 @@ def test_sustained_uptrend_requires_positive_ytd():
     """연초 대비가 마이너스면 아무리 최근 흐름이 좋아도 '연초부터 상승'이 아니다."""
     _seed_trend([("DOWN_YTD", -3.0, 90, -8.0, 70, 80)])
     assert _uptrend_search() == set()
+
+
+def test_collect_catalog_data_syncs_list_before_deep_collection(monkeypatch):
+    """딥수집(데이터 수집 버튼)은 시작 전 종목목록수집을 먼저 돌려야 한다.
+
+    금일 실시간 등락률(live_change_pct)·시총은 종목목록수집에서만 갱신되므로,
+    이 단계를 건너뛰면 딥수집을 아무리 돌려도 '금일 등락률'이 계속 비어 있게 된다.
+    """
+    calls = []
+    monkeypatch.setattr(scanner.catalog, "sync_catalog_detailed", lambda limit=None: calls.append("sync"))
+    result = scanner.collect_catalog_data()
+    assert calls == ["sync"]
+    assert result["status"] == "completed"
+
+
+def test_collect_catalog_data_continues_when_list_sync_fails(monkeypatch):
+    """종목목록수집이 실패해도(네트워크 오류 등) 딥수집 자체는 계속 진행한다."""
+    def _boom(limit=None):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(scanner.catalog, "sync_catalog_detailed", _boom)
+    result = scanner.collect_catalog_data()
+    assert result["status"] == "completed"

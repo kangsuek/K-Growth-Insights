@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 
 from app import config, timeutil
 from app.database import get_connection
-from app.services import metrics, naver_client
+from app.services import catalog, metrics, naver_client
 from app.timeutil import KST, MARKET_CLOSE, MARKET_OPEN
 
 logger = logging.getLogger(__name__)
@@ -244,10 +244,19 @@ def _collect_one(ticker: str) -> int:
 def collect_catalog_data(only_missing: bool = False) -> dict:
     """발굴 딥수집: 시총 상위 + 전체 ETF의 수익률·수급 지표를 병렬 수집(동기).
 
-    현재가·등락률·거래량은 종목목록수집이 이미 채웠으므로 여기서는 대상만 보강한다.
+    현재가·등락률·거래량(확정값)은 종목목록수집이 채운 것을 여기서는 대상만 보강한다.
     only_missing=True면 아직 지표가 없는 종목만 채운다(종목목록수집 직후 보강용).
+
+    딥수집 전에 카탈로그 목록수집(catalog.sync_catalog_detailed)을 먼저 돌린다 —
+    시총(상위 N 선별 기준)·금일 실시간 등락률(live_change_pct)은 이 단계에서만
+    갱신되므로, 여기서 건너뛰면 화면의 '금일 등락률'이 계속 비어 있게 된다.
+    페이지 단위 API 몇 번이라 딥수집(종목별 개별 조회)보다 훨씬 가볍다.
     """
     _cancel.clear()
+    try:
+        catalog.sync_catalog_detailed(limit=None)
+    except Exception as exc:  # noqa: BLE001 - 목록 동기화 실패해도 딥수집은 계속 진행
+        logger.warning("[scanner] 딥수집 전 종목 목록 동기화 실패: %s", exc)
     with get_connection() as conn:
         groups = _supply_target_groups(conn, only_missing=only_missing)
     total = sum(len(tickers) for _, tickers in groups)
