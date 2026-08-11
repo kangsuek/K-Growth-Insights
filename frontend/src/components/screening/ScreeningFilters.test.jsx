@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/utils'
 import ScreeningFilters, { formatDataFreshness } from './ScreeningFilters'
@@ -90,6 +90,39 @@ describe('상승(+) 토글', () => {
       ytd_return_positive: true,
     })
     expect(changes.at(-1)).not.toHaveProperty('foreign_net_positive')
+  })
+})
+
+describe('종목 검색 엔터', () => {
+  const renderFilters = (filters = {}) => {
+    const changes = []
+    renderWithProviders(
+      <ScreeningFilters
+        filters={{ market: 'ETF', ...filters }}
+        onFilterChange={(partial) => changes.push(partial)}
+        onReset={() => {}}
+      />
+    )
+    return changes
+  }
+
+  it('입력 후 엔터를 누르면 버튼을 누르지 않아도 바로 검색된다', async () => {
+    const user = userEvent.setup()
+    const changes = renderFilters()
+
+    await user.type(screen.getByPlaceholderText('종목명 또는 코드 입력...'), '005930{Enter}')
+
+    expect(changes.at(-1)).toMatchObject({ q: '005930' })
+  })
+
+  it('한글 IME 조합 중인 엔터(글자 확정)는 검색을 건너뛴다', () => {
+    const changes = renderFilters()
+    const input = screen.getByPlaceholderText('종목명 또는 코드 입력...')
+
+    fireEvent.change(input, { target: { value: '삼성' } })
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+
+    expect(changes).toHaveLength(0)
   })
 })
 

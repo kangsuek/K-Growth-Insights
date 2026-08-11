@@ -151,6 +151,14 @@ export default function ScreeningFilters({ filters, onFilterChange, onReset, las
               type="text"
               value={localQ}
               onChange={(e) => setLocalQ(e.target.value)}
+              onKeyDown={(e) => {
+                // 한글 IME 조합 중(예: 마지막 글자를 확정하는 엔터) 제출하면 아직
+                // 조합 중인 글자가 잘려 검색되므로, 조합이 끝난 엔터에만 반응한다.
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  handleSearch(e)
+                }
+              }}
               placeholder="종목명 또는 코드 입력..."
               className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
             />
