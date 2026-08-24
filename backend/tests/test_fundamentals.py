@@ -259,3 +259,23 @@ def test_fundamentals_holdings_fill_daily_change_from_catalog():
     assert by_seq[1]["weight"] == 20.49
     assert by_seq[2]["daily_change_pct"] is None    # 코드 없으면 채울 수 없음
     assert by_seq[2]["weight"] is None
+
+
+def test_fundamentals_holdings_prefer_fresher_price_over_stale_catalog():
+    """발굴 딥수집이 며칠 정체된 사이 종목관리 추적분의 일별시세가 더 최신이면
+    prices.change_pct를 써야 한다(오래된 stock_catalog 값을 그대로 보여주면 안 됨).
+    """
+    seed_stock("487241", "KODEX 정체테스트", "ETF")
+    with get_connection() as conn:
+        conn.execute("INSERT INTO etf_holdings (ticker, seq, item_code, item_name, weight) "
+                     "VALUES ('487241', 1, '005930', '삼성전자', 27.21)")
+        # 발굴 스냅샷: 6거래일 전(8/18) 기준으로 정체
+        conn.execute("INSERT INTO stock_catalog "
+                     "(ticker, name, type, market, daily_change_pct, metrics_date) "
+                     "VALUES ('005930', '삼성전자', 'STOCK', 'KOSPI', -2.19, '2026-08-18')")
+        # 종목관리 추적분 일별시세: 오늘(8/24)까지 최신
+        conn.execute("INSERT INTO prices (ticker, date, close_price, change_pct) "
+                     "VALUES ('005930', '2026-08-24', 257000, -8.7)")
+
+    holdings = client.get("/api/etfs/487241/fundamentals").json()["holdings"]
+    assert holdings[0]["daily_change_pct"] == -8.7  # 더 최신인 prices 값을 써야 함

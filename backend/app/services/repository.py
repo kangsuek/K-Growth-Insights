@@ -319,32 +319,49 @@ def close_before(ticker: str, date: str) -> float | None:
 def latest_change_pct(codes: list[str]) -> dict[str, float]:
     """여러 종목코드의 최근 등락률(%) 조회. {code: pct}.
 
-    발굴 스냅샷(stock_catalog.daily_change_pct)을 우선 쓰고, 없으면 최신
-    일별시세(prices.change_pct)로 보완한다. ETF 구성종목 전일대비 표시에 사용.
+    발굴 스냅샷(stock_catalog.daily_change_pct)과 종목관리 추적분의 일별시세
+    (prices.change_pct) 중 기준 거래일이 더 최신인 쪽을 쓴다. 발굴 딥수집(종목
+    발굴 화면의 '데이터 수집')은 스케줄러에 없어 수동 실행 전까지 며칠씩 정체될
+    수 있는 반면, 종목관리에 등록된 종목은 스케줄러가 매 거래일 갱신하므로 더
+    최신인 경우가 흔하다. 발굴 스냅샷의 기준일은 딥수집 이후엔 metrics_date,
+    딥수집 전(장중 카탈로그 동기화만 거친 상태)엔 updated_at 날짜다. ETF
+    구성종목 전일대비 표시에 사용.
     """
     codes = [c for c in dict.fromkeys(codes) if c]  # 중복·빈값 제거, 순서 유지
     if not codes:
         return {}
     ph = ",".join("?" * len(codes))
-    result: dict[str, float] = {}
+    catalog: dict[str, tuple[str, float]] = {}
+    price: dict[str, tuple[str, float]] = {}
     with get_connection() as conn:
         for r in conn.execute(
-            f"SELECT ticker, daily_change_pct FROM stock_catalog "
-            f"WHERE ticker IN ({ph}) AND daily_change_pct IS NOT NULL", codes
+            f"""SELECT ticker, daily_change_pct,
+                       COALESCE(metrics_date, date(updated_at)) AS as_of
+                FROM stock_catalog
+                WHERE ticker IN ({ph}) AND daily_change_pct IS NOT NULL""", codes
         ):
-            result[r["ticker"]] = r["daily_change_pct"]
-        missing = [c for c in codes if c not in result]
-        if missing:
-            ph2 = ",".join("?" * len(missing))
-            # 각 종목의 가장 최근 거래일 등락률.
-            for r in conn.execute(
-                f"""SELECT p.ticker, p.change_pct FROM prices p
-                    JOIN (SELECT ticker, MAX(date) AS d FROM prices
-                          WHERE ticker IN ({ph2}) GROUP BY ticker) m
-                      ON p.ticker = m.ticker AND p.date = m.d""", missing
-            ):
-                if r["change_pct"] is not None:
-                    result[r["ticker"]] = r["change_pct"]
+            if r["as_of"]:
+                catalog[r["ticker"]] = (r["as_of"], r["daily_change_pct"])
+        # 각 종목의 가장 최근 거래일 등락률.
+        for r in conn.execute(
+            f"""SELECT p.ticker, p.change_pct, p.date FROM prices p
+                JOIN (SELECT ticker, MAX(date) AS d FROM prices
+                      WHERE ticker IN ({ph}) GROUP BY ticker) m
+                  ON p.ticker = m.ticker AND p.date = m.d
+                WHERE p.change_pct IS NOT NULL""", codes
+        ):
+            price[r["ticker"]] = (r["date"], r["change_pct"])
+
+    result: dict[str, float] = {}
+    for code in codes:
+        c = catalog.get(code)
+        p = price.get(code)
+        if c and p:
+            result[code] = p[1] if p[0] > c[0] else c[1]
+        elif c:
+            result[code] = c[1]
+        elif p:
+            result[code] = p[1]
     return result
 
 
