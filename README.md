@@ -20,6 +20,8 @@
 | 펀더멘털(PER/PBR/NAV) | `m.stock.naver.com/api/stock/{code}/integration` |
 | ETF 구성종목 | `m.stock.naver.com/api/stock/{code}/etfAnalysis` |
 | 시총 상위 카탈로그 | `m.stock.naver.com/api/stocks/marketValue/{market}` |
+| 시장 지수(코스피/코스닥) 현황·일별 차트 | `m.stock.naver.com/api/index/{code}/basic`, `/price` |
+| 시장 지수 분봉 | `api.stock.naver.com/chart/domestic/index/{code}/minute` |
 | 뉴스 | `openapi.naver.com/v1/search/news.json` (API 키 필요) |
 
 뉴스만 네이버 검색 API 키가 필요합니다. 설정 화면에서 등록하며, 없어도 나머지 기능은 모두 동작합니다.
@@ -33,7 +35,7 @@
 | `/scanner` | 종목 발굴 | 카탈로그 전체 대상 조건 검색(수익률·순매수·섹터), 테마 탐색, 추천 프리셋 |
 | `/compare` | 비교 | 정규화 가격 추이, 위험-수익 산점도, 상관관계 히트맵, 성과 비교, 투자 시뮬레이션 |
 | `/simulation` | 시뮬레이션 | 일시 투자·적립식(DCA)·포트폴리오 배분 — "그때 샀다면?" |
-| `/portfolio` | 포트폴리오 | 투자금·평가액·손익, 비중, 수익률 추이, 종목별 기여도, 분석 리포트 |
+| `/portfolio` | 포트폴리오 | 투자금·평가액·손익, 비중, 수익률 추이, 종목별 기여도, DB 데이터 기반 AI 분석 프롬프트 생성(복사/다운로드) |
 | `/settings` | 설정 | 종목 관리(추가·수정·삭제·순서), API 키, 데이터 수집·초기화, 테마 |
 
 ![종목 상세 — 인사이트 요약과 투자 전략, 기간별 캔들+거래량 차트](site/images/detail.png)
@@ -61,7 +63,9 @@ FastAPI backend (backend/app)  ──/api──▶  React + Vite frontend (front
         │    ├─ simulation.py     일시·적립식·포트폴리오
         │    ├─ insights.py       전략·핵심 포인트·리스크
         │    ├─ catalog.py        시총 상위 카탈로그 + 섹터 분류
-        │    └─ scheduler.py      장중 주기 수집 + 마감 후 수집
+        │    ├─ scheduler.py      장중 주기 수집 + 마감 후 수집
+        │    ├─ jobs.py           전체 수집 백그라운드 실행 + 진행률
+        │    └─ ai_prompt.py      DB 데이터(RAG context) 기반 AI 투자분석 프롬프트 생성
         └─ data/kgrowth.db        SQLite (단일 파일)
 ```
 
@@ -153,7 +157,7 @@ just collect    # 전체 데이터 수집(네이버 모바일 API)
 
 ## API
 
-엔드포인트 41개. 시세·매매동향은 **항상 최신순(DESC)**, 분봉·지수 차트는 **시간순(ASC)** 으로 반환합니다.
+엔드포인트 43개. 시세·매매동향은 **항상 최신순(DESC)**, 분봉·지수 차트는 **시간순(ASC)** 으로 반환합니다.
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
@@ -164,6 +168,8 @@ just collect    # 전체 데이터 수집(네이버 모바일 API)
 | GET | `/api/etfs/{ticker}/intraday` | 최근 세션 분봉 (시간순) |
 | GET | `/api/etfs/{ticker}/fundamentals` | 펀더멘털(주식 PER/PBR, ETF NAV·구성종목) |
 | GET | `/api/etfs/{ticker}/insights` | 전략·핵심 포인트·리스크 |
+| GET | `/api/etfs/{ticker}/ai-prompt` | 단일 종목 AI 투자분석 프롬프트 생성(RAG context) |
+| POST | `/api/etfs/ai-prompt-multi` | 여러 종목 비교 AI 프롬프트 생성 |
 | GET | `/api/etfs/compare?tickers=A,B` | 정규화 가격·통계·상관관계 |
 | POST | `/api/etfs/batch-summary` | 여러 종목 요약 일괄 조회 |
 | GET | `/api/scanner` | 조건 검색(수익률·순매수·섹터·정렬·페이지) |
@@ -173,9 +179,13 @@ just collect    # 전체 데이터 수집(네이버 모바일 API)
 | POST | `/api/simulation/dca` | 적립식(DCA) |
 | POST | `/api/simulation/portfolio` | 포트폴리오 배분 |
 | GET/POST/PUT/DELETE | `/api/settings/stocks[/{ticker}]` | 종목 관리 |
+| GET/PUT | `/api/settings/api-keys` | 네이버 검색 API 키 조회·저장 |
+| GET/PUT | `/api/settings/scheduler` | 자동 수집 주기 설정 |
 | POST | `/api/settings/ticker-catalog/collect` | 시총 상위 카탈로그 수집 |
 | GET | `/api/news/{ticker}` | 종목 뉴스 |
 | GET | `/api/market/overview` | 코스피·코스닥 현황 |
+| GET | `/api/market/index/{code}/chart` | 지수 기간 차트 |
+| GET | `/api/market/index/{code}/intraday` | 지수 분봉 |
 | POST | `/api/data/collect-all` | 전체 수집 |
 | GET | `/api/data/stats` | 수집 통계 |
 | DELETE | `/api/data/reset` | 수집 데이터 초기화(종목 목록 유지) |
@@ -253,8 +263,8 @@ Pages는 저장소 Settings → Pages → Source를 **GitHub Actions**로 한 �
 
 ```bash
 just test        # 전체
-uv run --directory backend pytest      # 백엔드 187건
-npm --prefix frontend test -- --run    # 프론트엔드 384건
+uv run --directory backend pytest      # 백엔드 229건
+npm --prefix frontend test -- --run    # 프론트엔드 397건 (스킵 3건)
 ```
 
 백엔드 검증은 pytest로만 합니다. `uv run python -c "..."` 같은 raw 스크립트는 `DATABASE_PATH`가
