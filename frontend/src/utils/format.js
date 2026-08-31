@@ -12,6 +12,7 @@ export const formatNumber = (value) => {
 
 /**
  * 거래량을 K/M 단위로 포맷팅
+ * CLAUDE.md의 천 단위 구분 기호 규칙의 의도적 예외 — 거래량은 자릿수가 커서 축약이 더 읽기 쉽다.
  * @param {number} value - 거래량
  * @returns {string} - 포맷팅된 문자열
  */
