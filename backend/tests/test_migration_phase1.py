@@ -1,11 +1,13 @@
 """이식 Phase 1 백엔드 계약 테스트: market·etfs·data 확장."""
+from datetime import timedelta
+
 import httpx
 import respx
 from fastapi.testclient import TestClient
 
 from app.database import get_connection
 from app.main import app
-from app.services import naver_client
+from app.services import metrics, naver_client
 from tests.conftest import seed_stock
 
 client = TestClient(app)
@@ -20,6 +22,34 @@ def _seed_prices(ticker, closes):
                    VALUES (?, ?, ?, ?, ?, ?, 1000, 0.5)""",
                 (ticker, f"2026-07-{i + 1:02d}", c, c, c, c),
             )
+
+
+def _seed_prices_seq(ticker, closes, start="2025-01-01"):
+    """closes를 start부터 연속 날짜로 시딩. 월 경계를 넘는 긴 시계열(MACD 등)에 쓴다."""
+    from datetime import datetime as dt
+    base = dt.strptime(start, "%Y-%m-%d")
+    with get_connection() as conn:
+        for i, c in enumerate(closes):
+            d = (base + timedelta(days=i)).strftime("%Y-%m-%d")
+            conn.execute(
+                """INSERT INTO prices (ticker, date, open_price, high_price,
+                   low_price, close_price, volume, change_pct)
+                   VALUES (?, ?, ?, ?, ?, ?, 1000, 0.5)""",
+                (ticker, d, c, c, c, c),
+            )
+
+
+def _golden_cross_closes():
+    """test_metrics.py와 동일한 구성: 40일 완만한 하락 후 25일 급반등, 교차 시점까지만 자른다."""
+    closes = [100.0 - i * 0.5 for i in range(40)]
+    closes += [closes[-1] + i * 5.0 for i in range(1, 26)]
+    macd_line, signal_line = metrics.calculate_macd(closes)
+    idx = [i for i in range(len(macd_line))
+           if macd_line[i] is not None and signal_line[i] is not None]
+    for a, b in zip(idx, idx[1:]):
+        if macd_line[a] <= signal_line[a] and macd_line[b] > signal_line[b]:
+            return closes[: b + 1]
+    raise AssertionError("골든크로스가 발생해야 한다")
 
 
 # --- market ------------------------------------------------------------------
@@ -161,6 +191,32 @@ def test_batch_summary_ticker_without_prices_returns_empty_gracefully():
     assert s["prices"] == []
     assert s["latest_price"] is None
     assert s["weekly_return"] is None
+
+
+def test_batch_summary_includes_macd_golden_cross_signal():
+    """대시보드 '오늘의 신호' — 로컬 시세만으로 골든크로스를 판정해 응답에 포함한다."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_prices_seq("005930", _golden_cross_closes())
+    r = client.post(
+        "/api/etfs/batch-summary",
+        json={"tickers": ["005930"], "price_days": 14, "news_limit": 3},
+    ).json()
+    s = r["data"]["005930"]
+    assert s["macd_cross_signal"] == "golden"
+    assert s["rsi_zone_entered"] is None  # 이 합성 시세는 RSI 구간 진입 조건이 아니다
+
+
+def test_batch_summary_signal_is_none_with_short_history():
+    """이력이 짧으면(MACD 최소 요구치 미만) 신호는 None이지 오류가 아니다."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_prices("005930", [100, 101, 102])
+    r = client.post(
+        "/api/etfs/batch-summary",
+        json={"tickers": ["005930"], "price_days": 14, "news_limit": 3},
+    ).json()
+    s = r["data"]["005930"]
+    assert s["macd_cross_signal"] is None
+    assert s["rsi_zone_entered"] is None
 
 
 def test_get_prices_batch_respects_per_ticker_limit():

@@ -9,6 +9,7 @@ import ETFCardGrid from '../components/dashboard/ETFCardGrid'
 import PortfolioHeatmap from '../components/dashboard/PortfolioHeatmap'
 import RecommendationCards from '../components/dashboard/RecommendationCards'
 import MarketOverview from '../components/dashboard/MarketOverview'
+import SignalSummaryCard from '../components/dashboard/SignalSummaryCard'
 import StockContextMenu from '../components/dashboard/StockContextMenu'
 import TickerDeleteConfirm from '../components/settings/TickerDeleteConfirm'
 import { useSettings } from '../contexts/SettingsContext'
@@ -503,6 +504,9 @@ export default function Dashboard() {
 
       {/* 시장 개요 (KOSPI / KOSDAQ) */}
       <MarketOverview />
+
+      {/* 오늘의 신호 (MACD 골든/데드크로스·RSI 과매수/과매도) */}
+      <SignalSummaryCard etfs={sortedETFs} batchSummary={batchSummary} />
 
       {/* 포트폴리오 히트맵 (전체 조감) */}
       <PortfolioHeatmap

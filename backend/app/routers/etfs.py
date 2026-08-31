@@ -151,16 +151,23 @@ class BatchSummaryRequest(BaseModel):
     news_limit: int = Field(default=5, ge=1, le=100)
 
 
+# MACD(최소 35일)·RSI Wilder 스무딩이 수렴할 만큼 넉넉한 로컬 조회 창.
+# 네이버 API를 추가로 부르지 않고 이미 매일 쌓인 prices 테이블만 읽는다.
+SIGNAL_LOOKBACK_DAYS = 250
+
+
 @router.post("/batch-summary")
 def batch_summary(req: BatchSummaryRequest):
     """대시보드 카드용 종목별 요약 배치 조회.
 
-    티커마다 쿼리를 반복하지 않고(N+1) 시세/매매동향/뉴스 각각 한 번씩,
-    총 3번의 쿼리로 전체 티커 결과를 가져온다(repository.*_batch).
+    티커마다 쿼리를 반복하지 않고(N+1) 시세/매매동향/뉴스/신호계산용 시세 각각 한 번씩,
+    총 4번의 쿼리로 전체 티커 결과를 가져온다(repository.*_batch).
     """
     prices_by_ticker = repository.get_prices_batch(req.tickers, req.price_days)
     flow_by_ticker = repository.get_trading_flow_batch(req.tickers, days=1)
     news_by_ticker = repository.get_news_batch(req.tickers, req.news_limit)
+    # 오늘의 신호(대시보드 카드용): 발굴 카탈로그 딥수집 범위 밖 종목도 로컬 시세만으로 판정.
+    signal_prices_by_ticker = repository.get_prices_batch(req.tickers, SIGNAL_LOOKBACK_DAYS)
 
     out: dict[str, dict] = {}
     for ticker in req.tickers:
@@ -181,6 +188,8 @@ def batch_summary(req: BatchSummaryRequest):
             }
 
         news = news_by_ticker.get(ticker, [])
+        signal_closes = [p["close_price"] for p in signal_prices_by_ticker.get(ticker, [])
+                          if p.get("close_price")]
         out[ticker] = {
             "ticker": ticker,
             "latest_price": prices_desc[0] if prices_desc else None,
@@ -188,6 +197,8 @@ def batch_summary(req: BatchSummaryRequest):
             "weekly_return": weekly_return,
             "latest_trading_flow": latest_flow,
             "latest_news": [_news_out(n) for n in news],
+            "macd_cross_signal": metrics.macd_cross_signal(signal_closes),
+            "rsi_zone_entered": metrics.rsi_zone_entered(signal_closes),
         }
     return {"data": out}
 

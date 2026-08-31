@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { formatNumber, formatSignedNumber, formatPercent, getChangeColor } from '../../utils/formatters'
+import { getSignalBadges } from '../../utils/signalBadges'
 
 /**
  * YTD 기준일이 전년도 마지막 거래일이 아닐 때만 true.
@@ -24,25 +25,6 @@ export const COLUMNS = [
   { key: 'foreign_net', label: '외국인', sortable: true, align: 'right' },
   { key: 'institutional_net', label: '기관', sortable: true, align: 'right' },
 ]
-
-/**
- * 전일 대비 MACD 골든/데드크로스·RSI 과매수/과매도 신규 진입 배지.
- * 필터('추세 전환 확인 필요')를 켜지 않아도 값이 있으면 항상 표시된다.
- */
-function getSignalBadges(item) {
-  const badges = []
-  if (item.macd_cross_signal === 'golden') {
-    badges.push({ key: 'macd-golden', text: '▲골든크로스', className: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' })
-  } else if (item.macd_cross_signal === 'dead') {
-    badges.push({ key: 'macd-dead', text: '▼데드크로스', className: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' })
-  }
-  if (item.rsi_zone_entered === 'overbought') {
-    badges.push({ key: 'rsi-overbought', text: 'RSI 과매수', className: 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' })
-  } else if (item.rsi_zone_entered === 'oversold') {
-    badges.push({ key: 'rsi-oversold', text: 'RSI 과매도', className: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' })
-  }
-  return badges
-}
 
 function SortIcon({ column, sortBy, sortDir }) {
   if (sortBy !== column) {
