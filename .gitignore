@@ -23,3 +23,6 @@ logs/**/*.log
 desktop/node_modules/
 desktop/release/
 backend/requirements.txt.lock
+
+# Playwright MCP 화면 검증 스냅샷/로그(임시 산출물)
+.playwright-mcp/
