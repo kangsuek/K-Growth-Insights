@@ -153,15 +153,23 @@ class BatchSummaryRequest(BaseModel):
 
 @router.post("/batch-summary")
 def batch_summary(req: BatchSummaryRequest):
-    """대시보드 카드용 종목별 요약 배치 조회(N+1 방지)."""
+    """대시보드 카드용 종목별 요약 배치 조회.
+
+    티커마다 쿼리를 반복하지 않고(N+1) 시세/매매동향/뉴스 각각 한 번씩,
+    총 3번의 쿼리로 전체 티커 결과를 가져온다(repository.*_batch).
+    """
+    prices_by_ticker = repository.get_prices_batch(req.tickers, req.price_days)
+    flow_by_ticker = repository.get_trading_flow_batch(req.tickers, days=1)
+    news_by_ticker = repository.get_news_batch(req.tickers, req.news_limit)
+
     out: dict[str, dict] = {}
     for ticker in req.tickers:
-        prices_asc = repository.get_prices(ticker, days=req.price_days)  # 오래된→최신
-        prices_desc = [_price_out(p) for p in reversed(prices_asc)]      # 최신→오래된
+        prices_asc = prices_by_ticker.get(ticker, [])          # 오래된→최신
+        prices_desc = [_price_out(p) for p in reversed(prices_asc)]  # 최신→오래된
         # 주간 수익률: 발굴·인사이트와 같은 기준(네이버 W1 = 7일 전)을 쓰도록 공용 함수 사용.
         weekly_return = metrics.weekly_return(prices_desc)
 
-        flow = repository.get_trading_flow(ticker, days=1)
+        flow = flow_by_ticker.get(ticker, [])
         latest_flow = None
         if flow:
             f = flow[-1]
@@ -172,7 +180,7 @@ def batch_summary(req: BatchSummaryRequest):
                 "foreign_net": f.get("foreign_net"),
             }
 
-        news = repository.get_news(ticker, limit=req.news_limit)
+        news = news_by_ticker.get(ticker, [])
         out[ticker] = {
             "ticker": ticker,
             "latest_price": prices_desc[0] if prices_desc else None,

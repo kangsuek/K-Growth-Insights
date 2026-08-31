@@ -123,6 +123,62 @@ def test_batch_summary_computes_weekly_return():
     assert round(s["weekly_return"], 1) == round((110 / 97 - 1) * 100, 1)
 
 
+def test_batch_summary_multi_ticker_results_do_not_cross_contaminate():
+    """여러 티커를 한 번에 조회해도(윈도우 함수 배치 쿼리) 서로 섞이지 않는다."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    seed_stock("000660", "SK하이닉스", "STOCK")
+    _seed_prices("005930", [100, 101, 102])
+    _seed_prices("000660", [200, 205, 210, 220])
+    r = client.post(
+        "/api/etfs/batch-summary",
+        json={"tickers": ["005930", "000660"], "price_days": 14, "news_limit": 3},
+    ).json()
+    data = r["data"]
+    assert data["005930"]["latest_price"]["close_price"] == 102
+    assert len(data["005930"]["prices"]) == 3
+    assert data["000660"]["latest_price"]["close_price"] == 220
+    assert len(data["000660"]["prices"]) == 4
+
+
+def test_batch_summary_missing_trading_flow_is_none():
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_prices("005930", [100, 101])
+    r = client.post(
+        "/api/etfs/batch-summary",
+        json={"tickers": ["005930"], "price_days": 14, "news_limit": 3},
+    ).json()
+    assert r["data"]["005930"]["latest_trading_flow"] is None
+
+
+def test_batch_summary_ticker_without_prices_returns_empty_gracefully():
+    seed_stock("005930", "삼성전자", "STOCK")
+    # 시세를 전혀 시딩하지 않는다.
+    r = client.post(
+        "/api/etfs/batch-summary",
+        json={"tickers": ["005930"], "price_days": 14, "news_limit": 3},
+    ).json()
+    s = r["data"]["005930"]
+    assert s["prices"] == []
+    assert s["latest_price"] is None
+    assert s["weekly_return"] is None
+
+
+def test_get_prices_batch_respects_per_ticker_limit():
+    """days 상한이 티커마다 독립적으로 적용된다(윈도우 파티션 경계 확인)."""
+    from app.services import repository
+
+    seed_stock("005930", "삼성전자", "STOCK")
+    seed_stock("000660", "SK하이닉스", "STOCK")
+    _seed_prices("005930", [100, 101, 102, 103, 104])  # 5건
+    _seed_prices("000660", [200, 201])                  # 2건
+
+    result = repository.get_prices_batch(["005930", "000660"], days=3)
+
+    assert len(result["005930"]) == 3          # 5건 중 최근 3건만
+    assert [p["close_price"] for p in result["005930"]] == [102, 103, 104]  # 오래된→최신
+    assert len(result["000660"]) == 2           # 보유분(2건)이 상한보다 적으면 전부
+
+
 def test_etf_detail_404_for_unknown():
     assert client.get("/api/etfs/999999").status_code == 404
 

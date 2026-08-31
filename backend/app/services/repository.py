@@ -191,6 +191,38 @@ def get_prices(ticker: str, days: int = 60) -> list[dict]:
     return [dict(r) for r in reversed(rows)]
 
 
+def get_prices_batch(tickers: list[str], days: int) -> dict[str, list[dict]]:
+    """여러 종목의 최근 N거래일 시세를 한 쿼리로 조회(종목별 오래된→최신).
+
+    get_prices()를 종목마다 반복 호출하는 대신 윈도우 함수로 한 번에 가져온다
+    (batch-summary 등 다종목 배치 조회 전용).
+    """
+    if not tickers:
+        return {}
+    placeholders = ",".join("?" * len(tickers))
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ticker, date, open_price, high_price, low_price, close_price,
+                   volume, change_pct
+            FROM (
+                SELECT ticker, date, open_price, high_price, low_price, close_price,
+                       volume, change_pct,
+                       ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
+                FROM prices WHERE ticker IN ({placeholders})
+            )
+            WHERE rn <= ?
+            ORDER BY ticker, date
+            """,
+            (*tickers, days),
+        ).fetchall()
+    out: dict[str, list[dict]] = {t: [] for t in tickers}
+    for r in rows:
+        d = dict(r)
+        out[d.pop("ticker")].append(d)
+    return out
+
+
 def get_prices_range(ticker: str, start: str | None, end: str | None) -> list[dict]:
     """기간(start~end)으로 시세 조회(오래된→최신). 상세 차트의 날짜 범위용."""
     where = ["ticker = ?"]
@@ -252,6 +284,34 @@ def get_trading_flow(ticker: str, days: int = 20) -> list[dict]:
             (ticker, days),
         ).fetchall()
     return [dict(r) for r in reversed(rows)]
+
+
+def get_trading_flow_batch(tickers: list[str], days: int) -> dict[str, list[dict]]:
+    """여러 종목의 최근 N거래일 매매동향을 한 쿼리로 조회(종목별 오래된→최신)."""
+    if not tickers:
+        return {}
+    placeholders = ",".join("?" * len(tickers))
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ticker, date, individual_net, institutional_net, foreign_net,
+                   foreign_hold_ratio
+            FROM (
+                SELECT ticker, date, individual_net, institutional_net, foreign_net,
+                       foreign_hold_ratio,
+                       ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
+                FROM trading_flow WHERE ticker IN ({placeholders})
+            )
+            WHERE rn <= ?
+            ORDER BY ticker, date
+            """,
+            (*tickers, days),
+        ).fetchall()
+    out: dict[str, list[dict]] = {t: [] for t in tickers}
+    for r in rows:
+        d = dict(r)
+        out[d.pop("ticker")].append(d)
+    return out
 
 
 def get_intraday_dated(
@@ -438,6 +498,32 @@ def get_news(ticker: str, limit: int = 10) -> list[dict]:
             (ticker, limit),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_news_batch(tickers: list[str], limit: int) -> dict[str, list[dict]]:
+    """여러 종목의 최신 뉴스를 한 쿼리로 조회(종목별 최신순)."""
+    if not tickers:
+        return {}
+    placeholders = ",".join("?" * len(tickers))
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ticker, title, link, description, pub_date
+            FROM (
+                SELECT ticker, title, link, description, pub_date,
+                       ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY pub_date DESC) AS rn
+                FROM news WHERE ticker IN ({placeholders})
+            )
+            WHERE rn <= ?
+            ORDER BY ticker, pub_date DESC
+            """,
+            (*tickers, limit),
+        ).fetchall()
+    out: dict[str, list[dict]] = {t: [] for t in tickers}
+    for r in rows:
+        d = dict(r)
+        out[d.pop("ticker")].append(d)
+    return out
 
 
 def reset_collected_data() -> dict:
