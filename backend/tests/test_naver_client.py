@@ -3,6 +3,7 @@ import httpx
 import pytest
 import respx
 
+from app import config
 from app.services import naver_client as nc
 
 
@@ -208,3 +209,99 @@ def test_fetch_index_intraday_returns_current_session_when_available():
 def test_fetch_index_intraday_rejects_unknown_index():
     with pytest.raises(ValueError):
         nc.fetch_index_intraday("NASDAQ")
+
+
+# --- 재시도/백오프 ---------------------------------------------------------
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    """재시도 sleep을 무력화해 테스트가 실제로 대기하지 않게 한다."""
+    calls: list[float] = []
+    monkeypatch.setattr(nc, "_sleep", lambda s: calls.append(s))
+    return calls
+
+
+@respx.mock
+def test_get_with_retry_recovers_from_503(no_sleep):
+    route = respx.get(f"{nc.MSTOCK_BASE}/005930/basic")
+    route.side_effect = [
+        httpx.Response(503),
+        httpx.Response(200, json={"itemCode": "005930", "stockName": "삼성전자"}),
+    ]
+
+    result = nc.fetch_stock_basic("005930")
+
+    assert result["name"] == "삼성전자"
+    assert route.call_count == 2
+    assert len(no_sleep) == 1
+
+
+@respx.mock
+def test_get_with_retry_uses_retry_after_header(no_sleep):
+    route = respx.get(f"{nc.MSTOCK_BASE}/005930/basic")
+    route.side_effect = [
+        httpx.Response(429, headers={"Retry-After": "2"}),
+        httpx.Response(200, json={"itemCode": "005930", "stockName": "삼성전자"}),
+    ]
+
+    result = nc.fetch_stock_basic("005930")
+
+    assert result["name"] == "삼성전자"
+    assert no_sleep == [2.0]  # 헤더 값을 지터 없이 그대로 사용
+
+
+@respx.mock
+def test_get_with_retry_exhausts_and_falls_back_like_before(no_sleep):
+    route = respx.get(f"{nc.MSTOCK_BASE}/005930/basic")
+    route.side_effect = [httpx.Response(503)] * (nc.MAX_RETRIES + 1)
+
+    result = nc.fetch_stock_basic("005930")
+
+    assert result is None  # 재시도 소진 후 기존과 동일하게 조용히 폴백
+    assert route.call_count == nc.MAX_RETRIES + 1
+    assert len(no_sleep) == nc.MAX_RETRIES
+
+
+@respx.mock
+def test_get_with_retry_does_not_retry_on_404(no_sleep):
+    route = respx.get(f"{nc.MSTOCK_BASE}/005930/basic")
+    route.side_effect = [httpx.Response(404)]
+
+    result = nc.fetch_stock_basic("005930")
+
+    assert result is None
+    assert route.call_count == 1  # 영구 오류는 재시도하지 않는다
+    assert no_sleep == []
+
+
+@respx.mock
+def test_get_with_retry_recovers_from_connect_error(no_sleep):
+    route = respx.get(f"{nc.MSTOCK_BASE}/005930/basic")
+    route.side_effect = [
+        httpx.ConnectError("boom"),
+        httpx.Response(200, json={"itemCode": "005930", "stockName": "삼성전자"}),
+    ]
+
+    result = nc.fetch_stock_basic("005930")
+
+    assert result["name"] == "삼성전자"
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_fetch_news_retries_through_separate_client(no_sleep, monkeypatch):
+    monkeypatch.setattr(config, "NAVER_CLIENT_ID", "test-id")
+    monkeypatch.setattr(config, "NAVER_CLIENT_SECRET", "test-secret")
+    route = respx.get(nc.SEARCH_NEWS_URL)
+    route.side_effect = [
+        httpx.Response(502),
+        httpx.Response(200, json={"items": [
+            {"title": "삼성전자 실적 호조", "link": "https://example.com/1",
+             "description": "설명", "pubDate": "Mon, 21 Jul 2026 09:00:00 +0900"},
+        ]}),
+    ]
+
+    rows = nc.fetch_news("삼성전자")
+
+    assert len(rows) == 1
+    assert route.call_count == 2

@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import html
 import logging
+import random
 import re
+import time
 from email.utils import parsedate_to_datetime
 from typing import Optional
 
@@ -54,6 +56,68 @@ DEFAULT_TIMEOUT = 10.0
 
 def _client() -> httpx.Client:
     return httpx.Client(headers=HEADERS, timeout=DEFAULT_TIMEOUT)
+
+
+# --- HTTP 재시도/백오프 ---------------------------------------------------
+# 연결 오류·타임아웃(httpx.TransportError)과 일시적 상태코드(429/5xx)만 재시도한다.
+# 400/404 등 영구적 오류는 즉시 전파해 기존 동작을 그대로 유지한다.
+MAX_RETRIES = 3  # 최초 시도 실패 후 추가로 재시도할 횟수
+BACKOFF_BASE_SECONDS = 0.5
+BACKOFF_MAX_SECONDS = 8.0
+BACKOFF_JITTER_RATIO = 0.25  # 지수 백오프 값의 최대 +25%를 지터로 추가
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _sleep(seconds: float) -> None:
+    """time.sleep 래퍼. 테스트에서 monkeypatch로 대체해 재시도 지연 없이 검증한다."""
+    time.sleep(seconds)
+
+
+def _backoff_seconds(retry_count: int, retry_after: str | None) -> float:
+    """retry_count(1부터)번째 재시도 전 대기 시간(초).
+
+    Retry-After 헤더가 초 단위 숫자면 그 값을 그대로 쓴다(서버가 지정한 값이므로
+    지터 없이 존중). 없거나 파싱 불가(HTTP-date 등)면 지수 백오프+지터로 폴백한다.
+    """
+    if retry_after is not None:
+        try:
+            return max(0.0, float(retry_after))
+        except ValueError:
+            pass
+    delay = min(BACKOFF_MAX_SECONDS, BACKOFF_BASE_SECONDS * (2 ** (retry_count - 1)))
+    return delay + random.uniform(0, delay * BACKOFF_JITTER_RATIO)
+
+
+def _get_with_retry(
+    client: httpx.Client,
+    url: str,
+    *,
+    params: dict | None = None,
+    headers: dict | None = None,
+) -> httpx.Response:
+    """GET + 상태확인 + 재시도/백오프를 한 곳에서 처리하는 공용 헬퍼.
+
+    연결 오류·타임아웃과 429/500/502/503/504만 최대 MAX_RETRIES회 재시도한다.
+    그 외 상태코드(400/404 등)는 즉시 전파한다. 재시도를 모두 소진하면 마지막
+    예외를 그대로 raise한다 — 새 예외 타입을 만들지 않으므로 각 fetch_* 함수의
+    기존 `except (httpx.HTTPError, ValueError)` 블록이 변경 없이 그대로 잡는다.
+    """
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = client.get(url, params=params, headers=headers)
+            resp.raise_for_status()
+            return resp
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status not in _RETRYABLE_STATUS_CODES or attempt == MAX_RETRIES:
+                raise
+            delay = _backoff_seconds(attempt + 1, exc.response.headers.get("Retry-After"))
+        except httpx.TransportError:
+            if attempt == MAX_RETRIES:
+                raise
+            delay = _backoff_seconds(attempt + 1, None)
+        _sleep(delay)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _to_int(value) -> Optional[int]:
@@ -121,8 +185,7 @@ def fetch_stock_basic(code: str) -> Optional[dict]:
     url = f"{MSTOCK_BASE}/{code}/basic"
     try:
         with _client() as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            resp = _get_with_retry(client, url)
             data = resp.json()
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_stock_basic(%s) failed: %s", code, exc)
@@ -151,8 +214,7 @@ def fetch_daily_prices(code: str, pages: int = 1) -> list[dict]:
         with _client() as client:
             for page in range(1, pages + 1):
                 url = f"{MSTOCK_BASE}/{code}/price"
-                resp = client.get(url, params={"pageSize": MAX_PAGE_SIZE, "page": page})
-                resp.raise_for_status()
+                resp = _get_with_retry(client, url, params={"pageSize": MAX_PAGE_SIZE, "page": page})
                 items = resp.json()
                 if not items:
                     break
@@ -205,8 +267,7 @@ def fetch_trading_flow(code: str, pages: int = 1, days: int | None = None) -> li
         with _client() as client:
             if days is None:
                 # 기존 동작: 최근 1회 창.
-                resp = client.get(url, params={"trendType": 1})
-                resp.raise_for_status()
+                resp = _get_with_retry(client, url, params={"trendType": 1})
                 for it in resp.json() or []:
                     rows.append(_flow_row(it))
                 return rows
@@ -218,8 +279,7 @@ def fetch_trading_flow(code: str, pages: int = 1, days: int | None = None) -> li
                 params = {"trendType": 1}
                 if bizdate:
                     params["bizdate"] = bizdate
-                resp = client.get(url, params=params)
-                resp.raise_for_status()
+                resp = _get_with_retry(client, url, params=params)
                 items = resp.json() or []
                 if not items:
                     break
@@ -282,8 +342,7 @@ def fetch_index_intraday(code: str) -> list[dict]:
 def _fetch_minute_bars(url: str, code: str) -> list[dict]:
     try:
         with _client() as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            resp = _get_with_retry(client, url)
             rows = _parse_minute_bars(resp.json())
             if rows:
                 return rows
@@ -297,14 +356,14 @@ def _fetch_minute_bars(url: str, code: str) -> list[dict]:
 
             end = date.today()
             start = end - timedelta(days=10)
-            resp = client.get(
+            resp = _get_with_retry(
+                client,
                 url,
                 params={
                     "startDateTime": f"{start.strftime('%Y%m%d')}0000",
                     "endDateTime": f"{end.strftime('%Y%m%d')}2359",
                 },
             )
-            resp.raise_for_status()
             wide_rows = _parse_minute_bars(resp.json())
             if not wide_rows:
                 return []
@@ -325,8 +384,7 @@ def fetch_stock_fundamentals(code: str) -> Optional[dict]:
     url = f"{MSTOCK_BASE}/{code}/integration"
     try:
         with _client() as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            resp = _get_with_retry(client, url)
             data = resp.json()
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_stock_fundamentals(%s) failed: %s", code, exc)
@@ -363,8 +421,7 @@ def fetch_etf_fundamentals(code: str) -> Optional[dict]:
     url = f"{MSTOCK_BASE}/{code}/integration"
     try:
         with _client() as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            resp = _get_with_retry(client, url)
             data = resp.json()
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_etf_fundamentals(%s) failed: %s", code, exc)
@@ -398,8 +455,7 @@ def fetch_etf_holdings(code: str) -> list[dict]:
     url = f"{MSTOCK_BASE}/{code}/etfAnalysis"
     try:
         with _client() as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            resp = _get_with_retry(client, url)
             data = resp.json()
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_etf_holdings(%s) failed: %s", code, exc)
@@ -461,8 +517,7 @@ def fetch_market_catalog(market: str, limit: int | None = None) -> list[dict]:
     try:
         with _client() as client:
             def _fetch_page(page: int) -> tuple[list[dict], int]:
-                resp = client.get(url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
-                resp.raise_for_status()
+                resp = _get_with_retry(client, url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
                 body = resp.json()
                 return (body.get("stocks") or []), int(body.get("totalCount") or 0)
 
@@ -545,8 +600,7 @@ def fetch_news(query: str, display: int = 10) -> list[dict]:
     params = {"query": query, "display": display, "sort": "date"}
     try:
         with httpx.Client(timeout=DEFAULT_TIMEOUT) as client:
-            resp = client.get(SEARCH_NEWS_URL, params=params, headers=headers)
-            resp.raise_for_status()
+            resp = _get_with_retry(client, SEARCH_NEWS_URL, params=params, headers=headers)
             items = resp.json().get("items") or []
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_news(%s) failed: %s", query, exc)
@@ -575,8 +629,7 @@ def fetch_index_basic(code: str) -> Optional[dict]:
     url = f"{MINDEX_BASE}/{code}/basic"
     try:
         with _client() as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            resp = _get_with_retry(client, url)
             data = resp.json()
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("fetch_index_basic(%s) failed: %s", code, exc)
@@ -605,8 +658,7 @@ def fetch_index_chart(code: str, period: str = "3M") -> list[dict]:
         with _client() as client:
             page = 1
             while len(rows) < count:
-                resp = client.get(url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
-                resp.raise_for_status()
+                resp = _get_with_retry(client, url, params={"page": page, "pageSize": MAX_PAGE_SIZE})
                 items = resp.json()
                 if not items:
                     break
