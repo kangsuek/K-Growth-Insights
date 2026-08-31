@@ -285,6 +285,22 @@ export default function ScreeningFilters({ filters, onFilterChange, onReset, las
                 지속 상승추세
               </span>
             </label>
+            <label
+              className="flex items-center gap-2 cursor-pointer"
+              title={'전일 대비 MACD가 시그널선을 돌파(골든/데드크로스)했거나 RSI가 '
+                + '과매수(70+)/과매도(30-) 구간에 새로 진입한 종목만 봅니다.\n'
+                + '며칠째 같은 상태인 종목은 표시되지 않습니다.'}
+            >
+              <input
+                type="checkbox"
+                checked={!!filters.signal_alert}
+                onChange={(e) => onFilterChange({ signal_alert: e.target.checked ? true : undefined })}
+                className="w-4 h-4 text-primary-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500"
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                추세 전환 확인 필요
+              </span>
+            </label>
           </div>
         </div>
 

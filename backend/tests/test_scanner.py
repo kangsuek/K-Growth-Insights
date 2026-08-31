@@ -47,6 +47,41 @@ def test_search_foreign_positive_filter():
     assert {i["ticker"] for i in body["items"]} == {"069500"}
 
 
+def test_search_signal_alert_filter():
+    """signal_alert=true는 MACD 크로스 또는 RSI 구간 진입이 있는 종목만 남긴다."""
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price,
+                macd_cross_signal, rsi_zone_entered, catalog_updated_at)
+               VALUES ('069500', 'KODEX 200', 'ETF', 'KOSPI', 1, 1000,
+                       'golden', NULL, '2026-07-22 09:00:00')"""
+        )
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price,
+                macd_cross_signal, rsi_zone_entered, catalog_updated_at)
+               VALUES ('487240', 'KODEX AI', 'ETF', 'KOSPI', 1, 1000,
+                       NULL, 'oversold', '2026-07-22 09:00:00')"""
+        )
+        conn.execute(
+            """INSERT INTO stock_catalog
+               (ticker, name, type, market, is_active, close_price, catalog_updated_at)
+               VALUES ('305720', 'KODEX 2차전지', 'ETF', 'KOSPI', 1, 1000,
+                       '2026-07-22 09:00:00')"""
+        )
+
+    body = client.get("/api/scanner", params={"signal_alert": "true"}).json()
+    assert {i["ticker"] for i in body["items"]} == {"069500", "487240"}
+
+    without_filter = client.get("/api/scanner").json()
+    assert without_filter["total"] == 3
+
+    item = next(i for i in body["items"] if i["ticker"] == "069500")
+    assert item["macd_cross_signal"] == "golden"
+    assert item["rsi_zone_entered"] is None
+
+
 def test_search_is_registered_marks_watchlist():
     seed_stock("069500", "KODEX 200", "ETF")  # 워치리스트 등록
     _seed_catalog([("069500", "KODEX 200", "ETF", "KOSPI", "지수", 5.0, 1000, 100)])

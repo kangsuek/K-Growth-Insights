@@ -31,6 +31,32 @@ describe('YTD 기준일 표기', () => {
   })
 })
 
+describe('추세 전환 배지', () => {
+  it('macd_cross_signal·rsi_zone_entered 값에 따라 배지를 표시한다', () => {
+    renderWithProviders(
+      <ScreeningTable
+        items={[
+          { ...baseItem, ticker: '000001', name: '골든종목', macd_cross_signal: 'golden' },
+          { ...baseItem, ticker: '000002', name: '데드종목', macd_cross_signal: 'dead' },
+          { ...baseItem, ticker: '000003', name: '과매수종목', rsi_zone_entered: 'overbought' },
+          { ...baseItem, ticker: '000004', name: '과매도종목', rsi_zone_entered: 'oversold' },
+          { ...baseItem, ticker: '000005', name: '평범한종목' },
+        ]}
+        total={5} page={1} pageSize={20}
+        sortBy="weekly_return" sortDir="desc" onSort={() => {}} onPageChange={() => {}}
+      />
+    )
+
+    expect(within(screen.getByText('골든종목').closest('tr')).getByText('▲골든크로스')).toBeInTheDocument()
+    expect(within(screen.getByText('데드종목').closest('tr')).getByText('▼데드크로스')).toBeInTheDocument()
+    expect(within(screen.getByText('과매수종목').closest('tr')).getByText('RSI 과매수')).toBeInTheDocument()
+    expect(within(screen.getByText('과매도종목').closest('tr')).getByText('RSI 과매도')).toBeInTheDocument()
+
+    const plainRow = screen.getByText('평범한종목').closest('tr')
+    expect(within(plainRow).queryByText(/골든크로스|데드크로스|RSI/)).not.toBeInTheDocument()
+  })
+})
+
 describe('isLateYtdBase', () => {
   it('전년도 기준일이면 false — 네이버와 같은 정상 기준이라 덧붙이지 않는다', () => {
     // 하이픈·점 표기 모두 인식해야 한다 (백엔드는 하이픈으로 저장한다)

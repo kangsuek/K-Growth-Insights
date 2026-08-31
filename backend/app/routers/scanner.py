@@ -32,6 +32,8 @@ def search_scanner(
     # 연초 이후 추세가 꾸준했는지(R²·최대낙폭·월승률·20일선 유지). 임계값은
     # services/scanner.SUSTAINED_UPTREND 한 곳에 있다.
     sustained_uptrend: Optional[bool] = Query(None),
+    # 전일 대비 MACD 골든/데드크로스 또는 RSI 과매수·과매도 진입이 있었던 종목만.
+    signal_alert: Optional[bool] = Query(None),
     sort_by: str = Query("weekly_return"),
     sort_dir: str = Query("desc"),
     page: int = Query(1, ge=1),
@@ -49,6 +51,7 @@ def search_scanner(
         "foreign_net_positive": foreign_net_positive,
         "institutional_net_positive": institutional_net_positive,
         "sustained_uptrend": sustained_uptrend,
+        "signal_alert": signal_alert,
         "sort_by": sort_by, "sort_dir": sort_dir, "page": page, "page_size": page_size,
     })
 

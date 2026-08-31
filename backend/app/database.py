@@ -135,6 +135,9 @@ CREATE TABLE IF NOT EXISTS stock_catalog (
     trend_above_ma     REAL,      -- 종가가 20일 이동평균 위였던 날 비율(%)
     foreign_net        INTEGER,   -- 최근 외국인 순매수
     institutional_net  INTEGER,   -- 최근 기관 순매수
+    -- 전일 대비 기술적 신호 변화(services/metrics.py). '추세 전환 확인 필요' 필터용.
+    macd_cross_signal  TEXT,      -- 'golden' | 'dead' | NULL
+    rsi_zone_entered   TEXT,      -- 'overbought' | 'oversold' | NULL
     catalog_updated_at TEXT,      -- 지표 갱신 시각
     updated_at         TEXT DEFAULT (datetime('now'))
 );
@@ -215,6 +218,8 @@ _CATALOG_ADDED_COLUMNS = {
     "trend_above_ma": "REAL",
     "foreign_net": "INTEGER",
     "institutional_net": "INTEGER",
+    "macd_cross_signal": "TEXT",
+    "rsi_zone_entered": "TEXT",
     "catalog_updated_at": "TEXT",
 }
 

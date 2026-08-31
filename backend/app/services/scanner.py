@@ -142,6 +142,11 @@ def _metrics_for(ticker: str) -> dict | None:
     trend = metrics.trend_metrics(
         prices, since=f"{date.today().year}-01-01", base_price=ytd_base_of_year)
 
+    # MACD/RSI는 전일 대비 오늘의 상태 변화만 본다('추세 전환 확인 필요' 필터).
+    closes_asc = [p["close_price"] for p in reversed(prices) if p.get("close_price")]
+    macd_cross = metrics.macd_cross_signal(closes_asc)
+    rsi_zone = metrics.rsi_zone_entered(closes_asc)
+
     # 수급도 가격과 같은 거래일로 맞춘다(as_of 이하 가장 최근 확정분).
     flow = naver_client.fetch_trading_flow(ticker)  # 최신순
     foreign_net = inst_net = None
@@ -163,6 +168,8 @@ def _metrics_for(ticker: str) -> dict | None:
         **trend,
         "foreign_net": foreign_net,
         "institutional_net": inst_net,
+        "macd_cross_signal": macd_cross,
+        "rsi_zone_entered": rsi_zone,
     }
 
 
@@ -227,6 +234,7 @@ def _collect_one(ticker: str) -> int:
                 monthly_return=?, ytd_return=?, ytd_base_date=?, ytd_base_price=?,
                 metrics_date=?, trend_r2=?, trend_mdd=?, trend_win_rate=?,
                 trend_above_ma=?, foreign_net=?, institutional_net=?,
+                macd_cross_signal=?, rsi_zone_entered=?,
                 catalog_updated_at=datetime('now')
             WHERE ticker=?
             """,
@@ -234,7 +242,8 @@ def _collect_one(ticker: str) -> int:
              row["weekly_return"], row["monthly_return"], row["ytd_return"],
              row["ytd_base_date"], row["ytd_base_price"], row["metrics_date"],
              row["trend_r2"], row["trend_mdd"], row["trend_win_rate"],
-             row["trend_above_ma"], row["foreign_net"], row["institutional_net"], ticker),
+             row["trend_above_ma"], row["foreign_net"], row["institutional_net"],
+             row["macd_cross_signal"], row["rsi_zone_entered"], ticker),
         )
     with _lock:
         _progress["updated"] += 1
@@ -380,6 +389,9 @@ def _row_to_item(row, registered: set) -> dict:
         "trend_win_rate": d.get("trend_win_rate"),
         "trend_above_ma": d.get("trend_above_ma"),
         "foreign_net": d.get("foreign_net"), "institutional_net": d.get("institutional_net"),
+        # 전일 대비 기술적 신호 변화 — '추세 전환 확인 필요' 필터의 판정 근거.
+        "macd_cross_signal": d.get("macd_cross_signal"),
+        "rsi_zone_entered": d.get("rsi_zone_entered"),
         # 한 행의 값이 두 수집 단계에서 온다. 수익률·수급은 발굴 지표수집만
         # (catalog_updated_at) 채우지만, 현재가·등락률·거래량은 종목목록수집
         # (updated_at)과 지표수집 **양쪽 다** 쓴다. 그래서 시세 시각은 둘 중 나중
@@ -424,6 +436,9 @@ def search(filters: dict) -> dict:
         for cond, value in SUSTAINED_UPTREND.items():
             where.append(cond)
             params.append(value)
+    if filters.get("signal_alert"):
+        # 전일 대비 MACD 골든/데드크로스 또는 RSI 과매수·과매도 진입이 있었던 종목만.
+        where.append("(macd_cross_signal IS NOT NULL OR rsi_zone_entered IS NOT NULL)")
 
     where_sql = " AND ".join(where)
     sort_by = filters.get("sort_by") if filters.get("sort_by") in _SORT_COLUMNS else "weekly_return"

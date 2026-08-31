@@ -155,3 +155,40 @@ describe('지속 상승추세 토글', () => {
     expect(label.getAttribute('title')).toContain('머니마켓')
   })
 })
+
+describe('추세 전환 확인 필요 토글', () => {
+  const renderFilters = (filters = {}) => {
+    const changes = []
+    renderWithProviders(
+      <ScreeningFilters
+        filters={{ market: 'ETF', ...filters }}
+        onFilterChange={(partial) => changes.push(partial)}
+        onReset={() => {}}
+      />
+    )
+    return changes
+  }
+
+  it('체크하면 signal_alert를 켠다', async () => {
+    const user = userEvent.setup()
+    const changes = renderFilters()
+
+    await user.click(screen.getByLabelText('추세 전환 확인 필요'))
+    expect(changes.at(-1)).toEqual({ signal_alert: true })
+  })
+
+  it('체크 해제하면 signal_alert를 지운다', async () => {
+    const user = userEvent.setup()
+    const changes = renderFilters({ signal_alert: true })
+
+    await user.click(screen.getByLabelText('추세 전환 확인 필요'))
+    expect(changes.at(-1)).toEqual({ signal_alert: undefined })
+  })
+
+  it('MACD·RSI 기준을 툴팁으로 설명한다', () => {
+    renderFilters()
+    const label = screen.getByText('추세 전환 확인 필요').closest('label')
+    expect(label).toHaveAttribute('title', expect.stringContaining('골든/데드크로스'))
+    expect(label.getAttribute('title')).toContain('과매수')
+  })
+})

@@ -61,6 +61,8 @@ const DEFAULT_FILTERS = {
   institutional_net_positive: undefined,
   // 연초 이후 추세가 꾸준했는지(R²·최대낙폭·월승률·20일선 유지) — 백엔드 임계값 적용
   sustained_uptrend: undefined,
+  // 전일 대비 MACD 골든/데드크로스 또는 RSI 과매수·과매도 신규 진입
+  signal_alert: undefined,
   sort_by: 'weekly_return',
   sort_dir: 'desc',
   page: 1,

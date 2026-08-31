@@ -132,6 +132,115 @@ def annualized_volatility(daily_returns_pct: list[float]) -> float | None:
     return sd * math.sqrt(TRADING_DAYS_PER_YEAR)
 
 
+# --- 기술적 지표(MACD/RSI) ----------------------------------------------------
+#
+# 종목 발굴의 '추세 전환 확인 필요' 필터가 쓴다. 계산식은 종목 상세 화면
+# (frontend/src/utils/technicalIndicators.js)과 동일하게 맞춰, 발굴에서 골든크로스로
+# 뜬 종목이 상세 페이지에서도 같은 판정으로 보이도록 한다.
+
+RSI_OVERBOUGHT = 70.0
+RSI_OVERSOLD = 30.0
+
+
+def calculate_ema(values: list[float], period: int) -> list[float | None]:
+    """지수이동평균(EMA). 반환은 입력과 같은 길이, 앞의 (period-1)개는 None.
+
+    첫 EMA는 SMA로 시작한다(technicalIndicators.js의 calculateEMA와 동일 방식).
+    """
+    ema: list[float | None] = [None] * len(values)
+    if len(values) < period:
+        return ema
+    ema[period - 1] = sum(values[:period]) / period
+    multiplier = 2 / (period + 1)
+    for i in range(period, len(values)):
+        ema[i] = (values[i] - ema[i - 1]) * multiplier + ema[i - 1]
+    return ema
+
+
+def calculate_rsi(closes_asc: list[float], period: int = 14) -> list[float | None]:
+    """RSI(Wilder's smoothing). 반환은 closes_asc와 같은 길이, 앞부분은 None."""
+    n = len(closes_asc)
+    result: list[float | None] = [None] * n
+    if n < period + 1:
+        return result
+
+    gains = [max(closes_asc[i] - closes_asc[i - 1], 0.0) for i in range(1, n)]
+    losses = [max(closes_asc[i - 1] - closes_asc[i], 0.0) for i in range(1, n)]
+
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    rs = 100.0 if avg_loss == 0 else avg_gain / avg_loss
+    result[period] = 100 - 100 / (1 + rs)
+
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        rs = 100.0 if avg_loss == 0 else avg_gain / avg_loss
+        result[i + 1] = 100 - 100 / (1 + rs)
+    return result
+
+
+def calculate_macd(
+    closes_asc: list[float], fast: int = 12, slow: int = 26, signal_period: int = 9
+) -> tuple[list[float | None], list[float | None]]:
+    """(MACD선, 시그널선) — 둘 다 closes_asc와 같은 길이, 계산 불가 구간은 None."""
+    n = len(closes_asc)
+    if n < slow + signal_period:
+        return [None] * n, [None] * n
+
+    fast_ema = calculate_ema(closes_asc, fast)
+    slow_ema = calculate_ema(closes_asc, slow)
+    macd_line: list[float | None] = [
+        (f - s) if f is not None and s is not None else None
+        for f, s in zip(fast_ema, slow_ema)
+    ]
+
+    valid = [v for v in macd_line if v is not None]
+    signal_ema = calculate_ema(valid, signal_period)
+
+    signal_line: list[float | None] = [None] * n
+    vi = 0
+    for i, v in enumerate(macd_line):
+        if v is not None:
+            signal_line[i] = signal_ema[vi]
+            vi += 1
+    return macd_line, signal_line
+
+
+def macd_cross_signal(closes_asc: list[float]) -> str | None:
+    """가장 최근 거래일에 MACD가 시그널선을 돌파했으면 'golden'/'dead', 아니면 None.
+
+    어제 대비 오늘만 본다 — 며칠째 같은 상태인 종목을 계속 띄우지 않기 위함이다.
+    """
+    macd_line, signal_line = calculate_macd(closes_asc)
+    idx = [i for i in range(len(macd_line))
+           if macd_line[i] is not None and signal_line[i] is not None]
+    if len(idx) < 2:
+        return None
+    prev_macd, prev_sig = macd_line[idx[-2]], signal_line[idx[-2]]
+    last_macd, last_sig = macd_line[idx[-1]], signal_line[idx[-1]]
+    if prev_macd <= prev_sig and last_macd > last_sig:
+        return "golden"
+    if prev_macd >= prev_sig and last_macd < last_sig:
+        return "dead"
+    return None
+
+
+def rsi_zone_entered(closes_asc: list[float], period: int = 14) -> str | None:
+    """가장 최근 거래일에 RSI가 과매수/과매도 구간에 새로 진입했으면
+    'overbought'/'oversold', 아니면 None(계속 그 구간에 머물러 있던 경우도 None)."""
+    rsi = calculate_rsi(closes_asc, period)
+    idx = [i for i in range(len(rsi)) if rsi[i] is not None]
+    if len(idx) < 2:
+        return None
+    prev, last = rsi[idx[-2]], rsi[idx[-1]]
+    if last >= RSI_OVERBOUGHT and prev < RSI_OVERBOUGHT:
+        return "overbought"
+    if last <= RSI_OVERSOLD and prev > RSI_OVERSOLD:
+        return "oversold"
+    return None
+
+
 # --- 추세 지속성 -------------------------------------------------------------
 #
 # '연초 이후 꾸준히 올랐는가'는 연초대비 수익률(ytd_return)만으로 판정할 수 없다.
