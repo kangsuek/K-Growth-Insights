@@ -227,7 +227,6 @@ npm run build:release      # 서명 + 공증 (배포용, 자격증명 필요)
 
 산출물은 `desktop/release/`에 생성됩니다.
 
-서명·공증 준비물과 검증 방법은 [docs/desktop-release.md](./docs/desktop-release.md) 참고.
 인증서가 없으면 `npm run build`는 서명을 건너뛰고 계속 진행합니다(로컬 확인용으로는 문제없음).
 
 > Electron 셸은 실행 시 `uv`를 찾아 사용자 워크스페이스에 가상환경을 만들고 백엔드를 띄운 뒤
@@ -246,7 +245,7 @@ git tag v1.0.0 && git push origin v1.0.0   # 릴리스 생성
 
 릴리스 워크플로는 `CSC_LINK` 시크릿이 있으면 서명·공증까지 하고, 없으면 미서명으로 빌드합니다.
 서명 시 필요한 시크릿은 `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
-`APPLE_TEAM_ID` — 발급 방법은 [docs/desktop-release.md](./docs/desktop-release.md)에 있습니다.
+`APPLE_TEAM_ID`입니다.
 
 Pages는 저장소 Settings → Pages → Source를 **GitHub Actions**로 한 번 바꿔야 동작합니다.
 
