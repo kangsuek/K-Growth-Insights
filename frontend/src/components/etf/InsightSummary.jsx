@@ -7,8 +7,12 @@ import { generateAllInsights } from '../../utils/insights'
  * 투자 인사이트 요약을 페이지 상단에 표시
  *
  * 기능:
- * - 핵심 포인트 (최대 4개): 매매동향, 추세, 변동성 분석
+ * - 기술적 신호 (최대 4개): 매매동향, 추세, 변동성 분석
  * - 리스크 요약 (최대 3개): 위험 요소 알림
+ *
+ * StrategySummary(백엔드 insights.py 기반: 수익률·수급·뉴스 리스크)와는 별개 분석이다.
+ * 둘 다 "핵심 포인트"라는 같은 제목을 쓰면 같은 내용이 두 번 뜨는 것처럼 오해할 수 있어
+ * 이쪽은 "기술적 신호"로 구분한다.
  */
 // 인사이트 타입별 스타일 - 순수 함수로 컴포넌트 외부 정의
 const getInsightStyle = (type) => {
@@ -60,13 +64,13 @@ export default function InsightSummary({ pricesData = [], tradingFlowData = [] }
         </h3>
       </div>
 
-      {/* 핵심 포인트 */}
+      {/* 기술적 신호 */}
       {insights && insights.length > 0 && (
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm">💡</span>
             <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              핵심 포인트
+              기술적 신호
             </h4>
           </div>
           <ul className="space-y-2 ml-1">
