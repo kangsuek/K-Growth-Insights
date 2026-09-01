@@ -298,8 +298,12 @@ def test_etf_prices_returned_newest_first():
     assert rows[-1]["date"] == "2026-07-01"
 
 
+@respx.mock
 def test_etf_fundamentals_holdings_field_mapping():
     """구성종목은 프론트 계약(stock_code/stock_name/daily_change_pct)으로 매핑."""
+    respx.get(f"{naver_client.MSTOCK_BASE}/005930/basic").mock(
+        return_value=httpx.Response(200, json={})
+    )
     seed_stock("487240", "KODEX ETF", "ETF")
     with get_connection() as conn:
         conn.execute(

@@ -22,6 +22,10 @@ def _etf_analysis_url(code):
     return f"{naver_client.MSTOCK_BASE}/{code}/etfAnalysis"
 
 
+def _basic_url(code):
+    return f"{naver_client.MSTOCK_BASE}/{code}/basic"
+
+
 # --- naver_client 파싱 --------------------------------------------------------
 
 @respx.mock
@@ -238,10 +242,15 @@ def test_fundamentals_endpoint_empty_payload_when_not_collected():
     assert body["stock"] is None  # 아직 수집 전 → 빈 카드
 
 
+@respx.mock
 def test_fundamentals_holdings_fill_daily_change_from_catalog():
     """구성종목 전일대비는 코드로 stock_catalog 등락률을 조회해 채운다.
     코드가 없는 구성종목(해외자산·선물)은 조회 불가라 None으로 남는다.
+
+    실시간 조회(_fetch_live_changes)는 빈 응답으로 목킹해 실패시키고, DB 폴백
+    경로(latest_change_pct)가 검증되도록 한다.
     """
+    respx.get(_basic_url("010120")).mock(return_value=httpx.Response(200, json={}))
     seed_stock("487240", "KODEX AI일렉트릭", "ETF")
     with get_connection() as conn:
         # 구성종목 2건: 코드 있는 것 + 코드 없는 것
@@ -255,16 +264,20 @@ def test_fundamentals_holdings_fill_daily_change_from_catalog():
 
     holdings = client.get("/api/etfs/487240/fundamentals").json()["holdings"]
     by_seq = {h["seq"]: h for h in holdings}
-    assert by_seq[1]["daily_change_pct"] == 9.13   # 코드로 등락률 채워짐
+    assert by_seq[1]["daily_change_pct"] == 9.13   # 실시간 실패 → 코드로 등락률 채워짐
     assert by_seq[1]["weight"] == 20.49
     assert by_seq[2]["daily_change_pct"] is None    # 코드 없으면 채울 수 없음
     assert by_seq[2]["weight"] is None
 
 
+@respx.mock
 def test_fundamentals_holdings_prefer_fresher_price_over_stale_catalog():
     """발굴 딥수집이 며칠 정체된 사이 종목관리 추적분의 일별시세가 더 최신이면
     prices.change_pct를 써야 한다(오래된 stock_catalog 값을 그대로 보여주면 안 됨).
+
+    실시간 조회는 빈 응답으로 목킹해 실패시키고, DB 내에서의 신선도 비교 로직만 검증한다.
     """
+    respx.get(_basic_url("005930")).mock(return_value=httpx.Response(200, json={}))
     seed_stock("487241", "KODEX 정체테스트", "ETF")
     with get_connection() as conn:
         conn.execute("INSERT INTO etf_holdings (ticker, seq, item_code, item_name, weight) "
@@ -279,3 +292,26 @@ def test_fundamentals_holdings_prefer_fresher_price_over_stale_catalog():
 
     holdings = client.get("/api/etfs/487241/fundamentals").json()["holdings"]
     assert holdings[0]["daily_change_pct"] == -8.7  # 더 최신인 prices 값을 써야 함
+
+
+@respx.mock
+def test_fundamentals_holdings_prefer_live_over_stale_db():
+    """DB(발굴 카탈로그) 값이 오래돼 실제 등락과 부호까지 다를 수 있다 — 실시간 조회가
+    가능하면 DB 값 대신 그걸 써야 한다.
+    """
+    respx.get(_basic_url("000810")).mock(
+        return_value=httpx.Response(
+            200,
+            json={"itemCode": "000810", "fluctuationsRatio": "1.8"},
+        )
+    )
+    seed_stock("140700", "KODEX 보험", "ETF")
+    with get_connection() as conn:
+        conn.execute("INSERT INTO etf_holdings (ticker, seq, item_code, item_name, weight) "
+                     "VALUES ('140700', 1, '000810', '삼성화재', 21.21)")
+        # DB엔 오래된 음수 값만 있음(예: 며칠 전 확정 종가 기준)
+        conn.execute("INSERT INTO stock_catalog (ticker, name, type, market, daily_change_pct) "
+                     "VALUES ('000810', '삼성화재', 'STOCK', 'KOSPI', -3.2)")
+
+    holdings = client.get("/api/etfs/140700/fundamentals").json()["holdings"]
+    assert holdings[0]["daily_change_pct"] == 1.8  # DB의 -3.2가 아니라 실시간값

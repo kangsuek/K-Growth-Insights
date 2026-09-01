@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.services import ai_prompt, collectors, comparison, insights, metrics, repository
+from app import config
+from app.services import ai_prompt, collectors, comparison, insights, metrics, naver_client, repository
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +344,26 @@ def get_etf_intraday(
     return _intraday_response(ticker, target_date, auto_collect, force_refresh)
 
 
+def _fetch_live_changes(codes: list[str]) -> dict[str, float]:
+    """구성종목의 실시간 등락률을 네이버에서 직접 조회.
+
+    확정 시세(latest_change_pct)는 발굴 카탈로그에만 있는 종목의 경우 며칠씩 정체될 수
+    있어 장중 실제 등락과 어긋난다. 실패/결측 종목은 결과에서 빠지고 호출부가 DB 값으로
+    폴백한다.
+    """
+    codes = [c for c in dict.fromkeys(codes) if c]
+    if not codes:
+        return {}
+    workers = max(1, min(config.COLLECT_CONCURRENCY, len(codes)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(naver_client.fetch_stock_basic, codes))
+    return {
+        code: r["change_pct"]
+        for code, r in zip(codes, results)
+        if r is not None and r.get("change_pct") is not None
+    }
+
+
 @router.get("/{ticker}/fundamentals")
 def get_etf_fundamentals(ticker: str):
     data = repository.get_fundamentals(ticker)
@@ -352,14 +374,18 @@ def get_etf_fundamentals(ticker: str):
     # (해외자산·선물처럼 코드가 없는 구성종목은 조회 불가라 None으로 남는다.)
     holdings = data.get("holdings")
     if holdings:
-        changes = repository.latest_change_pct([h.get("item_code") for h in holdings])
+        codes = [h.get("item_code") for h in holdings]
+        db_changes = repository.latest_change_pct(codes)
+        live_changes = _fetch_live_changes(codes)
         data["holdings"] = [
             {
                 "seq": h.get("seq"),
                 "stock_code": h.get("item_code"),
                 "stock_name": h.get("item_name"),
                 "weight": h.get("weight"),
-                "daily_change_pct": changes.get(h.get("item_code")),
+                "daily_change_pct": live_changes.get(
+                    h.get("item_code"), db_changes.get(h.get("item_code"))
+                ),
             }
             for h in holdings
         ]
