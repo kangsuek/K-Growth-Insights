@@ -39,6 +39,11 @@ function convertDateRangeFormat(settingRange) {
 const AUTO_REFRESH_TOAST_MS = 1500
 const AUTO_REFRESH_ERROR_TOAST_MS = 5000
 
+// RSI/MACD 워밍업 기간(캘린더일). 대시보드·종목발굴 신호 계산
+// (SIGNAL_LOOKBACK_DAYS=250 거래일, backend/app/routers/etfs.py)과 비슷한 깊이로 맞춰
+// 같은 종목·같은 날짜인데 화면마다 RSI/MACD 값이 갈리는 걸 줄인다.
+const RSI_MACD_WARMUP_DAYS = 365
+
 // 상세 페이지 자동 갱신이 다시 읽는 쿼리들. 모두 DB만 읽어 네이버 API를 호출하지
 // 않으므로(분봉의 auto_collect는 데이터가 없을 때만 수집 트리거) 주기 실행에 안전하다.
 const DETAIL_AUTO_REFRESH_QUERY_KEYS = [
@@ -341,12 +346,12 @@ export default function ETFDetail() {
   }, [])
 
 
-  // 기술지표용 확장 가격 데이터 (60일 앞선 시작일)
+  // 기술지표용 확장 가격 데이터 (RSI_MACD_WARMUP_DAYS일 앞선 시작일)
   const extendedDateRange = useMemo(() => {
     if (!showRSI && !showMACD) return null
     const today = new Date()
     const startDate = new Date(dateRange.startDate)
-    startDate.setDate(startDate.getDate() - 60)
+    startDate.setDate(startDate.getDate() - RSI_MACD_WARMUP_DAYS)
     return {
       startDate: format(startDate, 'yyyy-MM-dd'),
       endDate: format(today, 'yyyy-MM-dd'),
@@ -368,7 +373,7 @@ export default function ETFDetail() {
   })
 
   // RSI/MACD 계산 (확장 데이터로 계산, 표시는 선택 기간으로 슬라이스해 가격 차트와 정렬)
-  // 앞선 60일(워밍업)은 지표 정확도를 위해 계산에만 쓰고 화면에는 노출하지 않는다.
+  // 앞선 RSI_MACD_WARMUP_DAYS일(워밍업)은 지표 정확도를 위해 계산에만 쓰고 화면에는 노출하지 않는다.
   const inSelectedRange = useCallback(
     (d) => d.date >= dateRange.startDate && d.date <= dateRange.endDate,
     [dateRange.startDate, dateRange.endDate],
