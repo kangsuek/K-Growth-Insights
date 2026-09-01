@@ -521,6 +521,137 @@ export default function ETFDetail() {
             )}
           </div>
 
+          {/* 펀더멘털 지표 — 네이버증권 등 국내 증권앱이 종목상세에 관례적으로 노출하는
+              항목만 표시한다. ETF의 return_1m/3m/1y는 이 앱이 이미 화면에 쓰는
+              metrics.py 기준 수익률과 산출 기준이 달라 "같은 개념, 다른 값" 혼란을
+              만들 수 있어 의도적으로 제외했다. */}
+          {etf?.type === 'STOCK' && fundamentalsData?.stock && (
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">펀더멘털</h4>
+              <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+                {fundamentalsData.stock.per != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">PER</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {formatPrice(fundamentalsData.stock.per)}배
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.stock.pbr != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">PBR</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {formatPrice(fundamentalsData.stock.pbr)}배
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.stock.eps != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">EPS</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {formatPrice(fundamentalsData.stock.eps)}원
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.stock.dividend_yield != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">배당수익률</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {fundamentalsData.stock.dividend_yield.toFixed(2)}%
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.stock.foreign_rate != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">외국인 지분율</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {fundamentalsData.stock.foreign_rate.toFixed(2)}%
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.stock.market_value != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">시가총액</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {fundamentalsData.stock.market_value}
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.stock.high_52w != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">52주 최고</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {formatPrice(fundamentalsData.stock.high_52w)}원
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.stock.low_52w != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">52주 최저</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {formatPrice(fundamentalsData.stock.low_52w)}원
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {etf?.type === 'ETF' && fundamentalsData?.etf && (
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">펀더멘털</h4>
+              <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+                {fundamentalsData.etf.issuer_name != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">운용사</span>
+                    <p className="text-base font-semibold mt-0.5 line-clamp-1 text-gray-900 dark:text-gray-100">
+                      {fundamentalsData.etf.issuer_name}
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.etf.nav != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">NAV</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {formatPrice(fundamentalsData.etf.nav)}원
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.etf.deviation_rate != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">괴리율</span>
+                    <p className={`text-base font-semibold mt-0.5 ${getPriceChangeColor(fundamentalsData.etf.deviation_rate)}`}>
+                      {formatPercent(fundamentalsData.etf.deviation_rate)}
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.etf.total_nav != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">순자산총액</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {fundamentalsData.etf.total_nav}
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.etf.total_fee != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">총보수</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {fundamentalsData.etf.total_fee.toFixed(2)}%
+                    </p>
+                  </div>
+                )}
+                {fundamentalsData.etf.dividend_yield != null && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">분배금수익률</span>
+                    <p className="text-base font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
+                      {fundamentalsData.etf.dividend_yield.toFixed(2)}%
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ETF 주요 구성자산 (상위 10개 종목) */}
           {etf?.type === 'ETF' && fundamentalsData?.holdings?.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
