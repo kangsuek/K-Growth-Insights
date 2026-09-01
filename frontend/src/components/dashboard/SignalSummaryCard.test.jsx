@@ -24,16 +24,17 @@ describe('오늘의 신호 요약 카드', () => {
     expect(screen.queryByText('삼성전기')).not.toBeInTheDocument()
   })
 
-  it('오늘 신호가 없으면 아무것도 렌더링하지 않는다', () => {
+  it('오늘 신호가 없어도 카드는 유지하고 빈 상태를 보여준다', () => {
     const batchSummary = {
       '005930': { macd_cross_signal: null, rsi_zone_entered: null },
       '000660': { macd_cross_signal: null, rsi_zone_entered: null },
       '009150': {},
     }
-    const { container } = renderWithProviders(
-      <SignalSummaryCard etfs={etfs} batchSummary={batchSummary} />
-    )
-    expect(container).toBeEmptyDOMElement()
+    renderWithProviders(<SignalSummaryCard etfs={etfs} batchSummary={batchSummary} />)
+
+    expect(screen.getByText('오늘의 신호')).toBeInTheDocument()
+    expect(screen.queryByText(/오늘의 신호 \d+건/)).not.toBeInTheDocument()
+    expect(screen.getByText('오늘 발생한 신호가 없습니다')).toBeInTheDocument()
   })
 
   it('batchSummary가 아직 없으면(로딩 중) 렌더링하지 않는다', () => {
