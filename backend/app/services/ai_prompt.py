@@ -11,7 +11,7 @@ import logging
 from datetime import date, timedelta
 from pathlib import Path
 
-from app.services import repository
+from app.services import metrics, repository
 
 logger = logging.getLogger(__name__)
 
@@ -44,27 +44,31 @@ def _pct(v) -> str:
 
 # --- DB context 섹션 ----------------------------------------------------------
 
-def _section_prices(lines: list[str], prices_desc: list[dict]) -> None:
-    """1. 최근 N거래일 가격 데이터 + 주간 수익률."""
+def _section_prices(lines: list[str], prices_desc: list[dict], weekly_return: float | None) -> None:
+    """1. 최근 N거래일 가격 데이터 + 거래대금 + 주간 수익률.
+
+    weekly_return은 metrics.weekly_return()으로 계산해 호출부에서 전달받는다
+    (대시보드·종목상세와 같은 기준일을 쓰기 위해 — 표에 담긴 N거래일만으로
+    자체 계산하면 휴장일 낀 주에 화면마다 다른 값이 나올 수 있다).
+    """
     if not prices_desc:
         return
     lines.append(f"### 1. 최근 {len(prices_desc)}거래일 가격 데이터")
     lines.append("")
-    lines.append("| 날짜 | 시가 | 고가 | 저가 | 종가 | 거래량 | 등락률(%) |")
-    lines.append("|------|------|------|------|------|--------|----------|")
+    lines.append("| 날짜 | 시가 | 고가 | 저가 | 종가 | 거래량 | 거래대금(억원) | 등락률(%) |")
+    lines.append("|------|------|------|------|------|--------|---------------|----------|")
     for p in prices_desc:
+        close = p.get("close_price")
+        volume = p.get("volume")
+        trading_value = close * volume / 1e8 if close is not None and volume is not None else None
         lines.append(
             f"| {p.get('date')} | {_f0(p.get('open_price'))} | {_f0(p.get('high_price'))} | "
-            f"{_f0(p.get('low_price'))} | {_f0(p.get('close_price'))} | "
-            f"{_f0(p.get('volume'))} | {_pct(p.get('change_pct'))} |"
+            f"{_f0(p.get('low_price'))} | {_f0(close)} | "
+            f"{_f0(volume)} | {_f0(trading_value)} | {_pct(p.get('change_pct'))} |"
         )
-    # 주간 수익률: 표에 담긴 최고(오래된)·최신 종가 비교.
-    first_close = prices_desc[-1].get("close_price")
-    last_close = prices_desc[0].get("close_price")
-    if first_close and last_close:
-        weekly = (last_close - first_close) / first_close * 100
+    if weekly_return is not None:
         lines.append("")
-        lines.append(f"**주간 수익률**: {weekly:+.2f}%")
+        lines.append(f"**주간 수익률**: {_pct(weekly_return)}")
     lines.append("")
 
 
@@ -191,6 +195,25 @@ def _section_technical(lines: list[str], closes_asc: list[float]) -> None:
         lines.append("- **신호**: " + ("상승 모멘텀 (MACD > 0)" if macd_line > 0 else "하락 모멘텀 (MACD < 0)"))
         lines.append("")
 
+    # 볼린저밴드(20, 2σ) — ma20과 같은 20일 구간의 표준편차로 상단/하단을 구한다.
+    if ma20:
+        window = closes_asc[-20:]
+        variance = sum((c - ma20) ** 2 for c in window) / 20
+        std = variance ** 0.5
+        upper = ma20 + 2 * std
+        lower = ma20 - 2 * std
+        lines.append("**볼린저밴드(20, 2σ)**:")
+        lines.append(f"- 상단: {upper:,.0f}원")
+        lines.append(f"- 중심(20일 SMA): {ma20:,.0f}원")
+        lines.append(f"- 하단: {lower:,.0f}원")
+        if current >= upper:
+            lines.append("- **신호**: 상단 이탈(과매수 근접)")
+        elif current <= lower:
+            lines.append("- **신호**: 하단 이탈(과매도 근접)")
+        else:
+            lines.append("- **신호**: 밴드 중립")
+        lines.append("")
+
 
 def _section_etf_fundamentals(lines: list[str], fund: dict | None, holdings: list[dict]) -> None:
     """6. ETF 펀더멘털 + 구성종목 상위."""
@@ -276,7 +299,8 @@ def _fetch_db_context(ticker: str, name: str, days: int = _CONTEXT_DAYS) -> str:
         current_price = prices_desc[0].get("close_price") if prices_desc else None
         close_by_date = {p["date"]: p.get("close_price") for p in prices_year}
 
-        _section_prices(lines, recent_desc)
+        weekly_return = metrics.weekly_return(prices_desc)
+        _section_prices(lines, recent_desc, weekly_return)
 
         flow_desc = list(reversed(repository.get_trading_flow(ticker, days=days)))
         _section_flow(lines, flow_desc, close_by_date)

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_connection
 from app.main import app
-from app.services import ai_prompt
+from app.services import ai_prompt, metrics, repository
 from tests.conftest import seed_stock
 
 client = TestClient(app)
@@ -112,6 +112,51 @@ def test_section_52week_excludes_data_older_than_true_52_weeks():
     ctx = ai_prompt._fetch_db_context("395270", "HANARO Fn K-반도체")
     assert "52주 최저가**: 100원" not in ctx
     assert "52주 최저가**: 11,830원" in ctx
+
+
+def test_weekly_return_matches_metrics_module():
+    """주간 수익률은 ai_prompt 자체 계산이 아니라 metrics.weekly_return()과
+    일치해야 한다(대시보드·종목상세와 같은 기준일을 쓰기 위함)."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    today = date.today()
+    for i in range(30):
+        d = (today - timedelta(days=29 - i)).isoformat()
+        _insert_price("005930", d, close=70000 + i * 100)
+
+    ctx = ai_prompt._fetch_db_context("005930", "삼성전자")
+    prices_desc = list(reversed(repository.get_prices("005930", days=365)))
+    expected = metrics.weekly_return(prices_desc)
+    assert expected is not None
+    assert f"**주간 수익률**: {expected:+.2f}%" in ctx
+
+
+def test_technical_section_includes_bollinger_bands():
+    seed_stock("005930", "삼성전자", "STOCK")
+    closes = [70000 + i * 50 for i in range(30)]
+    _seed_prices("005930", closes)
+
+    ctx = ai_prompt._fetch_db_context("005930", "삼성전자")
+    window = closes[-20:]
+    sma20 = sum(window) / 20
+    variance = sum((c - sma20) ** 2 for c in window) / 20
+    std = variance ** 0.5
+    upper = sma20 + 2 * std
+    lower = sma20 - 2 * std
+
+    assert "볼린저밴드(20, 2σ)" in ctx
+    assert f"상단: {upper:,.0f}원" in ctx
+    assert f"하단: {lower:,.0f}원" in ctx
+
+
+def test_price_table_includes_trading_value():
+    seed_stock("005930", "삼성전자", "STOCK")
+    _seed_prices("005930", list(range(70000, 70030)), volume=2_000_000)
+
+    ctx = ai_prompt._fetch_db_context("005930", "삼성전자")
+    assert "거래대금(억원)" in ctx
+    last_close = 70029
+    expected_value = ai_prompt._f0(last_close * 2_000_000 / 1e8)
+    assert f"| {ai_prompt._f0(2_000_000)} | {expected_value} |" in ctx
 
 
 # --- 엔드포인트 계약 ---------------------------------------------------------

@@ -487,7 +487,11 @@ def get_fundamentals(ticker: str) -> dict | None:
 
 
 def get_news(ticker: str, limit: int = 10) -> list[dict]:
-    """종목 뉴스를 최신순으로 조회."""
+    """종목 뉴스를 최신순으로 조회(제목 중복 제거).
+
+    재크롤링으로 같은 기사가 링크만 미세하게 다르게 저장되는 경우가 있어(link가
+    PK라 완전 동일 링크만 upsert됨), 제목이 정확히 같으면 최신 1건만 남긴다.
+    """
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -495,9 +499,19 @@ def get_news(ticker: str, limit: int = 10) -> list[dict]:
             FROM news WHERE ticker = ?
             ORDER BY pub_date DESC LIMIT ?
             """,
-            (ticker, limit),
+            (ticker, limit * 3),
         ).fetchall()
-    return [dict(r) for r in rows]
+    seen_titles: set[str] = set()
+    out: list[dict] = []
+    for r in rows:
+        d = dict(r)
+        if d["title"] in seen_titles:
+            continue
+        seen_titles.add(d["title"])
+        out.append(d)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def get_news_batch(tickers: list[str], limit: int) -> dict[str, list[dict]]:

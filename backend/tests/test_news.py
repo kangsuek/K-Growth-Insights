@@ -104,6 +104,29 @@ def test_get_news_orders_by_pub_date_desc(enable_search):
     assert rows[0]["link"] == "https://n.news.naver.com/b"
 
 
+def test_get_news_dedupes_identical_titles():
+    """재크롤링으로 같은 기사가 링크만 미세하게 다르게 저장돼도 제목이
+    같으면 최신 1건만 남아야 한다."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO news (ticker, title, link, pub_date) VALUES (?, ?, ?, ?)",
+            ("005930", "삼성전자 신고가", "https://a.example.com/old", "2026-07-22T10:00:00+09:00"),
+        )
+        conn.execute(
+            "INSERT INTO news (ticker, title, link, pub_date) VALUES (?, ?, ?, ?)",
+            ("005930", "삼성전자 신고가", "https://a.example.com/recrawled", "2026-07-22T10:00:00+09:00"),
+        )
+        conn.execute(
+            "INSERT INTO news (ticker, title, link, pub_date) VALUES (?, ?, ?, ?)",
+            ("005930", "반도체 업황 회복", "https://b.example.com/1", "2026-07-21T09:00:00+09:00"),
+        )
+    rows = repository.get_news("005930", limit=10)
+    assert len(rows) == 2
+    titles = [r["title"] for r in rows]
+    assert titles.count("삼성전자 신고가") == 1
+
+
 def test_news_endpoint_empty_list_when_none_collected():
     seed_stock("005930", "삼성전자", "STOCK")
     r = client.get("/api/news/005930")
