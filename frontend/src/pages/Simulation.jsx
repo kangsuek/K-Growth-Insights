@@ -41,6 +41,11 @@ export default function Simulation() {
         </nav>
       </div>
 
+      {/* 배당 미반영 고지: 시세 변동만 계산하므로 탭 공통으로 한 번만 안내 */}
+      <p className="text-xs text-gray-400 dark:text-gray-500">
+        본 시뮬레이션은 시세 변동만 반영하며 배당(분배금)은 포함하지 않습니다.
+      </p>
+
       {/* 탭 컨텐츠 */}
       {activeTab === 'lump-sum' && <LumpSumSimulation />}
       {activeTab === 'dca' && <DCASimulation />}

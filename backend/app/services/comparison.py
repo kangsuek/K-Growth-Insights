@@ -84,12 +84,13 @@ def compare(ticker_list: list[str], start: str | None, end: str | None) -> dict:
     end = end or today.isoformat()
     start = start or (today - timedelta(days=30)).isoformat()
 
-    # 종목별 {date: close} (기간 필터)
+    # 종목별 {date: close}. get_prices(days=N)는 "N개 행(거래일)"이라 보유
+    # 이력이 길면 요청한 start보다 늦게 잘릴 수 있어(52주 버그와 동일 패턴),
+    # 캘린더 범위를 그대로 쿼리하는 get_prices_range를 쓴다.
     series: dict[str, dict] = {}
     for t in ticker_list:
-        prices = repository.get_prices(t, days=400)  # 오래된→최신
-        m = {p["date"]: p["close_price"] for p in prices
-             if p.get("close_price") and start <= (p.get("date") or "") <= end}
+        prices = repository.get_prices_range(t, start, end)  # 오래된→최신, 이미 범위 필터됨
+        m = {p["date"]: p["close_price"] for p in prices if p.get("close_price")}
         if m:
             series[t] = m
 

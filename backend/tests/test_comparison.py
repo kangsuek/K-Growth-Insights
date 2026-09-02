@@ -60,6 +60,22 @@ def test_compare_normalizes_and_stats():
     assert body["correlation_matrix"]["matrix"][idx][idx] == 1.0
 
 
+def test_compare_uses_full_calendar_range_beyond_400_rows():
+    """get_prices(days=400)는 최근 400개 행(거래일)만 반환해 긴 보유 이력에서
+    요청한 시작일이 조용히 잘렸다(52주 최저가 버그와 동일 패턴) — 캘린더 범위
+    전체(get_prices_range)가 나와야 한다."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    closes = list(range(100, 520))  # 420일치(400행 제한보다 많음)
+    _seed_recent_prices("005930", closes)
+    start = (date.today() - timedelta(days=419)).isoformat()
+    end = date.today().isoformat()
+
+    body = comparison.compare(["005930"], start, end)
+
+    assert body["normalized_prices"]["dates"][0] == start
+    assert len(body["normalized_prices"]["dates"]) == 420
+
+
 def test_compare_endpoint_requires_two():
     seed_stock("005930", "삼성전자", "STOCK")
     r = client.get("/api/etfs/compare", params={"tickers": "005930"})

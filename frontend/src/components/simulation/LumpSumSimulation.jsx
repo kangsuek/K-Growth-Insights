@@ -112,6 +112,13 @@ export default function LumpSumSimulation() {
       {/* 결과 */}
       {result && (
         <>
+          {/* 실제 매수일 안내(휴장일 입력 시 다음 거래일로 보정됨) */}
+          {result.buy_date !== buyDate && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+              요청하신 {buyDate}은(는) 휴장일이라 다음 거래일인 {result.buy_date}에 매수한 것으로 계산했습니다.
+            </div>
+          )}
+
           {/* 요약 카드 */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <SummaryCard
