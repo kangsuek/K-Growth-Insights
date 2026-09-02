@@ -24,7 +24,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app import config
-from app.services import collectors, repository
+from app.services import alerts, collectors, repository
 from app.timeutil import KST, MARKET_CLOSE, MARKET_OPEN, is_market_hours  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,10 @@ def run_collect_all(reason: str) -> dict:
         result = collectors.collect_stock(s["ticker"])
         if result.ok:
             succeeded += 1
+            try:
+                alerts.check_signal_rules_after_daily_collect(s["ticker"])
+            except Exception:  # noqa: BLE001 - 알림 판정 실패가 수집 자체를 막지 않게
+                logger.warning("[scheduler:%s] 신호 알림 판정 실패: %s", reason, s["ticker"])
     summary = {"total": len(stocks), "succeeded": succeeded}
     logger.info("[scheduler:%s] 수집 완료 %d/%d", reason, succeeded, len(stocks))
     return summary
@@ -53,6 +57,7 @@ def run_collect_intraday_all(reason: str) -> dict:
         try:
             collectors.collect_intraday(s["ticker"])
             succeeded += 1
+            alerts.check_price_rules_after_intraday_collect(s["ticker"])
         except Exception:  # noqa: BLE001 - 한 종목 실패가 나머지를 막지 않게
             logger.warning("[scheduler:%s] 분봉 수집 실패: %s", reason, s["ticker"])
     summary = {"total": len(stocks), "succeeded": succeeded}

@@ -13,7 +13,7 @@ from datetime import datetime
 
 from app import config
 from app.models import CollectResult
-from app.services import collectors, repository
+from app.services import alerts, collectors, repository
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,11 @@ def _collect_one(stock: dict, days: int | None) -> CollectResult:
     with _lock:
         _state["completed"] += 1
         _state["succeeded" if result.ok else "failed"] += 1
+    if result.ok:
+        try:
+            alerts.check_signal_rules_after_daily_collect(ticker)
+        except Exception:  # noqa: BLE001 - 알림 판정 실패가 수집 자체를 막지 않게
+            logger.warning("신호 알림 판정 실패: %s", ticker)
     return result
 
 

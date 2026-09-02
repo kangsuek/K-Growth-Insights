@@ -13,7 +13,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app import config
-from app.services import ai_prompt, collectors, comparison, insights, metrics, naver_client, repository
+from app.services import (
+    ai_prompt, alerts, collectors, comparison, insights, metrics, naver_client, repository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ def _start_intraday_collect(ticker: str) -> bool:
     def _run() -> None:
         try:
             collectors.collect_intraday(ticker)
+            alerts.check_price_rules_after_intraday_collect(ticker)
         except Exception as exc:  # noqa: BLE001 - 로깅 후 상태만 해제
             logger.warning("분봉 백그라운드 수집 실패(%s): %s", ticker, exc)
         finally:

@@ -610,3 +610,137 @@ def data_stats() -> dict:
     except OSError:
         result["database_size_mb"] = None
     return result
+
+
+def get_latest_intraday_price(ticker: str) -> float | None:
+    """가장 최근 분봉의 현재가(price). 목표가 알림 판정용 — 분봉은 1분 주기로
+    갱신돼 일별 시세(prices, 10분 주기)보다 실시간성이 높다."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT price FROM intraday_prices WHERE ticker = ? "
+            "ORDER BY datetime DESC LIMIT 1",
+            (ticker,),
+        ).fetchone()
+    return row["price"] if row else None
+
+
+# --- 알림 (alert_rules / alert_events) ----------------------------------------
+
+def create_alert_rule(ticker: str, rule_type: str, target_price: float | None = None) -> dict:
+    with get_connection() as conn:
+        cur = conn.execute(
+            """INSERT INTO alert_rules (ticker, rule_type, target_price)
+               VALUES (?, ?, ?)""",
+            (ticker, rule_type, target_price),
+        )
+        row = conn.execute(
+            "SELECT * FROM alert_rules WHERE id = ?", (cur.lastrowid,)
+        ).fetchone()
+    return dict(row)
+
+
+def list_alert_rules(ticker: str | None = None) -> list[dict]:
+    query = "SELECT * FROM alert_rules"
+    params: tuple = ()
+    if ticker:
+        query += " WHERE ticker = ?"
+        params = (ticker,)
+    query += " ORDER BY created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_alert_rule(rule_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM alert_rules WHERE id = ?", (rule_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_alert_rule(rule_id: int, **fields) -> dict | None:
+    """status/target_price/last_triggered_at 등 주어진 필드만 갱신."""
+    if not fields:
+        return get_alert_rule(rule_id)
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE alert_rules SET {set_clause} WHERE id = ?",
+            (*fields.values(), rule_id),
+        )
+        row = conn.execute("SELECT * FROM alert_rules WHERE id = ?", (rule_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def try_trigger_alert_rule(rule_id: int, triggered_at: str) -> bool:
+    """규칙을 'active' -> 'triggered'로 원자적으로 전환. 이미 트리거된 규칙이면 False.
+
+    분봉 수집(스케줄러)과 온디맨드 수집(종목상세 조회)이 같은 종목을 거의 동시에
+    갱신할 수 있어, 조회 후 갱신하는 두 단계로 나누면 두 스레드가 모두 '아직
+    active'로 읽고 중복 알림을 만들 수 있다. WHERE status='active' 조건부
+    UPDATE 하나로 먼저 통과한 스레드만 True를 받게 해 이를 막는다.
+    """
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE alert_rules SET status = 'triggered', last_triggered_at = ? "
+            "WHERE id = ? AND status = 'active'",
+            (triggered_at, rule_id),
+        )
+    return cur.rowcount == 1
+
+
+def delete_alert_rule(rule_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute("DELETE FROM alert_rules WHERE id = ?", (rule_id,))
+
+
+def create_alert_event(
+    rule_id: int, ticker: str, rule_type: str, message: str, value: float | None, basis: str
+) -> dict:
+    with get_connection() as conn:
+        cur = conn.execute(
+            """INSERT INTO alert_events (rule_id, ticker, rule_type, message, value, basis)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (rule_id, ticker, rule_type, message, value, basis),
+        )
+        row = conn.execute(
+            "SELECT * FROM alert_events WHERE id = ?", (cur.lastrowid,)
+        ).fetchone()
+    return dict(row)
+
+
+def list_alert_events(ticker: str | None = None, unread_only: bool = False, limit: int = 50) -> list[dict]:
+    where = []
+    params: list = []
+    if ticker:
+        where.append("ticker = ?")
+        params.append(ticker)
+    if unread_only:
+        where.append("read_at IS NULL")
+    query = "SELECT * FROM alert_events"
+    if where:
+        query += " WHERE " + " AND ".join(where)
+    query += " ORDER BY triggered_at DESC LIMIT ?"
+    params.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def count_unread_alert_events() -> int:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM alert_events WHERE read_at IS NULL"
+        ).fetchone()
+    return row["c"] if row else 0
+
+
+def mark_alert_events_read(event_ids: list[int]) -> None:
+    if not event_ids:
+        return
+    placeholders = ",".join("?" * len(event_ids))
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE alert_events SET read_at = datetime('now') "
+            f"WHERE id IN ({placeholders}) AND read_at IS NULL",
+            event_ids,
+        )

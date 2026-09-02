@@ -142,6 +142,33 @@ CREATE TABLE IF NOT EXISTS stock_catalog (
     updated_at         TEXT DEFAULT (datetime('now'))
 );
 
+-- 가격/신호 알림 규칙. 사용자가 임의 개수를 만들 수 있어(같은 종목에 같은 유형
+-- 규칙을 여러 개 둘 수도 있음) 이 테이블만 예외적으로 surrogate PK를 쓴다 —
+-- 다른 테이블처럼 (ticker, ...) 자연키로는 표현이 안 된다.
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker             TEXT NOT NULL,
+    rule_type          TEXT NOT NULL,   -- price_above | price_below | rsi_zone | macd_cross
+    target_price       REAL,            -- price_above/price_below 전용
+    status             TEXT NOT NULL DEFAULT 'active',  -- active | triggered | disabled
+    created_at         TEXT DEFAULT (datetime('now')),
+    last_triggered_at  TEXT
+);
+
+-- 알림 발생 이력. basis는 어떤 데이터 기준으로 판정했는지를 남긴다(확정/실시간
+-- 구분 — CLAUDE.md '실시간 vs 확정 데이터 기준' 참고).
+CREATE TABLE IF NOT EXISTS alert_events (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id       INTEGER NOT NULL,
+    ticker        TEXT NOT NULL,
+    rule_type     TEXT NOT NULL,
+    message       TEXT NOT NULL,
+    value         REAL,             -- 트리거 시점 가격/RSI 스냅샷
+    basis         TEXT NOT NULL,    -- intraday_live | daily_live | daily_confirmed
+    triggered_at  TEXT DEFAULT (datetime('now')),
+    read_at       TEXT              -- NULL이면 미확인
+);
+
 -- 종목 뉴스: 네이버 검색 API. link를 종목 내 고유키로 사용해 중복을 막는다.
 CREATE TABLE IF NOT EXISTS news (
     ticker      TEXT NOT NULL,
@@ -161,6 +188,10 @@ CREATE INDEX IF NOT EXISTS idx_flow_ticker_date
     ON trading_flow (ticker, date DESC);
 CREATE INDEX IF NOT EXISTS idx_intraday_ticker_dt
     ON intraday_prices (ticker, datetime);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_ticker
+    ON alert_rules (ticker, status);
+CREATE INDEX IF NOT EXISTS idx_alert_events_ticker
+    ON alert_events (ticker, triggered_at DESC);
 """
 
 

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import CORS_ORIGINS
 from app.database import init_db
 from app.routers import (
-    data, etfs, market, news, scanner, settings, simulation,
+    alerts, data, etfs, market, news, scanner, settings, simulation,
 )
 from app.services import api_keys, app_settings, scheduler, stocks_sync
 
@@ -54,6 +54,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(alerts.router)
 app.include_router(data.router)
 app.include_router(etfs.router)
 app.include_router(market.router)
