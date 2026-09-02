@@ -263,6 +263,28 @@ export const settingsApi = {
 }
 
 // Alert (목표가/알림) API 서비스
+export const alertApi = {
+  // 알림 규칙 목록 조회(ticker 생략 시 전체)
+  getRules: (ticker) => api.get('/alerts/rules', { params: ticker ? { ticker } : {}, timeout: FAST_API_TIMEOUT }),
+
+  // 알림 규칙 생성
+  createRule: (data) => api.post('/alerts/rules', data, { timeout: NORMAL_API_TIMEOUT }),
+
+  // 알림 규칙 수정(활성화/비활성화 등)
+  updateRule: (ruleId, data) => api.put(`/alerts/rules/${ruleId}`, data, { timeout: NORMAL_API_TIMEOUT }),
+
+  // 알림 규칙 삭제
+  deleteRule: (ruleId) => api.delete(`/alerts/rules/${ruleId}`, { timeout: NORMAL_API_TIMEOUT }),
+
+  // 발생 이력 조회
+  getEvents: (params = {}) => api.get('/alerts/events', { params, timeout: FAST_API_TIMEOUT }),
+
+  // 안 읽은 이벤트 개수(헤더 뱃지용, 짧은 주기 폴링)
+  getUnreadCount: () => api.get('/alerts/events/unread-count', { timeout: FAST_API_TIMEOUT }),
+
+  // 이벤트 일괄 읽음 처리
+  markEventsRead: (eventIds) => api.post('/alerts/events/read', { event_ids: eventIds }, { timeout: NORMAL_API_TIMEOUT }),
+}
 
 // Simulation API 서비스
 export const simulationApi = {

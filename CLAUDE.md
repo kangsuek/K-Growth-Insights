@@ -38,18 +38,18 @@ npm --prefix frontend run lint                                  # ESLint (경고
 
 ```
 FastAPI (backend/app) ──/api──▶ React+Vite (frontend/src)
-  routers/{etfs,data,scanner,settings,simulation,news,market}
+  routers/{etfs,data,scanner,settings,simulation,news,market,alerts}
     → services/{naver_client,collectors,catalog,scanner,repository,metrics,insights,
                  comparison,simulation,scheduler,jobs,ai_prompt,api_keys,app_settings,
-                 stocks_sync} → SQLite (backend/data/kgrowth.db, 단일 파일)
+                 stocks_sync,alerts} → SQLite (backend/data/kgrowth.db, 단일 파일)
 ```
 
 - **수집 계층**: `naver_client`(네이버 모바일 API 정규화) → `collectors`·`catalog`·`scanner`(SQLite upsert). `scheduler`(APScheduler, 장중 주기 + 마감 후 수집)와 `jobs`(collect-all 백그라운드 실행 + 진행률)가 이 계층을 구동합니다.
-- **조회 계층**: `repository`(읽기 전용 쿼리) → `routers`. `metrics`(수익률·변동성·추세지속성)·`insights`(전략·핵심포인트)·`comparison`(정규화·상관관계)·`simulation`(일시/적립식/포트폴리오)은 조회 시점에 계산하는 공용 로직입니다.
-- **DB 스키마**(`database.py`): `stocks`(추적 종목), `prices`(일별 OHLCV), `trading_flow`(투자자별 순매수), `intraday_prices`(분봉), `stock_fundamentals`/`etf_fundamentals`/`etf_holdings`(펀더멘털 스냅샷), `stock_catalog`(종목 발굴용 전체 유니버스 — `stocks`와 별개), `news`.
+- **조회 계층**: `repository`(읽기 전용 쿼리) → `routers`. `metrics`(수익률·변동성·추세지속성)·`insights`(전략·핵심포인트)·`comparison`(정규화·상관관계)·`simulation`(일시/적립식/포트폴리오)은 조회 시점에 계산하는 공용 로직입니다. `alerts`(가격/신호 알림 규칙·판정)는 수집 직후(스케줄러·수동 수집·종목상세 온디맨드 수집) 훅으로 호출되는 유일한 "쓰기형" 조회 계층 로직입니다.
+- **DB 스키마**(`database.py`): `stocks`(추적 종목), `prices`(일별 OHLCV), `trading_flow`(투자자별 순매수), `intraday_prices`(분봉), `stock_fundamentals`/`etf_fundamentals`/`etf_holdings`(펀더멘털 스냅샷), `stock_catalog`(종목 발굴용 전체 유니버스 — `stocks`와 별개), `news`, `alert_rules`/`alert_events`(알림 규칙·발생 이력 — 추적 종목 한정, 스캐너 유니버스는 대상 아님).
 - **추적 종목의 소스는 DB(`stocks` 테이블)**. `backend/config/stocks.json`은 테이블이 비었을 때만 읽는 **최초 시딩용**입니다(앱 기동마다 동기화하지 않음 — 삭제한 종목이 되살아나는 것을 방지).
 - **`stock_catalog`는 `stocks`와 별개의 유니버스**입니다 — 종목 발굴(스캐너) 화면 전용 카탈로그로, 추적 종목 CRUD와 섞지 않습니다.
-- **프론트엔드**: `pages/{Dashboard,ETFDetail,Screening,Comparison,Simulation,Portfolio,Settings}.jsx`가 각각 `/api`만으로 백엔드와 통신. `components/{charts,dashboard,etf,screening,comparison,simulation,portfolio,settings,news,common,layout}`로 화면별 분리.
+- **프론트엔드**: `pages/{Dashboard,ETFDetail,Screening,Comparison,Simulation,Portfolio,Settings,Alerts}.jsx`가 각각 `/api`만으로 백엔드와 통신. `components/{charts,dashboard,etf,screening,comparison,simulation,portfolio,settings,news,common,layout}`로 화면별 분리.
 - **데스크톱**(`desktop/main.js`): 커스텀 `app://` 프로토콜로 정적 프론트를 서빙하고 `/api/*`는 `localhost:18000` 백엔드로 프록시. 패키징 모드에서는 `~/Library/Application Support/K-Growth Insights/`에 `.venv`를 만들고 `requirements.txt` 해시가 바뀌면 재설치, DB·설정 파일을 최초 1회 시딩합니다.
 
 ## 규칙 (Conventions)
@@ -73,8 +73,17 @@ FastAPI (backend/app) ──/api──▶ React+Vite (frontend/src)
 - **추세 지속성**(`trend_r2`/`trend_mdd`/`trend_win_rate`/`trend_above_ma`)은 연초대비 수익률만으로 '꾸준한 상승'을 가릴 수 없어 함께 저장합니다(폭락 후 반등도 YTD는 +). 판정 임계값은 `scanner.SUSTAINED_UPTREND` 한 곳에 둡니다.
 - 자세한 배경은 [README.md](./README.md#수익률-기준일) 참고.
 
+## 실시간 vs 확정 데이터 기준
+
+수익률·52주 등 위 "지표 규칙"은 확정 종가만 쓰지만, **알림처럼 실시간성이 필요한 기능은 오히려 미확정(장중) 값을 의도적으로 써야** 의미가 있습니다. 두 종류를 섞지 않도록 기준을 명확히 구분합니다.
+
+- **목표가류(현재가 임계값 감시)**: `intraday_prices`(분봉, 1분 주기)의 최신 현재가를 씁니다. `prices`(일별 시세, 10분 주기)보다 갱신이 잦아 실시간 알림에 더 맞습니다.
+- **기술적 신호류(RSI 존 진입, MACD 골든/데드크로스)**: `prices`(일별 시세)의 종가 시계열로 판정합니다(`metrics.rsi_zone_entered`/`macd_cross_signal`). 오늘자 행은 장중엔 계속 갱신되는 미확정 값이다가 15:40 마감 수집으로 확정되므로, 같은 함수가 장중엔 자연히 "실시간(미확정)" 결과를, 마감 후엔 "확정" 결과를 냅니다. `timeutil.is_close_confirmed()`로 판정 시점을 구분하세요.
+- **화면 표시 규칙**: 미확정 값을 보여주는 곳은 반드시 "실시간/미확정"임을 라벨로 명시하고, 확정 종가 기반 지표(수익률·52주 등)와 나란히 놓거나 섞어서 계산하지 않습니다.
+- 구체적인 예: `alert_events.basis` 컬럼(`services/alerts.py`) — `intraday_live`(분봉 기준, 목표가 알림) / `daily_live`(장중 미확정 일별 시세 기준 신호 알림) / `daily_confirmed`(마감 확정 후 신호 알림). 새로 실시간성이 필요한 기능을 추가할 때 이 3분류를 참고하세요.
+
 ## 범위
 
-시세·매매동향·분봉, 펀더멘털(PER/PBR/NAV/구성종목), 뉴스, 인사이트, 스케줄러, 종목 발굴, 비교·시뮬레이션·포트폴리오까지 구현 완료.
+시세·매매동향·분봉, 펀더멘털(PER/PBR/NAV/구성종목), 뉴스, 인사이트, 스케줄러, 종목 발굴, 비교·시뮬레이션·포트폴리오, 가격/신호 알림(추적 종목 한정)까지 구현 완료.
 
 남은 것: 종목 발굴의 수익률·수급 수집이 **전체 ETF + 코스피 상위 200 + 코스닥 상위 300**으로 제한돼 있어(`scanner.KOSPI_TOP_N_SUPPLY`/`KOSDAQ_TOP_N_SUPPLY`) 그 밖 종목은 값이 빕니다. 범위를 넓히려면 수집 시간(현재 1,654종목 약 21분)이 비례해 늘어납니다.

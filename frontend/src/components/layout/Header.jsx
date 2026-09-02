@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { alertApi } from '../../services/api'
 
 const NAV_BASE = 'px-3 py-2 rounded-md text-sm font-medium transition-all duration-200'
 const NAV_ACTIVE = `${NAV_BASE} bg-primary-500 text-white shadow-md`
@@ -19,6 +21,13 @@ export default function Header() {
   const mobileNavLinkClass = useCallback((path) =>
     location.pathname === path ? MOBILE_ACTIVE : MOBILE_INACTIVE,
   [location.pathname])
+
+  // 안 읽은 알림 개수(헤더 뱃지). 60초 주기로 폴링.
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['alerts-unread-count'],
+    queryFn: async () => (await alertApi.getUnreadCount()).data.count,
+    refetchInterval: 60000,
+  })
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-50 transition-colors">
@@ -53,6 +62,14 @@ export default function Header() {
             </Link>
             <Link to="/portfolio" className={navLinkClass('/portfolio')}>
               포트폴리오
+            </Link>
+            <Link to="/alerts" className={`${navLinkClass('/alerts')} relative`}>
+              알림
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Link>
             <Link to="/settings" className={navLinkClass('/settings')}>
               <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,6 +127,9 @@ export default function Header() {
             </Link>
             <Link to="/portfolio" className={mobileNavLinkClass('/portfolio')} onClick={() => setMobileMenuOpen(false)}>
               포트폴리오
+            </Link>
+            <Link to="/alerts" className={mobileNavLinkClass('/alerts')} onClick={() => setMobileMenuOpen(false)}>
+              알림{unreadCount > 0 && ` (${unreadCount > 99 ? '99+' : unreadCount})`}
             </Link>
             <Link to="/settings" className={mobileNavLinkClass('/settings')} onClick={() => setMobileMenuOpen(false)}>
               <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

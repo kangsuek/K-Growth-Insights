@@ -18,6 +18,7 @@ const Portfolio = lazy(() => import('./pages/Portfolio.jsx'))
 const Screening = lazy(() => import('./pages/Screening.jsx'))
 const Simulation = lazy(() => import('./pages/Simulation.jsx'))
 const Settings = lazy(() => import('./pages/Settings.jsx'))
+const Alerts = lazy(() => import('./pages/Alerts.jsx'))
 
 // TanStack Query 클라이언트 설정
 // 백엔드 캐시 TTL과 일치하도록 설정
@@ -57,6 +58,7 @@ function App() {
                           <Route path="/scanner" element={<Screening />} />
                           <Route path="/simulation" element={<Simulation />} />
                           <Route path="/settings" element={<Settings />} />
+                          <Route path="/alerts" element={<Alerts />} />
                         </Routes>
                       </Suspense>
                     </ErrorBoundary>
