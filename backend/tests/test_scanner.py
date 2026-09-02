@@ -1,10 +1,11 @@
 """Phase 4(종목 발굴) 테스트: 검색·필터·정렬·테마·추천 — stock_catalog 기반."""
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
 from app.database import get_connection
 from app.main import app
+from app.services import metrics as metrics_module
 from app.services import naver_client, scanner
 from app.timeutil import KST
 from tests.conftest import seed_stock
@@ -244,6 +245,56 @@ def test_metrics_align_price_and_flow_on_same_trading_day(monkeypatch):
     assert m["ytd_base_date"] == "2025-12-30"
 
 
+def _first_golden_cross_index(closes):
+    """MACD-시그널 부호가 처음 상향 반전되는 인덱스(test_metrics.py와 동일 로직).
+
+    macd_cross_signal은 '마지막 날'만 보므로, 교차가 일어난 그날까지만 잘라
+    넘겨야 'golden'이 나온다.
+    """
+    macd_line, signal_line = metrics_module.calculate_macd(closes)
+    idx = [i for i in range(len(macd_line))
+           if macd_line[i] is not None and signal_line[i] is not None]
+    for a, b in zip(idx, idx[1:]):
+        if macd_line[a] <= signal_line[a] and macd_line[b] > signal_line[b]:
+            return b
+    raise AssertionError("테스트 데이터에서 골든크로스가 발생해야 한다")
+
+
+def test_metrics_for_signal_uses_live_close_but_rest_stays_confirmed(monkeypatch):
+    """골든/데드크로스·RSI 신호는 당일(장중) 실시간 종가까지 포함해 판정하되,
+    같은 응답의 나머지 지표(종가·기준일)는 여전히 확정 기준을 유지해야 한다.
+
+    확정 구간(어제까지)만으로는 아직 크로스 전이고, 오늘 실시간 종가를 더해야
+    비로소 크로스가 나는 시나리오로 검증한다(장기 하락 후 급반등, test_metrics.py와
+    동일한 시퀀스 재사용).
+    """
+    closes = [100.0 - i * 0.5 for i in range(40)]            # 40일 완만한 하락
+    closes += [closes[-1] + i * 5.0 for i in range(1, 26)]   # 이후 25일 급반등
+    cross_i = _first_golden_cross_index(closes)               # 이 날 크로스 발생
+
+    start = date(2026, 1, 1)
+    dates = [(start + timedelta(days=i)).isoformat() for i in range(len(closes))]
+    today = dates[cross_i]
+
+    # naver_client는 최신순(내림차순)으로 반환한다 — 오늘(크로스 발생일)이 맨 앞.
+    raw_prices_desc = [
+        {"date": d, "close_price": c, "change_pct": 0.0, "volume": 100}
+        for d, c in zip(reversed(dates[: cross_i + 1]), reversed(closes[: cross_i + 1]))
+    ]
+
+    monkeypatch.setattr(naver_client, "fetch_daily_prices", lambda code, pages=1: raw_prices_desc)
+    monkeypatch.setattr(naver_client, "fetch_trading_flow", lambda code, **kw: [])
+    monkeypatch.setattr(
+        scanner, "confirmed_prices",
+        lambda prices, now=None: [p for p in prices if p["date"] < today],
+    )
+
+    m = scanner._metrics_for("069500")
+
+    assert m is not None
+    assert m["macd_cross_signal"] == "golden"        # 신호: 오늘 실시간 종가 포함해 판정
+    assert m["metrics_date"] == dates[cross_i - 1]    # 나머지: 여전히 확정(어제) 기준
+    assert m["close_price"] == closes[cross_i - 1]
 
 
 # --- 상승(+) 필터 -------------------------------------------------------------

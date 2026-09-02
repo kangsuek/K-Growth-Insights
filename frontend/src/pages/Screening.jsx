@@ -471,6 +471,12 @@ export default function Screening() {
             </div>
           </div>
 
+          {filters.signal_alert && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              실시간 가격으로 골든크로스·데드크로스·RSI 존 진입을 판정함.
+            </p>
+          )}
+
           {isLoading ? (
             <div className="flex justify-center py-12">
               <LoadingIndicator text="검색 중..." />

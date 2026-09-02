@@ -121,8 +121,8 @@ def _metrics_for(ticker: str) -> dict | None:
     딥페이징한다. 예전에는 YTD 기준가만 캐시해 1페이지로 끝냈지만, 기준가 한 점으로는
     '도중에 무너진 적 있는지'를 알 수 없어 캐시 경로를 걷어냈다.
     """
-    prices = confirmed_prices(
-        naver_client.fetch_daily_prices(ticker, pages=_pages_for_ytd()))
+    raw_prices = naver_client.fetch_daily_prices(ticker, pages=_pages_for_ytd())
+    prices = confirmed_prices(raw_prices)
     if not prices or not prices[0].get("close_price"):
         return None
     as_of = str(prices[0].get("date") or "")[:10]
@@ -143,7 +143,12 @@ def _metrics_for(ticker: str) -> dict | None:
         prices, since=f"{date.today().year}-01-01", base_price=ytd_base_of_year)
 
     # MACD/RSI는 전일 대비 오늘의 상태 변화만 본다('추세 전환 확인 필요' 필터).
-    closes_asc = [p["close_price"] for p in reversed(prices) if p.get("close_price")]
+    # 여기만 raw_prices(확정 필터 적용 전, 장중이면 오늘 실시간 종가 포함)를 쓴다 —
+    # "지금 크로스가 났는지"는 실시간으로 알고 싶다는 요청에 따른 의도적 예외다.
+    # 나머지 지표(종가·등락률·수익률·추세·수급)는 여전히 confirmed_prices() 기준(prices)을
+    # 쓴다 — 가격은 오늘인데 수급은 전일 확정치가 섞이는 기준일 불일치를 피하기 위함
+    # (confirmed_prices() 독스트링 참고).
+    closes_asc = [p["close_price"] for p in reversed(raw_prices) if p.get("close_price")]
     macd_cross = metrics.macd_cross_signal(closes_asc)
     rsi_zone = metrics.rsi_zone_entered(closes_asc)
 
