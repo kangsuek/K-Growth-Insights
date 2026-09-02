@@ -1,4 +1,6 @@
 """AI 투자분석 프롬프트 테스트: RAG context 생성 + /ai-prompt 엔드포인트 계약."""
+from datetime import date, timedelta
+
 from fastapi.testclient import TestClient
 
 from app.database import get_connection
@@ -20,6 +22,20 @@ def _seed_prices(ticker, closes, volume=1_000_000, change_pct=0.5):
                 (ticker, f"2026-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}",
                  c, c + 100, c - 100, c, volume, change_pct),
             )
+
+
+def _insert_price(ticker, date_str, close, high=None, low=None, volume=1_000_000, change_pct=0.5):
+    """실제 캘린더 날짜 1행 삽입(52주 창 경계 테스트용 — _seed_prices는 날짜가 합성이라 부적합)."""
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO prices (ticker, date, open_price, high_price,
+               low_price, close_price, volume, change_pct)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (ticker, date_str, close,
+             high if high is not None else close + 100,
+             low if low is not None else close - 100,
+             close, volume, change_pct),
+        )
 
 
 def _seed_flow(ticker):
@@ -71,6 +87,31 @@ def test_multi_prompt_combines_stocks():
     )
     assert "삼성전자" in prompt and "SK하이닉스" in prompt
     assert "통합 비교" in prompt
+
+
+def test_section_52week_excludes_data_older_than_true_52_weeks():
+    """get_prices(days=365)는 거래일 365개(≈1.4~1.5년)라 진짜 52주 밖 데이터가
+    섞일 수 있다 — 52주 최저가는 캘린더 364일(52주) 창만 반영해야 한다."""
+    seed_stock("395270", "HANARO Fn K-반도체", "ETF")
+    today = date.today()
+
+    # 52주(364일)보다 오래된 이상치: 매우 낮은 저가
+    old_date = (today - timedelta(days=400)).isoformat()
+    _insert_price("395270", old_date, close=9000, high=9100, low=100)
+
+    # 52주 이내의 정상적인 최저가
+    recent_low_date = (today - timedelta(days=100)).isoformat()
+    _insert_price("395270", recent_low_date, close=52000, high=52500, low=11830)
+
+    # 기술적 분석 섹션이 죽지 않도록 최근 30거래일 연속 종가(오늘 마감)
+    for i in range(30):
+        d = (today - timedelta(days=29 - i)).isoformat()
+        _insert_price("395270", d, close=50000 + i * 100,
+                       high=50600 + i * 100, low=49500 + i * 100)
+
+    ctx = ai_prompt._fetch_db_context("395270", "HANARO Fn K-반도체")
+    assert "52주 최저가**: 100원" not in ctx
+    assert "52주 최저가**: 11,830원" in ctx
 
 
 # --- 엔드포인트 계약 ---------------------------------------------------------

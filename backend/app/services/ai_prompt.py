@@ -8,7 +8,7 @@ etf_holdings)에 맞춰 RAG context를 구성한다.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from app.services import repository
@@ -267,7 +267,8 @@ def _fetch_db_context(ticker: str, name: str, days: int = _CONTEXT_DAYS) -> str:
         stock = repository.get_stock(ticker)
         is_etf = bool(stock and stock.get("type") == "ETF")
 
-        # 최근 1년 시세(오래된→최신). 표·기술지표·52주 범위 모두 여기서 파생.
+        # 최근 1년치 거래일 시세(오래된→최신). 표·기술지표는 거래일 수 기준으로
+        # 여기서 파생(MA60/MACD 등은 캘린더일이 아니라 거래일 수 데이터가 필요).
         prices_year = repository.get_prices(ticker, days=365)
         prices_desc = list(reversed(prices_year))
         recent_desc = prices_desc[:days]
@@ -281,7 +282,13 @@ def _fetch_db_context(ticker: str, name: str, days: int = _CONTEXT_DAYS) -> str:
         _section_flow(lines, flow_desc, close_by_date)
 
         _section_news(lines, repository.get_news(ticker, limit=10))
-        _section_52week(lines, prices_year, current_price)
+
+        # 52주 최고/최저는 캘린더 364일(52주=52*7일) 창이어야 한다(거래일 365개는
+        # ≈1.4~1.5년이라 get_prices(days=365)를 그대로 쓰면 진짜 52주 밖 데이터가
+        # 섞여 들어간다). 364일은 네이버증권이 표기하는 52주 최고/최저와 일치한다.
+        fifty_two_weeks_ago = (date.today() - timedelta(days=364)).isoformat()
+        prices_52w = repository.get_prices_range(ticker, fifty_two_weeks_ago, None)
+        _section_52week(lines, prices_52w, current_price)
         _section_technical(lines, closes_asc)
 
         fundamentals = repository.get_fundamentals(ticker) or {}
