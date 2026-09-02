@@ -92,6 +92,23 @@ export default function DataManagementPanel() {
     },
   })
 
+  // 종목 발굴(스캐너) 재수집 주기(TTL) 변경 Mutation
+  const updateScannerTtlMutation = useMutation({
+    mutationFn: async (hours) => {
+      const response = await settingsApi.updateSchedulerSettings({
+        scanner_collect_ttl_hours: hours,
+      })
+      return response.data
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['scheduler-settings'], data)
+      toast.success(`종목 발굴 재수집 주기를 ${data.scanner_collect_ttl_hours}시간으로 변경했습니다`, 3000)
+    },
+    onError: (error) => {
+      toast.error(`종목 발굴 재수집 주기 변경 실패: ${error.message}`)
+    },
+  })
+
   // 데이터 통계 조회
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
     queryKey: ['data-stats'],
@@ -490,7 +507,11 @@ export default function DataManagementPanel() {
 
         {/* 데이터 수집 섹션 */}
         <section className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">데이터 수집</h3>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">데이터 수집</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            아래 3가지는 모두 <strong>서버가 네이버 API에서 새 데이터를 얼마나 자주 가져오는지</strong>를 정합니다.
+            &lsquo;일반 설정&rsquo;의 자동 새로고침(화면이 이미 수집된 데이터를 다시 불러오는 주기)과는 다른 설정입니다.
+          </p>
 
           <div className="space-y-6">
             {/* 분봉 자동 수집 주기 */}
@@ -506,7 +527,7 @@ export default function DataManagementPanel() {
                 )}
               </div>
               <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                장중(평일 09:00~15:40)에 추적 종목의 분봉을 이 주기로 자동 재수집합니다. 짧을수록 화면이 더 자주 갱신되지만 네이버 API 호출이 늘어납니다.
+                장중(평일 09:00~15:40)에 <strong>추적 종목</strong>의 분봉을 네이버 API에서 이 주기로 자동 재수집합니다. 짧을수록 화면이 더 자주 갱신되지만 네이버 API 호출이 늘어납니다.
               </p>
               <select
                 value={schedulerSettings?.intraday_collect_interval_minutes ?? ''}
@@ -534,7 +555,7 @@ export default function DataManagementPanel() {
                 )}
               </div>
               <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                장중(평일 09:00~15:40)에 추적 종목의 일별 시세·매매동향·펀더멘털을 이 주기로 자동 재수집합니다. 짧을수록 화면이 더 자주 갱신되지만 네이버 API 호출이 늘어납니다.
+                장중(평일 09:00~15:40)에 <strong>추적 종목</strong>의 일별 시세·매매동향·펀더멘털을 네이버 API에서 이 주기로 자동 재수집합니다. 짧을수록 화면이 더 자주 갱신되지만 네이버 API 호출이 늘어납니다.
               </p>
               <select
                 value={schedulerSettings?.collect_interval_minutes ?? ''}
@@ -545,6 +566,34 @@ export default function DataManagementPanel() {
               >
                 {[1, 5, 10].map((m) => (
                   <option key={m} value={m}>{m}분마다</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 종목 발굴(스캐너) 재수집 주기 */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">종목 발굴 재수집 주기</h4>
+                {schedulerSettings ? (
+                  <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                    현재 {schedulerSettings.scanner_collect_ttl_hours}시간마다
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">로딩 중...</span>
+                )}
+              </div>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                위 두 항목과 달리 <strong>종목 발굴(스캐너) 화면의 전체 유니버스</strong>(추적 종목이 아닌 코스피/코스닥 전체) 지표를 대상으로 합니다. 자동 스케줄러 대상이 아니라, 마지막 수집 후 이 시간이 지나면 종목 발굴 화면 방문 시 자동으로 재수집됩니다.
+              </p>
+              <select
+                value={schedulerSettings?.scanner_collect_ttl_hours ?? ''}
+                onChange={(e) => updateScannerTtlMutation.mutate(Number(e.target.value))}
+                disabled={!schedulerSettings || updateScannerTtlMutation.isPending}
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+                aria-label="종목 발굴 재수집 주기 선택"
+              >
+                {[1, 3, 6, 12, 24].map((h) => (
+                  <option key={h} value={h}>{h}시간마다</option>
                 ))}
               </select>
             </div>

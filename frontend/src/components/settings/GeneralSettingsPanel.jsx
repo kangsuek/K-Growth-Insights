@@ -100,7 +100,8 @@ export default function GeneralSettingsPanel() {
                 새로고침 간격
               </label>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                대시보드 데이터를 선택한 주기마다 자동으로 갱신합니다
+                대시보드 화면이 서버에 이미 저장된 데이터를 선택한 주기마다 다시 불러옵니다.
+                서버가 네이버 API에서 새 데이터를 가져오는 주기는 &lsquo;설정 → 데이터 관리 → 데이터 수집&rsquo;에서 따로 정합니다.
               </p>
               <div className="grid grid-cols-3 gap-2">
                 {refreshIntervals.map((option) => (

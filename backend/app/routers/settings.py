@@ -74,6 +74,7 @@ class ApiKeysUpdate(BaseModel):
 class SchedulerSettingsUpdate(BaseModel):
     intraday_collect_interval_minutes: Optional[int] = None
     collect_interval_minutes: Optional[int] = None
+    scanner_collect_ttl_hours: Optional[int] = None
 
 
 # --- 종목 관리 ---------------------------------------------------------------
@@ -198,6 +199,7 @@ def update_scheduler_settings(data: SchedulerSettingsUpdate):
         return app_settings.update_scheduler_settings(
             intraday_collect_interval_minutes=data.intraday_collect_interval_minutes,
             collect_interval_minutes=data.collect_interval_minutes,
+            scanner_collect_ttl_hours=data.scanner_collect_ttl_hours,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -23,6 +23,9 @@ MAX_INTRADAY_MINUTES = 30
 MIN_COLLECT_MINUTES = 1
 MAX_COLLECT_MINUTES = 60
 
+MIN_SCANNER_TTL_HOURS = 1
+MAX_SCANNER_TTL_HOURS = 24
+
 
 def _load() -> dict:
     if not _SETTINGS_PATH.exists():
@@ -49,6 +52,9 @@ def load_to_runtime() -> None:
     collect = data.get("collect_interval_minutes")
     if isinstance(collect, int) and MIN_COLLECT_MINUTES <= collect <= MAX_COLLECT_MINUTES:
         config.COLLECT_INTERVAL_MINUTES = collect
+    scanner_ttl = data.get("scanner_collect_ttl_hours")
+    if isinstance(scanner_ttl, int) and MIN_SCANNER_TTL_HOURS <= scanner_ttl <= MAX_SCANNER_TTL_HOURS:
+        config.SCANNER_COLLECT_TTL_HOURS = scanner_ttl
 
 
 def get_scheduler_settings() -> dict:
@@ -59,16 +65,20 @@ def get_scheduler_settings() -> dict:
         "collect_interval_minutes": config.COLLECT_INTERVAL_MINUTES,
         "collect_min_minutes": MIN_COLLECT_MINUTES,
         "collect_max_minutes": MAX_COLLECT_MINUTES,
+        "scanner_collect_ttl_hours": config.SCANNER_COLLECT_TTL_HOURS,
+        "scanner_ttl_min_hours": MIN_SCANNER_TTL_HOURS,
+        "scanner_ttl_max_hours": MAX_SCANNER_TTL_HOURS,
     }
 
 
 def update_scheduler_settings(
     intraday_collect_interval_minutes: int | None = None,
     collect_interval_minutes: int | None = None,
+    scanner_collect_ttl_hours: int | None = None,
 ) -> dict:
     """스케줄러 주기를 저장·런타임 반영하고, 실행 중인 잡을 즉시 재등록한다.
 
-    제공된 값만 갱신한다(둘 다 줘도 되고, 하나만 줘도 된다).
+    제공된 값만 갱신한다(줄 만큼만 줘도 된다).
     """
     if intraday_collect_interval_minutes is not None and not (
         MIN_INTRADAY_MINUTES <= intraday_collect_interval_minutes <= MAX_INTRADAY_MINUTES
@@ -82,12 +92,20 @@ def update_scheduler_settings(
         raise ValueError(
             f"데이터 자동 수집 주기는 {MIN_COLLECT_MINUTES}~{MAX_COLLECT_MINUTES}분 사이여야 합니다"
         )
+    if scanner_collect_ttl_hours is not None and not (
+        MIN_SCANNER_TTL_HOURS <= scanner_collect_ttl_hours <= MAX_SCANNER_TTL_HOURS
+    ):
+        raise ValueError(
+            f"종목 발굴 재수집 주기는 {MIN_SCANNER_TTL_HOURS}~{MAX_SCANNER_TTL_HOURS}시간 사이여야 합니다"
+        )
 
     data = _load()
     if intraday_collect_interval_minutes is not None:
         data["intraday_collect_interval_minutes"] = intraday_collect_interval_minutes
     if collect_interval_minutes is not None:
         data["collect_interval_minutes"] = collect_interval_minutes
+    if scanner_collect_ttl_hours is not None:
+        data["scanner_collect_ttl_hours"] = scanner_collect_ttl_hours
     _save(data)
 
     if intraday_collect_interval_minutes is not None:
@@ -96,5 +114,10 @@ def update_scheduler_settings(
     if collect_interval_minutes is not None:
         scheduler.update_collect_interval(collect_interval_minutes)
         logger.info("데이터 자동 수집 주기 변경: %d분", collect_interval_minutes)
+    if scanner_collect_ttl_hours is not None:
+        # 스캐너 TTL은 스케줄러 잡이 아니라 다음 방문 시 신선도 판정(scanner.check_freshness)
+        # 에서만 쓰여 재등록할 잡이 없다 — config 값만 갱신하면 된다.
+        config.SCANNER_COLLECT_TTL_HOURS = scanner_collect_ttl_hours
+        logger.info("종목 발굴 재수집 주기 변경: %d시간", scanner_collect_ttl_hours)
 
     return get_scheduler_settings()
