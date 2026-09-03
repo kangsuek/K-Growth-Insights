@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 
 from app.config import DATABASE_PATH
@@ -169,6 +170,21 @@ CREATE TABLE IF NOT EXISTS alert_events (
     read_at       TEXT              -- NULL이면 미확인
 );
 
+-- 매수/매도 거래내역. stocks.purchase_price/quantity/purchase_date는 이 테이블로부터
+-- 재계산되는 파생 캐시다(services/transactions.py). 종목당 여러 건일 수 있어(같은 종목을
+-- 여러 번 매수/매도) alert_rules처럼 예외적으로 surrogate PK를 쓴다.
+CREATE TABLE IF NOT EXISTS stock_transactions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker            TEXT NOT NULL,
+    transaction_type  TEXT NOT NULL,   -- BUY | SELL
+    transaction_date  TEXT NOT NULL,   -- YYYY-MM-DD
+    price             REAL NOT NULL,
+    quantity          INTEGER NOT NULL,
+    realized_pnl      REAL,            -- SELL 전용: (매도가-그 시점 평단가)×수량
+    note              TEXT,
+    created_at        TEXT DEFAULT (datetime('now'))
+);
+
 -- 종목 뉴스: 네이버 검색 API. link를 종목 내 고유키로 사용해 중복을 막는다.
 CREATE TABLE IF NOT EXISTS news (
     ticker      TEXT NOT NULL,
@@ -192,6 +208,8 @@ CREATE INDEX IF NOT EXISTS idx_alert_rules_ticker
     ON alert_rules (ticker, status);
 CREATE INDEX IF NOT EXISTS idx_alert_events_ticker
     ON alert_events (ticker, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transactions_ticker_date
+    ON stock_transactions (ticker, transaction_date);
 """
 
 
@@ -286,6 +304,36 @@ def _migrate(conn) -> None:
                 logger.info("Migrated: added stock_catalog.%s", col)
 
 
+def _migrate_legacy_purchase_data(conn) -> None:
+    """기존 stocks.purchase_price/quantity를 최초 매수 거래 1건으로 변환한다.
+
+    종목별로 이미 거래내역이 하나라도 있으면 건너뛴다 — 재실행해도 안전하고(멱등),
+    사용자가 나중에 거래를 전부 지워도(그때 purchase_price가 이미 NULL로 정리됨)
+    되살아나지 않는다.
+    """
+    rows = conn.execute(
+        "SELECT ticker, purchase_date, purchase_price, quantity FROM stocks "
+        "WHERE purchase_price IS NOT NULL AND quantity IS NOT NULL AND quantity > 0"
+    ).fetchall()
+    migrated = 0
+    for r in rows:
+        exists = conn.execute(
+            "SELECT 1 FROM stock_transactions WHERE ticker = ? LIMIT 1", (r["ticker"],)
+        ).fetchone()
+        if exists:
+            continue
+        conn.execute(
+            """INSERT INTO stock_transactions
+               (ticker, transaction_type, transaction_date, price, quantity, note)
+               VALUES (?, 'BUY', ?, ?, ?, '기존 데이터에서 자동 이전')""",
+            (r["ticker"], r["purchase_date"] or date.today().isoformat(),
+             r["purchase_price"], r["quantity"]),
+        )
+        migrated += 1
+    if migrated:
+        logger.info("레거시 매입정보 %d건을 거래내역으로 이전", migrated)
+
+
 def init_db() -> None:
     """Create tables/indexes if they do not exist (idempotent)."""
     Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -301,4 +349,5 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_catalog_sector ON stock_catalog (sector, is_active)"
         )
+        _migrate_legacy_purchase_data(conn)
     logger.info("Database initialized at %s", DATABASE_PATH)

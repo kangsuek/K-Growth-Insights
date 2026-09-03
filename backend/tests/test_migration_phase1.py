@@ -240,14 +240,15 @@ def test_etf_detail_404_for_unknown():
 
 
 def test_etf_detail_includes_purchase_info():
-    """상세 응답에 구매 정보가 있어야 한다.
+    """상세 응답에 구매 정보가 있어야 한다(거래내역 등록 후 자동 계산된 값).
 
     회귀 방지: 이 값이 빠져 있으면 상세 화면의 매입가 기준선(가격 차트·분봉),
     매입가 카드, 수익률·평가금액이 모두 조용히 사라진다.
     """
     seed_stock("005930", "삼성전자", "STOCK", theme="반도체")
-    client.put("/api/settings/stocks/005930", json={
-        "purchase_date": "2026-07-24", "purchase_price": 165200, "quantity": 535,
+    client.post("/api/settings/stocks/005930/transactions", json={
+        "transaction_type": "BUY", "transaction_date": "2026-07-24",
+        "price": 165200, "quantity": 535,
     })
 
     body = client.get("/api/etfs/005930").json()

@@ -198,25 +198,23 @@ def test_update_stock_clears_optional_fields():
     """빈 값(null)으로 수정하면 선택 필드가 실제로 지워져야 한다.
 
     회귀 방지: repository.update_stock이 `data[col] is not None` 조건으로
-    명시적 null을 무시해, 매입가·보유수량·구매일을 비워도 기존 값이 남아
-    "수정이 저장되지 않는" 것처럼 보이던 결함.
+    명시적 null을 무시해, 테마 등을 비워도 기존 값이 남아 "수정이 저장되지
+    않는" 것처럼 보이던 결함. (매입가·보유수량·구매일은 이제 거래내역에서만
+    바뀌므로 이 엔드포인트로는 보내도 무시된다 — test_transactions.py 참고.)
     """
     client.post("/api/settings/stocks", json={
         "ticker": "111111", "name": "테스트종목", "type": "STOCK",
-        "theme": "반도체", "purchase_date": "2026-01-02",
-        "purchase_price": 10000, "quantity": 5,
+        "theme": "반도체", "search_keyword": "테스트",
     })
 
     # 종목 수정 폼이 빈 칸을 비웠을 때 실제로 보내는 payload와 같은 형태
     r = client.put("/api/settings/stocks/111111", json={
-        "name": "테스트종목", "type": "STOCK", "theme": "반도체",
-        "purchase_date": None, "purchase_price": None, "quantity": None,
+        "name": "테스트종목", "type": "STOCK", "theme": None, "search_keyword": None,
     })
     assert r.status_code == 200
     body = r.json()
-    assert body["purchase_price"] is None, "매입가가 지워지지 않았다"
-    assert body["quantity"] is None, "보유 수량이 지워지지 않았다"
-    assert body["purchase_date"] is None, "구매일이 지워지지 않았다"
+    assert body["theme"] is None, "테마가 지워지지 않았다"
+    assert body["search_keyword"] is None, "검색 키워드가 지워지지 않았다"
     # 필수 필드는 그대로 유지
     assert body["name"] == "테스트종목" and body["type"] == "STOCK"
 
@@ -224,16 +222,32 @@ def test_update_stock_clears_optional_fields():
 def test_update_stock_omitted_fields_are_untouched():
     """보내지 않은 필드는 기존 값을 유지해야 한다(부분 수정 의미 유지)."""
     client.post("/api/settings/stocks", json={
-        "ticker": "222222", "name": "보존종목", "type": "STOCK",
-        "purchase_price": 7000, "quantity": 3,
+        "ticker": "222222", "name": "보존종목", "type": "STOCK", "theme": "2차전지",
     })
 
-    r = client.put("/api/settings/stocks/222222", json={"theme": "2차전지"})
+    r = client.put("/api/settings/stocks/222222", json={"search_keyword": "보존"})
     assert r.status_code == 200
     body = r.json()
-    assert body["theme"] == "2차전지"
-    assert body["purchase_price"] == 7000, "보내지 않은 매입가가 지워졌다"
-    assert body["quantity"] == 3, "보내지 않은 보유 수량이 지워졌다"
+    assert body["search_keyword"] == "보존"
+    assert body["theme"] == "2차전지", "보내지 않은 테마가 지워졌다"
+
+
+def test_create_and_update_stock_ignore_legacy_purchase_fields():
+    """매입가/수량/구매일은 이제 거래내역 API로만 바뀐다 — 이 필드로 보내면 그냥 무시된다."""
+    r = client.post("/api/settings/stocks", json={
+        "ticker": "444444", "name": "레거시필드종목", "type": "STOCK",
+        "purchase_date": "2026-01-02", "purchase_price": 10000, "quantity": 5,
+    })
+    assert r.status_code == 201
+    assert r.json()["purchase_price"] is None
+    assert r.json()["quantity"] is None
+
+    r = client.put("/api/settings/stocks/444444", json={
+        "name": "레거시필드종목", "purchase_price": 99999, "quantity": 1,
+    })
+    assert r.status_code == 200
+    assert r.json()["purchase_price"] is None
+    assert r.json()["quantity"] is None
 
 
 def test_update_stock_required_fields_not_nulled():

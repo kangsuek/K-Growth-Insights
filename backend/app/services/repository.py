@@ -53,17 +53,17 @@ def create_stock(data: dict) -> dict:
         rk = data.get("relevance_keywords")
         # 신규 종목은 목록 맨 뒤로(최대 sort_order + 1).
         max_order = conn.execute("SELECT MAX(sort_order) AS m FROM stocks").fetchone()["m"]
+        # purchase_date/purchase_price/quantity는 여기서 받지 않는다 — 거래내역
+        # (services/transactions.py)이 유일한 소스이며, 매수 등록 시 채워진다.
         conn.execute(
             """
-            INSERT INTO stocks (ticker, name, type, theme, purchase_date,
-                purchase_price, quantity, search_keyword, relevance_keywords,
-                sort_order, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO stocks (ticker, name, type, theme, search_keyword,
+                relevance_keywords, sort_order, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
             """,
             (
                 ticker, data.get("name") or ticker, data.get("type", "STOCK"),
-                data.get("theme"), data.get("purchase_date"), data.get("purchase_price"),
-                data.get("quantity"), data.get("search_keyword"),
+                data.get("theme"), data.get("search_keyword"),
                 json.dumps(rk, ensure_ascii=False) if rk else None,
                 (max_order or 0) + 1,
             ),
@@ -74,8 +74,9 @@ def create_stock(data: dict) -> dict:
 # name·type은 NOT NULL이므로 null을 받아도 지우지 않고 기존 값을 유지한다.
 _STOCK_REQUIRED_COLS = ("name", "type")
 # 선택 필드는 null을 "지우기"로 해석해 NULL을 반영한다(수정 폼에서 칸을 비운 경우).
-_STOCK_OPTIONAL_COLS = ("theme", "purchase_date", "purchase_price", "quantity",
-                        "search_keyword")
+# purchase_date/purchase_price/quantity는 여기 없다 — 거래내역(services/transactions.py)이
+# 유일한 소스이며 update_stock_position()으로만 바뀐다.
+_STOCK_OPTIONAL_COLS = ("theme", "search_keyword")
 
 
 def update_stock(ticker: str, data: dict) -> dict | None:
@@ -744,3 +745,70 @@ def mark_alert_events_read(event_ids: list[int]) -> None:
             f"WHERE id IN ({placeholders}) AND read_at IS NULL",
             event_ids,
         )
+
+
+# --- 매수/매도 거래내역 (stock_transactions) --------------------------------
+#
+# 아래 함수들은 (다른 repository 함수와 달리) 자체 커넥션을 열지 않고 인자로 받은
+# conn을 그대로 쓴다. services/transactions.py가 "쓰기 → 전체 재계산 → 검증"을
+# 하나의 트랜잭션으로 묶어, 검증 실패 시 get_connection()의 예외 처리(자동 rollback)로
+# 방금 쓴 내용까지 함께 취소되게 하기 위함이다(레이스·부분반영 방지).
+
+def create_transaction(
+    conn, ticker: str, transaction_type: str, transaction_date: str,
+    price: float, quantity: int, note: str | None = None,
+) -> dict:
+    cur = conn.execute(
+        """INSERT INTO stock_transactions
+           (ticker, transaction_type, transaction_date, price, quantity, note)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (ticker, transaction_type, transaction_date, price, quantity, note),
+    )
+    return get_transaction(conn, cur.lastrowid)
+
+
+def list_transactions(conn, ticker: str) -> list[dict]:
+    """종목의 전체 거래내역(날짜, id 오름차순 — 평단가 재계산이 시간순을 가정한다)."""
+    rows = conn.execute(
+        "SELECT * FROM stock_transactions WHERE ticker = ? ORDER BY transaction_date, id",
+        (ticker,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_transaction(conn, transaction_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM stock_transactions WHERE id = ?", (transaction_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_transaction(conn, transaction_id: int, **fields) -> dict | None:
+    if not fields:
+        return get_transaction(conn, transaction_id)
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    conn.execute(
+        f"UPDATE stock_transactions SET {set_clause} WHERE id = ?",
+        (*fields.values(), transaction_id),
+    )
+    return get_transaction(conn, transaction_id)
+
+
+def delete_transaction(conn, transaction_id: int) -> None:
+    conn.execute("DELETE FROM stock_transactions WHERE id = ?", (transaction_id,))
+
+
+def update_stock_position(
+    conn, ticker: str, purchase_price: float | None, quantity: int | None,
+    purchase_date: str | None,
+) -> None:
+    """거래내역 재계산 결과로 stocks의 매입정보 3컬럼을 통째로 덮어쓴다.
+
+    update_stock()의 "필드가 요청에 있으면 NULL로 지운다" 부분 업데이트 로직과는
+    무관하게, 여기서는 항상 세 값을 그대로 SET한다(거래내역이 유일한 소스이므로).
+    """
+    conn.execute(
+        """UPDATE stocks SET purchase_price = ?, quantity = ?, purchase_date = ?,
+           updated_at = datetime('now') WHERE ticker = ?""",
+        (purchase_price, quantity, purchase_date, ticker),
+    )

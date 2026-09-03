@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.services import api_keys, app_settings, catalog, naver_client, repository
+from app.services import api_keys, app_settings, catalog, naver_client, repository, transactions
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -48,9 +48,6 @@ class StockCreate(BaseModel):
     name: str
     type: str = "STOCK"
     theme: Optional[str] = None
-    purchase_date: Optional[str] = None
-    purchase_price: Optional[float] = None
-    quantity: Optional[int] = None
     search_keyword: Optional[str] = None
     relevance_keywords: Optional[list[str]] = None
 
@@ -59,9 +56,6 @@ class StockUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     theme: Optional[str] = None
-    purchase_date: Optional[str] = None
-    purchase_price: Optional[float] = None
-    quantity: Optional[int] = None
     search_keyword: Optional[str] = None
     relevance_keywords: Optional[list[str]] = None
 
@@ -75,6 +69,22 @@ class SchedulerSettingsUpdate(BaseModel):
     intraday_collect_interval_minutes: Optional[int] = None
     collect_interval_minutes: Optional[int] = None
     scanner_collect_ttl_hours: Optional[int] = None
+
+
+class TransactionCreate(BaseModel):
+    transaction_type: str  # BUY | SELL
+    transaction_date: str  # YYYY-MM-DD
+    price: float
+    quantity: int
+    note: Optional[str] = None
+
+
+class TransactionUpdate(BaseModel):
+    transaction_type: Optional[str] = None
+    transaction_date: Optional[str] = None
+    price: Optional[float] = None
+    quantity: Optional[int] = None
+    note: Optional[str] = None
 
 
 # --- 종목 관리 ---------------------------------------------------------------
@@ -128,7 +138,6 @@ def validate_ticker(ticker: str):
         "name": name,
         "type": type_,
         "theme": theme,
-        "purchase_date": None,
         "search_keyword": _clean_name(name) if name else None,
         "relevance_keywords": _suggest_keywords(name, theme) if name else None,
     }
@@ -148,6 +157,47 @@ def delete_stock(ticker: str):
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
     deleted = repository.delete_stock(ticker)
     return {"ticker": ticker, "deleted": deleted}
+
+
+# --- 매수/매도 거래내역 -------------------------------------------------------
+# stocks.purchase_price/quantity/purchase_date는 이 거래내역으로부터 재계산되는
+# 파생 캐시다(services/transactions.py). 그 컬럼들은 더 이상 StockCreate/StockUpdate로
+# 직접 쓰지 않는다.
+
+@router.get("/stocks/{ticker}/transactions")
+def get_transactions(ticker: str):
+    if not repository.get_stock(ticker):
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+    return transactions.list_for_ticker(ticker)
+
+
+@router.post("/stocks/{ticker}/transactions", status_code=201)
+def create_transaction(ticker: str, body: TransactionCreate):
+    if not repository.get_stock(ticker):
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+    try:
+        return transactions.add(ticker, **body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/stocks/transactions/{transaction_id}")
+def update_transaction(transaction_id: int, body: TransactionUpdate):
+    try:
+        updated = transactions.edit(transaction_id, **body.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="거래내역을 찾을 수 없습니다")
+    return updated
+
+
+@router.delete("/stocks/transactions/{transaction_id}", status_code=204)
+def delete_transaction(transaction_id: int):
+    try:
+        transactions.remove(transaction_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # --- 카탈로그 수집(시총 상위 종목 자동 확장) ---------------------------------
