@@ -121,7 +121,8 @@ def get_stock_full(ticker: str) -> dict | None:
 def delete_stock(ticker: str) -> dict:
     """종목 + 관련 수집 데이터 전체 삭제(cascade). 삭제 건수 반환."""
     tables = ["prices", "trading_flow", "intraday_prices", "news",
-              "stock_fundamentals", "etf_fundamentals", "etf_holdings"]
+              "stock_fundamentals", "etf_fundamentals", "etf_holdings",
+              "stock_transactions"]
     deleted: dict[str, int] = {}
     with get_connection() as conn:
         for t in tables:

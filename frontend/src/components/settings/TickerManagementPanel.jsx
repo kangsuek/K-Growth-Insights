@@ -5,6 +5,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { formatPrice, formatNumber } from '../../utils/format'
 import TickerForm from './TickerForm'
 import TickerDeleteConfirm from './TickerDeleteConfirm'
+import TransactionManagementModal from './TransactionManagementModal'
 
 export default function TickerManagementPanel({ prefillStock }) {
   const queryClient = useQueryClient()
@@ -15,6 +16,7 @@ export default function TickerManagementPanel({ prefillStock }) {
   const [formMode, setFormMode] = useState('create') // 'create' or 'edit'
   const [prefillData, setPrefillData] = useState(null) // 스크리닝에서 전달된 프리필 데이터
   const [highlightedTicker, setHighlightedTicker] = useState(null) // 순서 변경 시 하이라이트
+  const [transactionTicker, setTransactionTicker] = useState(null) // 거래내역 모달 대상 티커
 
   // 스크리닝에서 종목 추가 요청이 들어온 경우 자동으로 폼 오픈
   useEffect(() => {
@@ -324,6 +326,16 @@ export default function TickerManagementPanel({ prefillStock }) {
                   <td className="px-6 py-2 whitespace-nowrap text-left text-sm font-medium">
                     <div className="flex items-center gap-3">
                       <button
+                        onClick={(e) => { e.stopPropagation(); setTransactionTicker(stock.ticker) }}
+                        className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                        title="거래내역"
+                        aria-label="거래내역"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3v-6m-3 6v-1m-4 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v13a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      <button
                         onClick={(e) => { e.stopPropagation(); handleEditClick(stock) }}
                         className="p-1.5 text-primary-600 dark:text-primary-400 hover:text-primary-900 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
                         title="수정"
@@ -425,6 +437,17 @@ export default function TickerManagementPanel({ prefillStock }) {
               </div>
               <div className="flex gap-2">
                 <button
+                  onClick={() => setTransactionTicker(stock.ticker)}
+                  className="flex-1 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                  title="거래내역"
+                  aria-label="거래내역"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3v-6m-3 6v-1m-4 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v13a2 2 0 002 2z" />
+                  </svg>
+                  <span>거래내역</span>
+                </button>
+                <button
                   onClick={() => handleEditClick(stock)}
                   className="flex-1 px-3 py-2 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                   title="수정"
@@ -481,6 +504,16 @@ export default function TickerManagementPanel({ prefillStock }) {
             setSelectedTicker(null)
           }}
           isDeleting={deleteMutation.isPending}
+        />
+      )}
+
+      {/* stocks 쿼리에서 매번 최신 항목을 찾아 넘긴다 — 클릭 시점 스냅샷을 그대로
+          들고 있으면 거래 등록 후 평단가·보유수량이 무효화·재조회돼도 모달에
+          반영되지 않는다. 종목 삭제 등으로 캐시에서 사라졌으면 모달을 띄우지 않는다. */}
+      {transactionTicker && stocks?.some((s) => s.ticker === transactionTicker) && (
+        <TransactionManagementModal
+          stock={stocks.find((s) => s.ticker === transactionTicker)}
+          onClose={() => setTransactionTicker(null)}
         />
       )}
     </div>

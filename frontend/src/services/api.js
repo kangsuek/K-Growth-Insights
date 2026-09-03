@@ -260,6 +260,22 @@ export const settingsApi = {
 
   // 스케줄러 설정(분봉 수집 주기) 변경
   updateSchedulerSettings: (data) => api.put('/settings/scheduler', data, { timeout: NORMAL_API_TIMEOUT }),
+
+  // 매수/매도 거래내역 조회(최신순)
+  getTransactions: (ticker) =>
+    api.get(`/settings/stocks/${ticker}/transactions`, { timeout: FAST_API_TIMEOUT }),
+
+  // 거래내역 추가(매수/매도)
+  createTransaction: (ticker, data) =>
+    api.post(`/settings/stocks/${ticker}/transactions`, data, { timeout: NORMAL_API_TIMEOUT }),
+
+  // 거래내역 수정
+  updateTransaction: (transactionId, data) =>
+    api.put(`/settings/stocks/transactions/${transactionId}`, data, { timeout: NORMAL_API_TIMEOUT }),
+
+  // 거래내역 삭제
+  deleteTransaction: (transactionId) =>
+    api.delete(`/settings/stocks/transactions/${transactionId}`, { timeout: NORMAL_API_TIMEOUT }),
 }
 
 // Alert (목표가/알림) API 서비스

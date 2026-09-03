@@ -4,7 +4,6 @@ import PropTypes from 'prop-types'
 import { settingsApi } from '../../services/api'
 import { useToast } from '../../contexts/ToastContext'
 import { MIN_SEARCH_LENGTH } from '../../constants'
-import { formatPrice, formatNumber } from '../../utils/format'
 
 // 티커 코드 / 종목명 입력의 자동완성 드롭다운 (두 입력에서 공유)
 function StockSuggestions({ innerRef, isSearching, results, onSelect }) {
@@ -64,9 +63,6 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
     name: '',
     type: 'ALL',
     theme: '',
-    purchase_date: '',
-    purchase_price: '',
-    quantity: '',
     search_keyword: '',
     relevance_keywords: [],
   })
@@ -96,22 +92,11 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
   // 초기 데이터 설정 (수정 모드)
   useEffect(() => {
     if (mode === 'edit' && initialData) {
-      // purchase_price와 quantity를 콤마 포맷팅된 문자열로 변환
-      const formattedPurchasePrice = initialData.purchase_price 
-        ? formatPrice(initialData.purchase_price) 
-        : ''
-      const formattedQuantity = initialData.quantity 
-        ? formatNumber(initialData.quantity) 
-        : ''
-      
       setFormData({
         ticker: initialData.ticker || '',
         name: initialData.name || '',
         type: initialData.type || 'ALL',
         theme: initialData.theme || '',
-        purchase_date: initialData.purchase_date ?? '', // null 또는 undefined인 경우 빈 문자열
-        purchase_price: formattedPurchasePrice, // 콤마 포맷팅된 문자열
-        quantity: formattedQuantity, // 콤마 포맷팅된 문자열
         search_keyword: initialData.search_keyword || '',
         relevance_keywords: initialData.relevance_keywords || [],
       })
@@ -167,8 +152,6 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
         name: data.name || '',
         type: data.type || 'ALL',
         theme: data.theme || '',
-        purchase_date: data.purchase_date ?? '', // null 또는 undefined인 경우 빈 문자열
-        purchase_price: data.purchase_price ?? '', // null 또는 undefined인 경우 빈 문자열
         search_keyword: data.search_keyword || '',
         relevance_keywords: data.relevance_keywords || [],
       }))
@@ -188,76 +171,10 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
     validateMutation.mutate(formData.ticker)
   }
 
-  // 날짜 입력 핸들러 - 연도 4자리로 제한
-  const handleDateInput = (e) => {
-    const input = e.target
-    let value = input.value
-    
-    // 날짜 형식이 YYYY-MM-DD인지 확인
-    const dateMatch = value.match(/^(\d+)-(\d{2})-(\d{2})$/)
-    if (dateMatch) {
-      let yearStr = dateMatch[1]
-      // 연도가 4자리 초과인 경우 앞 4자리만 사용
-      if (yearStr.length > 4) {
-        yearStr = yearStr.substring(0, 4)
-        value = `${yearStr}-${dateMatch[2]}-${dateMatch[3]}`
-        input.value = value
-        // onChange 이벤트 트리거
-        const syntheticEvent = {
-          target: { name: 'purchase_date', value: value }
-        }
-        handleChange(syntheticEvent)
-      }
-    }
-  }
-
   const handleChange = (e) => {
     const { name, value } = e.target
-    
-    // 보유 수량 필드인 경우 숫자만 허용 (타이핑 중에는 raw 값 저장, blur 시 포맷팅)
-    if (name === 'quantity') {
-      const numericValue = value.replace(/,/g, '')
-      if (numericValue === '' || /^\d+$/.test(numericValue)) {
-        setFormData(prev => ({ ...prev, [name]: numericValue }))
-      }
-      return
-    }
 
-    // 매입 평균 금액 필드인 경우 숫자(소수점 포함)만 허용 (타이핑 중에는 raw 값 저장, blur 시 포맷팅)
-    if (name === 'purchase_price') {
-      const numericValue = value.replace(/,/g, '')
-      if (numericValue === '' || /^\d*\.?\d*$/.test(numericValue)) {
-        setFormData(prev => ({ ...prev, [name]: numericValue }))
-      }
-      return
-    }
-    
-    // 날짜 필드인 경우 연도 4자리로 정규화
-    let processedValue = value
-    if (name === 'purchase_date' && value) {
-      // 날짜 형식이 YYYY-MM-DD인지 확인하고, 연도가 4자리 초과인 경우 정규화
-      const dateMatch = value.match(/^(\d+)-(\d{2})-(\d{2})$/)
-      if (dateMatch) {
-        let yearStr = dateMatch[1]
-        // 연도가 4자리 초과인 경우 앞 4자리만 사용
-        if (yearStr.length > 4) {
-          yearStr = yearStr.substring(0, 4)
-        }
-        const year = parseInt(yearStr, 10)
-        // 유효한 연도 범위로 제한 (1900-2099)
-        if (year >= 1900 && year <= 2099) {
-          processedValue = `${yearStr.padStart(4, '0')}-${dateMatch[2]}-${dateMatch[3]}`
-        } else {
-          // 유효하지 않은 연도인 경우 이전 값 유지
-          processedValue = formData.purchase_date || ''
-        }
-      } else if (value.length > 0) {
-        // 형식이 맞지 않으면 이전 값 유지
-        processedValue = formData.purchase_date || ''
-      }
-    }
-    
-    setFormData(prev => ({ ...prev, [name]: processedValue }))
+    setFormData(prev => ({ ...prev, [name]: value }))
     // 에러 클리어
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }))
@@ -269,47 +186,6 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
       setSearchField(name)
       setShowSuggestions(value.length >= MIN_SEARCH_LENGTH)
     }
-  }
-
-  // 매입 평균 금액 포커스: 콤마 제거하여 raw 값으로 (편집 용이)
-  const handlePurchasePriceFocus = () => {
-    const raw = formData.purchase_price.toString().replace(/,/g, '')
-    setFormData(prev => ({ ...prev, purchase_price: raw }))
-  }
-
-  // 매입 평균 금액 블러: 콤마 포맷팅 적용
-  const handlePurchasePriceBlur = () => {
-    const raw = formData.purchase_price
-    if (!raw) return
-    const numericStr = raw.replace(/,/g, '')
-    const dotIndex = numericStr.indexOf('.')
-    let formatted = ''
-    if (dotIndex === -1) {
-      const intValue = parseInt(numericStr, 10)
-      formatted = isNaN(intValue) ? '' : intValue.toLocaleString('ko-KR')
-    } else {
-      const intPart = numericStr.substring(0, dotIndex)
-      const decPart = numericStr.substring(dotIndex)
-      const intValue = parseInt(intPart || '0', 10)
-      formatted = (isNaN(intValue) ? '0' : intValue.toLocaleString('ko-KR')) + decPart
-    }
-    setFormData(prev => ({ ...prev, purchase_price: formatted }))
-  }
-
-  // 보유 수량 포커스: 콤마 제거하여 raw 값으로 (편집 용이)
-  const handleQuantityFocus = () => {
-    const raw = formData.quantity.toString().replace(/,/g, '')
-    setFormData(prev => ({ ...prev, quantity: raw }))
-  }
-
-  // 보유 수량 블러: 콤마 포맷팅 적용
-  const handleQuantityBlur = () => {
-    const raw = formData.quantity
-    if (!raw) return
-    const numericStr = raw.replace(/,/g, '')
-    const intValue = parseInt(numericStr, 10)
-    const formatted = isNaN(intValue) ? '' : intValue.toLocaleString('ko-KR')
-    setFormData(prev => ({ ...prev, quantity: formatted }))
   }
 
   // 자동완성에서 종목 선택
@@ -362,49 +238,12 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
     return Object.keys(newErrors).length === 0
   }
 
-  // 날짜를 YYYY-MM-DD 형식으로 정규화 (연도 4자리 보장)
-  const normalizeDateString = (dateStr) => {
-    if (!dateStr) return null
-    
-    // Date 객체로 파싱 후 다시 포맷
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return null
-    
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    
-    // 연도가 유효한 범위인지 확인 (1900-2100)
-    if (year < 1900 || year > 2100) return null
-    
-    return `${year}-${month}-${day}`
-  }
-
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!validate()) return
 
     // 제출 데이터 준비
     const submitData = { ...formData }
-
-    // 구매일 정규화 (연도 4자리 형식 보장)
-    submitData.purchase_date = normalizeDateString(submitData.purchase_date)
-
-    // 매입 평균 금액을 숫자로 변환 (콤마 제거 후, 빈 값이면 null)
-    if (submitData.purchase_price) {
-      const numericValue = submitData.purchase_price.toString().replace(/,/g, '')
-      submitData.purchase_price = numericValue ? parseFloat(numericValue) : null
-    } else {
-      submitData.purchase_price = null
-    }
-
-    // 보유 수량을 숫자로 변환 (콤마 제거 후, 빈 값이면 null)
-    if (submitData.quantity) {
-      const numericValue = submitData.quantity.toString().replace(/,/g, '')
-      submitData.quantity = numericValue ? parseInt(numericValue, 10) : null
-    } else {
-      submitData.quantity = null
-    }
 
     // 비운 선택 필드는 빈 문자열 대신 null로 보낸다. 백엔드는 null을 "지우기"로
     // 해석해 컬럼을 NULL로 만든다(빈 문자열이 그대로 저장되는 것을 막는다).
@@ -584,69 +423,11 @@ export default function TickerForm({ mode, initialData, prefillData, onSubmit, o
             {errors.theme && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.theme}</p>}
           </div>
 
-          {/* 구매일 (선택) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              구매일
-            </label>
-            <input
-              type="date"
-              name="purchase_date"
-              value={formData.purchase_date}
-              onChange={handleChange}
-              onInput={handleDateInput}
-              disabled={isSubmitting}
-              min="1900-01-01"
-              max="2099-12-31"
-              pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}"
-              className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              종목을 구매한 날짜입니다. (선택, 연도는 4자리만 입력 가능)
-            </p>
-          </div>
-
-          {/* 매입 평균 금액 (선택) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              매입 평균 금액
-            </label>
-            <input
-              type="text"
-              name="purchase_price"
-              value={formData.purchase_price}
-              onChange={handleChange}
-              onFocus={handlePurchasePriceFocus}
-              onBlur={handlePurchasePriceBlur}
-              disabled={isSubmitting}
-              className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              placeholder="예: 25,000"
-            />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              종목을 매입한 평균 단가입니다. (선택, 원 단위)
-            </p>
-          </div>
-
-          {/* 보유 수량 (선택) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              보유 수량
-            </label>
-            <input
-              type="text"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleChange}
-              onFocus={handleQuantityFocus}
-              onBlur={handleQuantityBlur}
-              disabled={isSubmitting}
-              className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-              placeholder="예: 100"
-            />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              현재 보유하고 있는 종목 수량입니다. (선택, 주 단위)
-            </p>
-          </div>
+          {/* 매입 정보 안내 */}
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            매입가·보유수량은 종목 추가 후 목록의 &quot;거래내역&quot; 버튼에서
+            매수/매도 내역으로 관리합니다.
+          </p>
 
           {/* 뉴스 검색 키워드 */}
           <div>

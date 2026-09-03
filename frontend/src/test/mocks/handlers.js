@@ -366,4 +366,27 @@ export const handlers = [
         : ['ETF', 'AI', '반도체'],
     })
   }),
+
+  // 매수/매도 거래내역: 기본은 빈 목록/단순 echo. 상태가 필요한 테스트는
+  // server.use()로 재정의한다(TickerManagementPanel.test.jsx의 삭제 테스트와 같은 패턴).
+  http.get(`${BASE_URL}/settings/stocks/:ticker/transactions`, () => {
+    return HttpResponse.json([])
+  }),
+
+  http.post(`${BASE_URL}/settings/stocks/:ticker/transactions`, async ({ params, request }) => {
+    const body = await request.json()
+    return HttpResponse.json({
+      id: 1, ticker: params.ticker, realized_pnl: null, note: null,
+      created_at: new Date().toISOString(), ...body,
+    }, { status: 201 })
+  }),
+
+  http.put(`${BASE_URL}/settings/stocks/transactions/:id`, async ({ params, request }) => {
+    const body = await request.json()
+    return HttpResponse.json({ id: Number(params.id), realized_pnl: null, ...body })
+  }),
+
+  http.delete(`${BASE_URL}/settings/stocks/transactions/:id`, () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
 ]

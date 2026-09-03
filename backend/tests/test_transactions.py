@@ -197,6 +197,22 @@ def test_legacy_purchase_data_migrated_to_transaction(tmp_path, monkeypatch):
     assert len(txns_again) == 1
 
 
+def test_deleting_stock_cascades_to_transactions():
+    """종목 삭제 시 거래내역도 함께 삭제돼야 한다(고아 데이터 방지)."""
+    seed_stock("005930", "삼성전자", "STOCK")
+    _buy("005930", "2026-01-10", 70000, 10)
+
+    r = client.delete("/api/settings/stocks/005930")
+    assert r.status_code == 200
+    assert r.json()["deleted"]["stock_transactions"] == 1
+
+    with database.get_connection() as conn:
+        remaining = conn.execute(
+            "SELECT COUNT(*) AS c FROM stock_transactions WHERE ticker = ?", ("005930",)
+        ).fetchone()["c"]
+    assert remaining == 0
+
+
 def test_legacy_purchase_data_migration_falls_back_to_today_when_date_missing():
     """구버전 데이터에 구매일이 없으면(purchase_date NULL) 오늘 날짜로 이전한다."""
     from datetime import date
