@@ -888,6 +888,22 @@ export default function ETFDetail() {
                 {intradayData.date}
               </span>
             )}
+            <a
+              href={`https://stock.naver.com/domestic/stock/${ticker}/price`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                e.preventDefault()
+                window.open(
+                  `https://stock.naver.com/domestic/stock/${ticker}/price`,
+                  '_blank',
+                  'width=1024,height=800,noopener,noreferrer'
+                )
+              }}
+              className="btn btn-outline btn-sm"
+            >
+              네이버 증권에서 보기
+            </a>
             {intradayCollecting && (
               <span className="text-xs text-blue-500 animate-pulse">
                 {intradayData?.background_collect_started ? '수집 중...' : '갱신 중...'}
