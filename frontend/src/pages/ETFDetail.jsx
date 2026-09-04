@@ -897,7 +897,7 @@ export default function ETFDetail() {
                 window.open(
                   `https://stock.naver.com/domestic/stock/${ticker}/price`,
                   '_blank',
-                  'width=1024,height=800,noopener,noreferrer'
+                  'width=1300,height=800,noopener,noreferrer'
                 )
               }}
               className="btn btn-outline btn-sm"
