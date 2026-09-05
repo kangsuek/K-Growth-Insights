@@ -20,7 +20,9 @@ VALID_TYPES = ("BUY", "SELL")
 def _walk(transactions_asc: list[dict]) -> dict:
     """시간순 거래 목록을 순회해 최종 상태를 계산한다.
 
-    - BUY: 가중평균으로 평단가 갱신, 수량 누적.
+    - BUY: 가중평균으로 평단가 갱신, 수량 누적. 보유수량이 0인 상태에서 들어온 BUY는
+      새 포지션의 시작이므로 그 거래일을 first_date로 기록한다(전량매도 후 재매수 시
+      재매수일로 갱신되도록 — qty가 0으로 돌아간 뒤에도 그대로였던 과거 버그 수정).
     - SELL: 그 시점 보유수량보다 많으면 오류. 실현손익 = (매도가-그 시점 평단가)×수량,
       평단가는 매도로 변하지 않는다(남은 물량의 원가는 그대로).
 
@@ -30,9 +32,11 @@ def _walk(transactions_asc: list[dict]) -> dict:
     qty = 0
     avg_cost = 0.0
     realized_by_id: dict[int, float] = {}
-    first_date = transactions_asc[0]["transaction_date"] if transactions_asc else None
+    first_date = None
     for t in transactions_asc:
         if t["transaction_type"] == "BUY":
+            if qty == 0:
+                first_date = t["transaction_date"]
             new_qty = qty + t["quantity"]
             avg_cost = (qty * avg_cost + t["quantity"] * t["price"]) / new_qty
             qty = new_qty

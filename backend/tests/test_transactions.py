@@ -77,6 +77,23 @@ def test_full_sell_clears_position_but_keeps_first_date():
     assert stock["purchase_date"] == "2026-01-10"
 
 
+def test_rebuy_after_full_sell_uses_new_purchase_date():
+    """전량 매도로 청산된 뒤 재매수하면 purchase_date는 재매수일이어야 한다(현재 보유분 기준).
+
+    과거에는 first_date가 거래내역 전체의 최초 거래일로 고정돼, 이미 청산된 예전
+    포지션의 날짜가 새 포지션의 매입가와 함께 표시되는 버그가 있었다.
+    """
+    seed_stock("005930", "삼성전자", "STOCK")
+    _buy("005930", "2026-01-10", 70000, 10)
+    _sell("005930", "2026-02-10", 90000, 10)   # 전량 청산
+    _buy("005930", "2026-06-01", 100000, 5)    # 재매수 (새 포지션 시작)
+
+    stock = client.get("/api/etfs/005930").json()
+    assert stock["purchase_price"] == 100000
+    assert stock["quantity"] == 5
+    assert stock["purchase_date"] == "2026-06-01"
+
+
 def test_oversell_rejected_with_400():
     seed_stock("005930", "삼성전자", "STOCK")
     _buy("005930", "2026-01-10", 70000, 10)
